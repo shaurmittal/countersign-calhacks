@@ -31,6 +31,7 @@ import { templateReply } from "../shared/reply";
 import { composeReply } from "./lib/claude";
 import { EMPTY_REQUEST, runIntake, summarizeIntake } from "./agents/intake";
 import { runVendorVerifier } from "./agents/vendorVerifier";
+import { crsLaneText } from "../shared/verification/crs";
 import { runRiskAnalyst } from "./agents/riskAnalyst";
 import { runPayer } from "./agents/payer";
 
@@ -80,14 +81,15 @@ function toApproval(a: Doc<"approvals"> | null): ApprovalState | null {
 
 /** One line for the Vendor Verifier's War Room lane, e.g. "Vendor matched (0.95) · sender not on file · new bank ≠ file · invoice found". */
 function summarizeVendor(f: VendorFindings): string {
-  if (!f.vendorId) return "No vendor match in the vendor book";
+  const crs = crsLaneText(f.crs);
+  if (!f.vendorId) return ["No vendor match in the vendor book", crs].filter(Boolean).join(" · ");
   const parts = [`Vendor matched (${f.matchConfidence.toFixed(2)})`];
   parts.push(f.senderOnFile ? "sender on file" : "sender not on file");
   if (f.bankMatches === false) parts.push("new bank ≠ file");
   else if (f.bankMatches === true) parts.push("bank matches file");
   parts.push(f.alreadyPaidAt != null ? "invoice already paid" : f.matchingInvoiceId ? "invoice found" : "no matching invoice");
   if (f.ofacHit) parts.push("OFAC HIT");
-  if (f.crs.status === "unavailable") parts.push("CRS unavailable");
+  if (crs) parts.push(crs);
   return parts.join(" · ");
 }
 

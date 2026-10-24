@@ -323,6 +323,19 @@ describe("leader pipeline", () => {
     expect(runPayer).not.toHaveBeenCalled();
   });
 
+  it("the Vendor Verifier lane shows the live CRS score, and a high score escalates", async () => {
+    const { t, w } = await setup();
+    const crs = { status: "ok" as const, businessVerified: false, raw: { product: "atdata_fraud_finder", score: 100, emailStatus: "invalid" } };
+    given({ claimedVendorName: "Northwind", invoiceNumber: "NW-889" }, findings(w.northwind._id, w.nw889._id, { crs }));
+    const caseId = await open(t);
+    await drain(t);
+
+    const runs = await t.run((ctx) => ctx.db.query("agentRuns").withIndex("by_case", (q) => q.eq("caseId", caseId)).collect());
+    expect(runs.find((r) => r.agent === "vendorVerifier")?.summary).toContain("CRS fraud score 100/100 · email invalid");
+    expect((await getCase(t, caseId))?.policyResult.firedRules).toContain("R14");
+    expect(runPayer).not.toHaveBeenCalled();
+  });
+
   it("intake crashes -> parseFailed -> HOLD", async () => {
     const { t } = await setup();
     vi.mocked(extractPaymentRequest).mockRejectedValue(new Error("Anthropic 529"));
