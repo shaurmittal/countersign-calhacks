@@ -1,34 +1,10 @@
 // Hash-chained audit log (owner: P1). Every state change writes one event:
-// hash = sha256(prevHash + canonical(event)). Append-only: never patch or delete these rows.
+// hash = sha256(prevHash + canonical(event)), see shared/audit.ts. Append-only: never patch or
+// delete these rows. Convex mutations are serializable, so concurrent appends cannot fork the chain.
 import { v } from "convex/values";
 import { internalMutation, query, type MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-
-const GENESIS = "0".repeat(64);
-
-async function sha256Hex(text: string): Promise<string> {
-  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-// Keys are sorted recursively: Convex returns stored objects with sorted keys, so hashing
-// insertion order would make verifyChain fail on any multi-key payload.
-function stable(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stable);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .filter(([, v]) => v !== undefined)
-        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-        .map(([k, v]) => [k, stable(v)]),
-    );
-  }
-  return value;
-}
-
-function canonical(e: { seq: number; caseId?: string; actor: string; action: string; payload: unknown; at: number }) {
-  return JSON.stringify(stable([e.seq, e.caseId ?? null, e.actor, e.action, e.payload ?? null, e.at]));
-}
+import { GENESIS, hashEvent, verifyEvents } from "../shared/audit";
 
 /** Call from any mutation. Use `internal.audit.append` from actions. */
 export async function appendAudit(
@@ -40,7 +16,7 @@ export async function appendAudit(
   const prevHash = last?.hash ?? GENESIS;
   const at = Date.now();
   const payload = event.payload ?? null;
-  const hash = await sha256Hex(prevHash + canonical({ ...event, payload, seq, at }));
+  const hash = await hashEvent(prevHash, { ...event, payload, seq, at });
   return ctx.db.insert("auditEvents", { ...event, payload, seq, prevHash, hash, at });
 }
 
@@ -60,12 +36,7 @@ export const verifyChain = query({
   args: {},
   handler: async (ctx) => {
     const events = await ctx.db.query("auditEvents").withIndex("by_seq").collect();
-    let prevHash = GENESIS;
-    for (const e of events) {
-      const expected = await sha256Hex(prevHash + canonical({ ...e, caseId: e.caseId ?? undefined }));
-      if (e.prevHash !== prevHash || e.hash !== expected) return { ok: false, brokenAtSeq: e.seq, count: events.length };
-      prevHash = e.hash;
-    }
-    return { ok: true, brokenAtSeq: null, count: events.length };
+    const { ok, brokenAtSeq } = await verifyEvents(events);
+    return { ok, brokenAtSeq, count: events.length };
   },
 });

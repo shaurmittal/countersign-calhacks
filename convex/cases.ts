@@ -6,7 +6,7 @@ import type { Doc } from "./_generated/dataModel";
 import { caseStatus, channel, decision } from "./schema";
 import { appendAudit } from "./audit";
 import { LIMITS } from "../shared/config";
-import type { Channel } from "../shared/types";
+import type { Channel, PaymentRequest, PolicyResult } from "../shared/types";
 
 type OpenArgs = { channel: Channel; fromAddress: string; rawContent: string; externalId?: string };
 
@@ -63,6 +63,70 @@ export const update = internalMutation({
     const fields = Object.fromEntries(Object.entries(patch).filter(([, val]) => val !== undefined));
     await ctx.db.patch(caseId, { ...fields, updatedAt: Date.now() });
     await appendAudit(ctx, { caseId, actor: actor ?? "system", action: "case.updated", payload: fields });
+  },
+});
+
+/**
+ * Atomic lock taken right before the Payer runs. Convex mutations are serializable, so if two
+ * pipeline runs race, exactly one gets `true`. The Payer's idempotency key is the second guard.
+ */
+export const claimPayment = internalMutation({
+  args: { caseId: v.id("cases") },
+  handler: async (ctx, { caseId }) => {
+    const c = await ctx.db.get(caseId);
+    if (!c || c.payStartedAt || c.status === "CLOSED") return false;
+    await ctx.db.patch(caseId, { payStartedAt: Date.now(), updatedAt: Date.now() });
+    await appendAudit(ctx, { caseId, actor: "policy", action: "payment.claimed" });
+    return true;
+  },
+});
+
+/**
+ * After R2 was satisfied (vendor confirmed by callback AND owner approved via step-up), the new
+ * bank details become the vendor's details on file. Only the last 4 go in the audit payload.
+ */
+export const applyConfirmedBankChange = internalMutation({
+  args: { caseId: v.id("cases") },
+  handler: async (ctx, { caseId }) => {
+    const c = await ctx.db.get(caseId);
+    const bank = (c?.request as PaymentRequest | undefined)?.newBankDetails;
+    const policyResult = c?.policyResult as PolicyResult | undefined;
+    if (!c?.vendorId || !bank || policyResult?.decision !== "PAY" || !policyResult.firedRules.includes("R2")) {
+      throw new Error("applyConfirmedBankChange: case is not an approved bank change");
+    }
+    const vendor = await ctx.db.get(c.vendorId);
+    if (!vendor) throw new Error("vendor not found");
+    const patch = {
+      ...(bank.routing && { bankRouting: bank.routing }),
+      ...(bank.account && { bankLast4: bank.account.slice(-4) }),
+    };
+    await ctx.db.patch(vendor._id, patch);
+    await appendAudit(ctx, {
+      caseId,
+      actor: "owner",
+      action: "vendor.bank_updated",
+      payload: { vendorId: vendor._id, fromLast4: vendor.bankLast4, toLast4: patch.bankLast4 ?? vendor.bankLast4 },
+    });
+  },
+});
+
+/** R10: the vendor denied the request, so this sender address is known-bad for that vendor. */
+export const markSenderKnownBad = internalMutation({
+  args: { caseId: v.id("cases") },
+  handler: async (ctx, { caseId }) => {
+    const c = await ctx.db.get(caseId);
+    if (!c?.vendorId) return;
+    const vendor = await ctx.db.get(c.vendorId);
+    if (!vendor) return;
+    const known = vendor.knownBadSenders ?? [];
+    if (known.includes(c.fromAddress)) return;
+    await ctx.db.patch(vendor._id, { knownBadSenders: [...known, c.fromAddress] });
+    await appendAudit(ctx, {
+      caseId,
+      actor: "policy",
+      action: "vendor.sender_marked_bad",
+      payload: { vendorId: vendor._id, senderLast4: c.fromAddress.slice(-4) },
+    });
   },
 });
 
