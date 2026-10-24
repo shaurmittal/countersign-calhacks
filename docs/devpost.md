@@ -43,7 +43,8 @@ phone call to its own number, web chat, or another agent over Fetch.ai's Chat Pr
   and approve pending payments in ASI:One; a demo vendor billing agent sends requests agent-to-agent.
 - **Increase** sandbox ACH transfers (or a mock double-entry ledger), with idempotency keys so a
   retry can never pay twice.
-- **CRS** business verification and OFAC screening; **Moss** for vendor-book retrieval. **[confirm]**
+- **Moss** for vendor-book search. **CRS** business verification and OFAC screening **[confirm: drop
+  this unless P3 wires CRS before submitting]**
 
 ## Challenges
 
@@ -68,7 +69,7 @@ vendor-side Countersign so two agents can verify each other.
 ## Built with
 
 Claude (Anthropic API), Cartesia, Convex, Next.js, TypeScript, Fetch.ai uAgents / Agentverse /
-ASI:One, Increase, CRS **[confirm]**, Moss **[confirm]**, Python.
+ASI:One, Increase, Moss, CRS **[confirm]**, Python.
 
 ## Demo video (3 minutes max, opens with the moment)
 

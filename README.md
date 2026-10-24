@@ -190,7 +190,7 @@ are in [docs/cartesia-setup.md](docs/cartesia-setup.md).
 | Claude parses every request and writes every reply | Teammates play the owner and the vendor on their own phones |
 | The Policy Engine, rules R1-R15 and the 30-scenario answer key | Money: the mock ledger, or the Increase **sandbox** (no real funds) |
 | Owner step-up: real TOTP codes from an authenticator app, checked server-side | Vendor bank accounts store only routing + last 4; the sandbox uses a stand-in account number ending in those 4 digits |
-| Hash-chained audit log, recomputed live in the War Room | CRS identity checks run against the CRS sandbox with test identities only |
+| Hash-chained audit log, recomputed live in the War Room | CRS business checks and OFAC screening are not wired yet; the vendor lane shows them as not checked |
 | Fetch.ai agents on Agentverse speaking the Chat Protocol; the owner flow in ASI:One | The vendor billing agent is ours, playing a compromised vendor |
 
 Every lane in the War Room is a real database row written by the agent that did the work.
