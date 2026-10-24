@@ -122,6 +122,43 @@ ESCALATE only; it never lifts a BLOCK or HOLD. PAY requires R12's positive check
 - **P4 `ownerConcierge`:** on OTP success set `approvedAt` and, when `policyResult.needs.coolingOffSeconds > 0`, `coolingOffUntil = approvedAt + seconds*1000`; on decline/cancel set `cancelledAt`. Then schedule `internal.pipeline.advance`. The pipeline schedules its own wake-up at `coolingOffUntil`.
 - **P4 `runPayer`:** runs only after `cases.claimPayment` took the lock. For an approved bank change the vendor record has already been updated when the Payer is called; read destination details from the vendor record.
 
+## Voice: how we use Cartesia
+
+Voice is the verification itself, not a front end. Setup details (prompts, tool configs, numbers)
+are in [docs/cartesia-setup.md](docs/cartesia-setup.md).
+
+**Features used**
+- **Managed Agents** (Claude Haiku 5.5, Sonic voice): two production agents. *Countersign Inbound*
+  answers the line and holds it during verification. *Countersign Callback* phones the vendor.
+  A third test agent plays the vendor, so the whole loop runs agent-to-agent in development.
+- **Cartesia phone numbers:** the inbound line, an outbound-only callback number and the test vendor.
+  No other telephony provider.
+- **Outbound calls API** (`POST /agents/calls`), with per-call `dynamic_variables`. The callback agent
+  learns the amount, the vendor and the new account's last 4 at dial time, but deliberately not the
+  invoice number: the vendor has to say it.
+- **Webhook tools with secret headers**, all served by Convex HTTP actions:
+  - `submit_payment_request` and `get_case_status` on the inbound agent. `get_case_status` long-polls,
+    so the agent announces the callback once and then waits quietly.
+  - `record_callback_outcome` on the callback agent.
+- **System dynamic variables** `system__caller_id` and `system__conversation_id` (tool parameters the
+  model can't change), plus an **assignment** that saves `case_id` from a tool response.
+- **System tools:** End call on both agents; Voicemail detection on the callback agent, with no
+  message, so payment details are never left on voicemail.
+- **Get Call API:** after every callback we store the transcript and Cartesia's summary on the case
+  for the War Room and the audit trail.
+
+**Known limits**
+- Cartesia numbers call **US numbers only**, so the vendor's number on file must be a US number.
+  Inbound calls from anywhere work.
+- **No SMS:** text requests come in through the web chat (`/try`).
+- **The model classifies the vendor's answer.** Code then checks it: "confirmed" only counts if the
+  vendor states the matching invoice number. Anything else counts as not verified.
+- **Caller ID is never trusted.** Verification is always an outbound call to the number already on
+  file; we never call back a number the caller gives.
+- **No voice tool can move money.** The worst a jailbroken agent can do is say the wrong thing.
+- **Waits:** a callback takes about 30–60 s end to end. Tools time out after 25 s, so long waits
+  arrive as several 20 s checks.
+
 ## Team rules
 
 - **Only `decide()` can say PAY.** No model output, tool or webhook moves money directly.
