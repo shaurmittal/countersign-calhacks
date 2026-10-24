@@ -192,8 +192,10 @@ function OwnerDetail({ detail }: { detail: CaseDetail }) {
   if (!approval) return null;
   const via = approval.method === "otp" ? "owner page" : "ASI:One";
   let state: ReactNode;
-  if (approval.cancelledAt) state = <span className="chip bad">Declined by owner via {via}</span>;
-  else if (approval.approvedAt && approval.coolingOffUntil && approval.coolingOffUntil > now) {
+  if (approval.cancelledAt) {
+    const verb = approval.approvedAt ? "Cancelled during cooling-off" : "Declined";
+    state = <span className="chip bad">{verb} by owner via {via}</span>;
+  } else if (approval.approvedAt && approval.coolingOffUntil && approval.coolingOffUntil > now) {
     state = <span className="chip warn">Approved · cooling-off {secondsLeft(approval.coolingOffUntil, now)}s</span>;
   } else if (approval.approvedAt) state = <span className="chip ok">Approved by owner via {via}</span>;
   else state = <span className="chip info">Waiting for the owner&apos;s code since {clockTime(approval.requestedAt)}</span>;

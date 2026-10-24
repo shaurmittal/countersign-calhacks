@@ -14,6 +14,7 @@ import { v } from "convex/values";
 import { internalMutation, mutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
+import { finishRun, startRun } from "../agentRuns";
 import { appendAudit } from "../audit";
 import { latestApproval, summarizeCase } from "../lib/caseView";
 import { formatCents } from "../../shared/ledger";
@@ -39,7 +40,7 @@ export const requestApproval = internalMutation({
     await ctx.db.insert("approvals", { caseId, method: "otp", requestedAt: Date.now(), attempts: 0 });
     await appendAudit(ctx, { caseId, actor: "ownerConcierge", action: "approval.requested" });
     // The lane stays "running" while Countersign waits for the owner; applyOwnerCode finishes it.
-    await ctx.scheduler.runAfter(0, internal.agentRuns.start, { caseId, agent: "ownerConcierge" });
+    await startRun(ctx, { caseId, agent: "ownerConcierge" });
     await notify(ctx, caseId, `Approval needed: ${await describe(ctx, c)}. Enter the code from your authenticator app on /owner.`);
   },
 });
@@ -76,7 +77,7 @@ async function applyOwnerCode(
   const approval = await latestApproval(ctx, caseId);
   if (!approval) return fail("This case is not waiting for your approval.");
 
-  const notAllowed = await actionNotAllowed(ctx, approval, action, now);
+  const notAllowed = actionNotAllowed(c, approval, action, now);
   if (notAllowed) return fail(notAllowed);
   if (approval.lockedUntil && approval.lockedUntil > now) {
     return fail(`Too many wrong codes. Try again in ${Math.ceil((approval.lockedUntil - now) / 1000)}s.`);
@@ -97,22 +98,14 @@ async function applyOwnerCode(
   return { ok: true, message };
 }
 
-async function actionNotAllowed(
-  ctx: MutationCtx,
-  approval: Doc<"approvals">,
-  action: OwnerAction,
-  now: number,
-): Promise<string | null> {
+function actionNotAllowed(c: Doc<"cases">, approval: Doc<"approvals">, action: OwnerAction, now: number): string | null {
   if (approval.cancelledAt) return "This payment was already declined.";
   if (action !== "cancel") return approval.approvedAt ? "You already approved this payment." : null;
 
   if (!approval.approvedAt) return "Nothing to cancel yet. Decline it instead.";
   if (!approval.coolingOffUntil || approval.coolingOffUntil <= now) return "The cooling-off period is over.";
-  const payment = await ctx.db
-    .query("payments")
-    .withIndex("by_case", (q) => q.eq("caseId", approval.caseId))
-    .first();
-  return payment ? "The payment is already being sent." : null;
+  // cases.claimPayment sets payStartedAt atomically before the Payer runs.
+  return c.payStartedAt ? "The payment is already being sent." : null;
 }
 
 async function recordWrongCode(
@@ -162,17 +155,18 @@ async function applyAction(
   await ctx.db.patch(approval._id, { method, cancelledAt: now });
   const verb = action === "decline" ? "declined" : "cancelled";
   await appendAudit(ctx, { caseId: c._id, actor: "owner", action: `approval.${verb}`, payload: { method } });
-  await finishLane(ctx, c._id, `${verb === "declined" ? "Declined" : "Cancelled"} by the owner via ${via}`);
+  const lane = verb === "declined" ? "Declined by the owner" : "Cancelled by the owner during cooling-off";
+  await finishLane(ctx, c._id, `${lane} via ${via}`);
   const message = `${verb === "declined" ? "Declined" : "Cancelled"}. Nothing will be paid.`;
   await notify(ctx, c._id, message);
   return message;
 }
 
-/** Finishes the "waiting for owner" lane run, if it is still running. */
+/** Finishes the "waiting for owner" lane run; a cancel after approval gets a run of its own. */
 async function finishLane(ctx: MutationCtx, caseId: Id<"cases">, summary: string) {
   const runs = await ctx.db.query("agentRuns").withIndex("by_case", (q) => q.eq("caseId", caseId)).collect();
   const waiting = runs.find((r) => r.agent === "ownerConcierge" && r.status === "running");
-  if (waiting) await ctx.scheduler.runAfter(0, internal.agentRuns.finish, { runId: waiting._id, summary });
+  await finishRun(ctx, waiting?._id ?? (await startRun(ctx, { caseId, agent: "ownerConcierge" })), { summary });
 }
 
 /** Owner alerts are audit events; the owner page and the ASI:One agent read them from there. */

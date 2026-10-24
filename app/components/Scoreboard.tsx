@@ -24,7 +24,7 @@ export function Scoreboard() {
           value={score?.realBillsPaid}
           extra={score ? formatCents(score.dollarsPaidCents) : undefined}
         />
-        <Metric label="Median decision" value={median != null ? `${Math.round(median / 1000)}s` : score ? "—" : undefined} />
+        <Metric label="Median decision" value={median != null ? seconds(median) : score ? "—" : undefined} />
       </dl>
       <div className="mono" role="status" aria-live="polite">
         {chain == null ? (
@@ -37,6 +37,11 @@ export function Scoreboard() {
       </div>
     </header>
   );
+}
+
+/** "0.2s" under ten seconds, "38s" above. */
+function seconds(ms: number): string {
+  return ms < 10_000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms / 1000)}s`;
 }
 
 function Metric(props: { label: string; value: string | number | undefined; extra?: string; good?: boolean }) {

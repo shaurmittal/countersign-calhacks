@@ -73,8 +73,9 @@ export async function withOneRetry<T>(call: () => Promise<T>): Promise<T> {
 /** Increase errors are JSON with `title` and `detail`. Only those go in logs, never the whole body. */
 function errorDetail(body: string): string {
   try {
-    const parsed = JSON.parse(body) as { title?: string; detail?: string };
-    return [parsed.title, parsed.detail].filter(Boolean).join(": ").slice(0, MAX_ERROR_DETAIL_CHARS) || "no detail";
+    const { title = "", detail = "" } = JSON.parse(body) as { title?: string; detail?: string };
+    const text = detail.startsWith(title.replace(/\.$/, "")) ? detail : [title, detail].filter(Boolean).join(" ");
+    return text.slice(0, MAX_ERROR_DETAIL_CHARS) || "no detail";
   } catch {
     return "non-JSON error body";
   }
