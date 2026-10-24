@@ -1,3 +1,4 @@
-uagents
-requests
-python-dotenv
+uagents==0.26.1
+uagents-core==0.4.12
+requests==2.34.2
+python-dotenv==1.2.4
