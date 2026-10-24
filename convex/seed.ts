@@ -57,8 +57,10 @@ export const run = internalMutation({
       });
     }
 
-    // The Moss index holds vendor ids, which change on every seed. A no-op when Moss isn't set up.
+    // The Moss vendor index holds vendor ids, which change on every seed; the policy index is built
+    // alongside it. Both are no-ops when Moss isn't set up.
     await ctx.scheduler.runAfter(0, internal.agents.moss.syncVendorIndex, {});
+    await ctx.scheduler.runAfter(0, internal.agents.moss.syncPolicyIndex, {});
 
     await appendAudit(ctx, { actor: "system", action: "seed.loaded" });
   },

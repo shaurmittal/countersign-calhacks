@@ -15,15 +15,34 @@ import { internalAction } from "../_generated/server";
 import {
   MOSS_MIN_SCORE,
   MOSS_SEARCH_BUDGET_MS,
+  deploymentIndexName,
   toSearchHits,
   vendorIndexName,
   vendorSearchDocs,
   withTimeout,
 } from "../../shared/verification/moss";
+import {
+  POLICY_LOOKUP_BUDGET_MS,
+  docsFromHits,
+  policyAnswer,
+  policyIndexName,
+  policySearchDocs,
+  rankPolicyByKeywords,
+  type PolicyAnswer,
+  type PolicyDoc,
+} from "../../shared/verification/policyLookup";
 import type { SearchHit, VerificationBook } from "../../shared/verification/types";
 
 // Only /tmp is writable here. The client keeps its device id and index cache under CACHE_PATH.
 const CACHE_PATH = "/tmp/moss";
+
+/**
+ * Moss bills per active device, and every serverless container (and worker) would otherwise mint a new
+ * device id under /tmp. One stable id per deployment keeps that to one device.
+ */
+function deviceId(): string {
+  return deploymentIndexName("countersign", process.env.CONVEX_CLOUD_URL);
+}
 
 type Credentials = { projectId: string; projectKey: string };
 
@@ -49,7 +68,10 @@ function describeError(err: unknown): string {
 // once (auto-refreshed, so a re-seed reaches it) and is reused while this process stays warm.
 const WORKER_SOURCE = `
 const { MossClient } = await import(process.env.MOSS_SDK_URL);
-const client = new MossClient(process.env.MOSS_PROJECT_ID, process.env.MOSS_PROJECT_KEY, { cachePath: process.env.MOSS_CACHE });
+const client = new MossClient(process.env.MOSS_PROJECT_ID, process.env.MOSS_PROJECT_KEY, {
+  cachePath: process.env.MOSS_CACHE,
+  identity: { deviceId: process.env.MOSS_DEVICE_ID },
+});
 const loaded = new Map();
 function load(index) {
   let ready = loaded.get(index);
@@ -105,6 +127,7 @@ function startWorker(creds: Credentials): Worker {
     MOSS_SESSION_CACHE_PATH: `${CACHE_PATH}/sessions`,
     MOSS_CACHE: CACHE_PATH,
     MOSS_SDK_URL: sdkUrl,
+    MOSS_DEVICE_ID: deviceId(),
     MOSS_PROJECT_ID: creds.projectId,
     MOSS_PROJECT_KEY: creds.projectKey,
   };
@@ -159,26 +182,87 @@ function ask(creds: Credentials, message: { type: "query" | "unload"; index: str
   });
 }
 
-/** Rebuilds this deployment's Moss index from the vendor book. The seed schedules it; safe to re-run. */
+type SyncResult = { ok: boolean; index: string; docCount: number; reason?: string };
+
+/**
+ * Makes `index` hold exactly `docs`. Management happens in the cloud, so it needs no local model and runs
+ * here. An existing index is updated in place (upsert, then drop what's gone) rather than deleted and
+ * recreated, so a failure, such as Moss refusing writes over its usage limit, never leaves it missing.
+ */
+async function rebuildIndex(
+  creds: Credentials,
+  index: string,
+  docs: { id: string; text: string; metadata: Record<string, string> }[],
+): Promise<SyncResult> {
+  const client = new MossClient(creds.projectId, creds.projectKey, {
+    cachePath: CACHE_PATH,
+    identity: { deviceId: deviceId() },
+  });
+  try {
+    if (!(await client.listIndexes()).some((i) => i.name === index)) {
+      if (docs.length > 0) await client.createIndex(index, docs);
+    } else {
+      if (docs.length > 0) await client.addDocs(index, docs, { upsert: true });
+      const keep = new Set(docs.map((d) => d.id));
+      const stale = (await client.getDocs(index)).map((d) => d.id).filter((id) => !keep.has(id));
+      if (stale.length > 0) await client.deleteDocs(index, stale);
+    }
+  } finally {
+    await client.close();
+  }
+  // A warm worker still holds the old copy; reloading picks up the new one.
+  if (worker) await withTimeout(ask(creds, { type: "unload", index }), 5_000, []);
+  return { ok: true, index, docCount: docs.length };
+}
+
+const NOT_SET_UP = "MOSS_PROJECT_ID or MOSS_API_KEY is not set";
+
+/** Rebuilds this deployment's vendor index from the vendor book. The seed schedules it; safe to re-run. */
 export const syncVendorIndex = internalAction({
   args: {},
-  handler: async (ctx): Promise<{ ok: boolean; index: string; docCount: number; reason?: string }> => {
+  handler: async (ctx): Promise<SyncResult> => {
     const index = vendorIndexName(process.env.CONVEX_CLOUD_URL);
     const creds = credentials();
-    if (!creds) return { ok: false, index, docCount: 0, reason: "MOSS_PROJECT_ID or MOSS_API_KEY is not set" };
+    if (!creds) return { ok: false, index, docCount: 0, reason: NOT_SET_UP };
     const book: VerificationBook = await ctx.runQuery(internal.agents.vendorVerifier.loadVerificationBook, {});
-    const docs = vendorSearchDocs(book.vendors);
-    // Index management happens in the cloud, so it needs no local model and runs in this process.
-    const client = new MossClient(creds.projectId, creds.projectKey, { cachePath: CACHE_PATH });
-    try {
-      // Vendor ids change on every seed, so the index is rebuilt rather than patched.
-      if ((await client.listIndexes()).some((i) => i.name === index)) await client.deleteIndex(index);
-      if (docs.length > 0) await client.createIndex(index, docs);
-    } finally {
-      await client.close();
+    // Vendor ids change on every seed, so the index is rebuilt rather than patched.
+    return rebuildIndex(creds, index, vendorSearchDocs(book.vendors));
+  },
+});
+
+/** Rebuilds this deployment's policy index from shared/verification/policyLookup.ts. Safe to re-run. */
+export const syncPolicyIndex = internalAction({
+  args: {},
+  handler: async (): Promise<SyncResult> => {
+    const index = policyIndexName(process.env.CONVEX_CLOUD_URL);
+    const creds = credentials();
+    if (!creds) return { ok: false, index, docCount: 0, reason: NOT_SET_UP };
+    return rebuildIndex(creds, index, policySearchDocs());
+  },
+});
+
+/**
+ * The mid-call lookup for both voice agents: the Countersign policy that answers a caller's or vendor's
+ * question ("why do you need to call them?", "can I pay in gift cards?"). Policy only, never invoice,
+ * amount or account details (see policyLookup.ts). Falls back to keyword matching when Moss is unavailable.
+ */
+export const lookupPolicy = internalAction({
+  args: { question: v.string() },
+  handler: async (_ctx, { question }): Promise<PolicyAnswer> => {
+    const asked = question.trim().slice(0, 500);
+    const creds = credentials();
+    if (creds && asked !== "") {
+      const index = policyIndexName(process.env.CONVEX_CLOUD_URL);
+      const found = ask(creds, { type: "query", index, query: asked, topK: 4 })
+        .then((hits) => docsFromHits(hits))
+        .catch((err: unknown): PolicyDoc[] => {
+          console.warn(`[moss] policy lookup failed: ${describeError(err)}`);
+          return [];
+        });
+      const docs = await withTimeout(found, POLICY_LOOKUP_BUDGET_MS, []);
+      if (docs.length > 0) return policyAnswer(docs, "moss");
     }
-    if (worker) await withTimeout(ask(creds, { type: "unload", index }), 5_000, []);
-    return { ok: true, index, docCount: docs.length };
+    return policyAnswer(rankPolicyByKeywords(asked), "keywords");
   },
 });
 

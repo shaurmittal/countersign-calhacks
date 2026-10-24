@@ -20,8 +20,8 @@ export const MOSS_CALLER_TIMEOUT_MS = 5_000;
 
 export type MossDoc = { id: string; text: string; metadata: Record<string, string> };
 
-/** "https://happy-otter-123.convex.cloud" -> "countersign-vendors-happy-otter-123". */
-export function vendorIndexName(deploymentUrl: string | undefined): string {
+/** `prefix` plus the deployment's name: ("countersign-vendors", "https://happy-otter-123.convex.cloud") -> "countersign-vendors-happy-otter-123". */
+export function deploymentIndexName(prefix: string, deploymentUrl: string | undefined): string {
   let host = "";
   try {
     host = new URL(deploymentUrl ?? "").hostname;
@@ -29,7 +29,11 @@ export function vendorIndexName(deploymentUrl: string | undefined): string {
     // No deployment URL (tests): the bare prefix.
   }
   const slug = (host.split(".")[0] ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  return slug ? `${VENDOR_INDEX_PREFIX}-${slug}` : VENDOR_INDEX_PREFIX;
+  return slug ? `${prefix}-${slug}` : prefix;
+}
+
+export function vendorIndexName(deploymentUrl: string | undefined): string {
+  return deploymentIndexName(VENDOR_INDEX_PREFIX, deploymentUrl);
 }
 
 /** One document per name and alias, so a short alias isn't averaged with the others. Ids are "<vendorId>#<n>". */

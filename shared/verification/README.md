@@ -27,6 +27,7 @@ Only `decide()` can return PAY. These findings are its inputs. They never claim 
 | `verifyVendor.ts` | Combines the above into `VendorFindings` |
 | `assessRisk.ts` | Combines the above into `RiskFindings` |
 | `moss.ts` | What goes into the Moss index, how its hits become `searchHits`, and the score floor |
+| `policyLookup.ts` | Policy sentences for the voice agents' mid-call lookup, and their keyword fallback |
 | `seedScenarios.test.ts` | Pins what P3 returns for each `scenarios.json` entry on the seed world |
 
 `shared/seedWorld.ts` holds the seed data. `convex/seed.ts` inserts it, and the tests read it through `buildSeedBook()`.
@@ -99,6 +100,57 @@ A hit can raise a vendor's score, never lower it, and only from 0.95 (`MOSS_MIN_
 | Harbor Bank | Harbor Legal | 0.83 | no match |
 
 If Moss isn't set up, fails, or runs out of time, matching runs in memory alone.
+
+**Billing**
+- Moss bills per active device. Each serverless container would otherwise mint its own device id, so every client reports one stable id per deployment, `countersign-<deployment>`.
+- Syncs update an existing index in place (upsert, then delete what's gone). A refused write therefore leaves the old index working.
+
+## Mid-call policy lookup (for P2's voice agents)
+
+`internal.agents.moss.lookupPolicy({ question })` returns `{ message, rules, source }`. `message` is plain text that the agent explains in its own words.
+
+**What it returns**
+- It answers "why does this need a callback?", "can I pay in gift cards?" or "what happens next?" with Countersign's rules: one speakable sentence per rule in `policyLookup.ts`, checked against P1's rule catalogue.
+- It is policy only. It never returns invoice numbers, amounts, limits or vendor details:
+  - An inbound caller isn't verified.
+  - On a callback the vendor must say the invoice number unprompted. That is P2's check against "yes to everything" answers (spec §8.2).
+
+**How it searches**
+- Moss searches `countersign-policy-<deployment>`. `syncPolicyIndex` builds it, and the seed schedules it.
+- Without Moss, the same sentences are ranked by keywords, so the tool always answers. `source` says which method answered.
+
+**Wiring for P2**
+
+`convex/channels/voice.ts` and `convex/http.ts` are P2's files. Add a tool that follows their conventions:
+
+```ts
+/** Tool `lookup_policy` (both agents). Body: { question (model) }. Policy only, never invoices or accounts. */
+export const lookupPolicy = httpAction(async (ctx, request) => {
+  if (!toolSecretValid(request)) return text("unauthorized", 401);
+  const question = str((await readJson(request)).question, 500);
+  if (!question) return text("question is required.", 400);
+  const answer = await ctx.runAction(internal.agents.moss.lookupPolicy, { question });
+  return text(answer.message);
+});
+
+// convex/http.ts
+http.route({ path: "/cartesia/tools/policy", method: "POST", handler: lookupPolicy });
+```
+
+Then configure the Cartesia tool `lookup_policy` on both agents:
+
+| Setting | Value |
+| --- | --- |
+| Description | "Look up Countersign's payment policy when the caller or vendor asks why a payment needs checking or what happens next. Never use it for invoices or accounts." |
+| Request | POST `<SITE>/cartesia/tools/policy` with the `X-Countersign-Secret` header |
+| Body | `question` (model-supplied): "The caller's question in a few words." |
+| Execution | pre_tool_speech `auto`, execution_mode `immediate`, timeout 5 s |
+
+To try it:
+
+```bash
+npx convex run agents/moss:lookupPolicy '{"question":"Can I pay you in bitcoin?"}'
+```
 
 ## Notes for P1 (`decide()`) and P4 (UI)
 
