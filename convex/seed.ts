@@ -5,6 +5,7 @@
 //   npx convex env set SEED_VENDOR_B_PHONE +1... (teammate B playing Pixel & Pine)
 // Run: npm run seed   (wipes the seed tables, then inserts)
 import { internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { DEMO_POLICY } from "../shared/config";
 import {
@@ -55,6 +56,9 @@ export const run = internalMutation({
         status: "open",
       });
     }
+
+    // The Moss index holds vendor ids, which change on every seed. A no-op when Moss isn't set up.
+    await ctx.scheduler.runAfter(0, internal.agents.moss.syncVendorIndex, {});
 
     await appendAudit(ctx, { actor: "system", action: "seed.loaded" });
   },

@@ -17,6 +17,7 @@
   "description": "The second signer a one-person company never had.",
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
+    "@moss-js/moss": "^1.21.0",
     "convex": "^1.48.0",
     "next": "^16.4.3",
     "react": "^19.3.1",
