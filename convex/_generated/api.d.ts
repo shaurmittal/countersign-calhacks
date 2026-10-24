@@ -24,6 +24,7 @@ import type * as channels_reply from "../channels/reply.js";
 import type * as channels_voice from "../channels/voice.js";
 import type * as channels_web from "../channels/web.js";
 import type * as channels_whatsapp from "../channels/whatsapp.js";
+import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as lib_cartesia from "../lib/cartesia.js";
 import type * as lib_caseView from "../lib/caseView.js";
@@ -64,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   "channels/voice": typeof channels_voice;
   "channels/web": typeof channels_web;
   "channels/whatsapp": typeof channels_whatsapp;
+  crons: typeof crons;
   http: typeof http;
   "lib/cartesia": typeof lib_cartesia;
   "lib/caseView": typeof lib_caseView;

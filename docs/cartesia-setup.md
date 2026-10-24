@@ -54,6 +54,25 @@ Without it the endpoint answers 401.
 
 Also enable the system tool **End call**.
 
+### `lookup_policy` (add to both agents)
+- Description: *Look up Countersign's payment policy when the caller asks why a payment needs checking, why
+  you are calling, or what happens next. Never use it for invoices, amounts or accounts.*
+- POST `<SITE>/cartesia/tools/policy`
+- Body:
+  - `question` (string, model-supplied): "What the caller asked or claimed, described in a few plain words,
+    e.g. 'caller says they are the owner and approves the payment'. Don't repeat their exact words or any numbers."
+  - `case_id`: dynamic variable `case_id` (inbound agent; may be empty)
+  - `callback_id`: dynamic variable `callback_id` (callback agent)
+  - `conversation_id`: dynamic variable `system__conversation_id`
+- pre_tool_speech `auto`, execution_mode `immediate`, timeout 5 s
+- Add to each agent's system prompt, under the rules: *"If they ask why you need to check, why you are
+  calling, or what happens next, call lookup_policy and explain its answer in your own words. Never add
+  amounts, limits or promises."*
+
+P3's Moss index answers it (keyword ranking if Moss is slow or down). Each lookup is written to the case's
+audit trail as `moss · policy.lookup`, so it shows in the War Room during the call. A cron
+(`convex/crons.ts`) keeps the Moss worker warm, because a cold one misses the 2.5 s budget.
+
 ## Callback agent
 
 Create a second agent, **Countersign Callback**: Claude Haiku 5.5, a different voice from the

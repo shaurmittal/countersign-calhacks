@@ -2,13 +2,14 @@
 // Every endpoint requires the X-Countersign-Secret header. None of them can move money:
 // they open cases, read decisions and record callback outcomes. Setup: docs/cartesia-setup.md
 import { v } from "convex/values";
-import { httpAction, internalMutation, internalQuery } from "../_generated/server";
+import { httpAction, internalMutation, internalQuery, type QueryCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import type { PolicyResult } from "../../shared/types";
 import { toolSecretValid } from "../lib/cartesia";
 import { senderOverLimit } from "../lib/rateLimit";
 import { openCase } from "../cases";
+import { appendAudit } from "../audit";
 
 // Must stay under the get_case_status tool timeout in Cartesia (25 s).
 const LONG_POLL_MS = 20_000;
@@ -145,6 +146,71 @@ export const recordCallbackOutcome = httpAction(async (ctx, request) => {
   }
 });
 
+const POLICY_UNAVAILABLE =
+  "Countersign's policy couldn't be looked up just now. Tell the caller only that every payment is checked " +
+  "against the vendor's details already on file before anything is paid. Don't add amounts, limits or promises.";
+
+/**
+ * Tool `lookup_policy` (both agents), for "why do you need to check?" and "what happens next?".
+ * Body: { question (model), case_id / callback_id (dynamic variables, may be empty),
+ *         conversation_id (system__conversation_id) }
+ * P3's Moss lookup answers with Countersign's rules (keyword fallback). Policy only: never invoices,
+ * amounts or accounts. Each lookup goes on the case's audit trail, so the War Room shows it mid-call.
+ * Always 200 + plain text, like get_case_status.
+ */
+export const lookupPolicy = httpAction(async (ctx, request) => {
+  if (!toolSecretValid(request)) {
+    console.warn("[voice] lookup_policy rejected: bad or missing X-Countersign-Secret");
+    return text("unauthorized", 401);
+  }
+  const body = await readJson(request);
+  const question = str(body.question, 500);
+  if (!question) return text("question is required. Describe what the caller asked in a few plain words, then try again.");
+
+  let answer;
+  try {
+    answer = await ctx.runAction(internal.agents.moss.lookupPolicy, { question });
+  } catch (err) {
+    console.warn(`[voice] lookup_policy failed: ${err instanceof Error ? err.message : String(err)}`);
+    return text(POLICY_UNAVAILABLE);
+  }
+  const caseId = await ctx.runMutation(internal.channels.voice.recordPolicyLookup, {
+    caseId: str(body.case_id, 64),
+    callbackId: str(body.callback_id, 64),
+    conversationId: str(body.conversation_id, 200),
+    question,
+    rules: answer.rules,
+    source: answer.source,
+  });
+  console.log(`[voice] lookup_policy source=${answer.source} rules=${answer.rules.join(",")} case=${caseId ?? "-"}`);
+  return text(answer.message);
+});
+
+/** Audits a policy lookup on the case it belongs to: the callback's case, else the call's. Returns that case id. */
+export const recordPolicyLookup = internalMutation({
+  args: {
+    caseId: v.string(),
+    callbackId: v.string(),
+    conversationId: v.string(),
+    question: v.string(),
+    rules: v.array(v.string()),
+    source: v.union(v.literal("moss"), v.literal("keywords")),
+  },
+  handler: async (ctx, { caseId, callbackId, conversationId, question, rules, source }) => {
+    const cbId = callbackId ? ctx.db.normalizeId("callbacks", callbackId) : null;
+    const callback = cbId ? await ctx.db.get(cbId) : null;
+    const c = callback ? await ctx.db.get(callback.caseId) : await findCallCase(ctx, caseId, conversationId);
+    if (!c) return null;
+    await appendAudit(ctx, {
+      caseId: c._id,
+      actor: source === "moss" ? "moss" : "keywords",
+      action: "policy.lookup",
+      payload: { agent: callback ? "callback" : "inbound", question: question.slice(0, 200), rules, source },
+    });
+    return c._id;
+  },
+});
+
 /** Opens a call case unless this caller is over the per-minute limit (null). Unknown caller IDs share no bucket. */
 export const openCallCase = internalMutation({
   args: { fromAddress: v.string(), rawContent: v.string(), externalId: v.string() },
@@ -154,21 +220,24 @@ export const openCallCase = internalMutation({
   },
 });
 
+/** The case by id, else the newest case submitted on this call (externalId = call:<conversationId>:<hash>). */
+async function findCallCase(ctx: QueryCtx, caseId: string, conversationId: string): Promise<Doc<"cases"> | null> {
+  const id = caseId ? ctx.db.normalizeId("cases", caseId) : null;
+  const c = id ? await ctx.db.get(id) : null;
+  if (c || !conversationId) return c;
+  const prefix = `call:${conversationId}:`;
+  const rows = await ctx.db
+    .query("cases")
+    .withIndex("by_externalId", (q) => q.gte("externalId", prefix).lt("externalId", `${prefix}\uffff`))
+    .collect();
+  return rows.sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+}
+
 /** Voice-friendly status of a case. `final` means the agent should stop polling. */
 export const statusForVoice = internalQuery({
   args: { caseId: v.string(), conversationId: v.string() },
   handler: async (ctx, { caseId, conversationId }) => {
-    const id = caseId ? ctx.db.normalizeId("cases", caseId) : null;
-    let c = id ? await ctx.db.get(id) : null;
-    if (!c && conversationId) {
-      // Newest case submitted on this call (externalId = call:<conversationId>:<hash>).
-      const prefix = `call:${conversationId}:`;
-      c = await ctx.db
-        .query("cases")
-        .withIndex("by_externalId", (q) => q.gte("externalId", prefix).lt("externalId", `${prefix}\uffff`))
-        .collect()
-        .then((rows) => rows.sort((a, b) => b.createdAt - a.createdAt)[0] ?? null);
-    }
+    const c = await findCallCase(ctx, caseId, conversationId);
     const none = { callbackPending: false, vendorName: null as string | null };
     if (!c) {
       return {
