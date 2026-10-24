@@ -46,7 +46,10 @@ Without it the endpoint answers 401.
 ### `get_case_status`
 - Description: *Get Countersign's decision on the submitted request. Call it after submit_payment_request, and again whenever it says to check again.*
 - POST `<SITE>/cartesia/tools/case-status`
-- Body: `case_id`: dynamic variable `case_id`
+- Body:
+  - `case_id`: dynamic variable `case_id`
+  - `conversation_id`: dynamic variable `system__conversation_id` (fallback: the backend finds the newest
+    case on this call if the `case_id` assignment hasn't landed yet)
 - pre_tool_speech `force` (it can take up to 15 s), execution_mode `immediate`, **timeout 25 s**
 
 Also enable the system tool **End call**.

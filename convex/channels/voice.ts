@@ -39,7 +39,10 @@ async function sha8(s: string) {
  * Returns JSON; the tool's assignment saves `case_id` into a dynamic variable for get_case_status.
  */
 export const submitPaymentRequest = httpAction(async (ctx, request) => {
-  if (!toolSecretValid(request)) return text("unauthorized", 401);
+  if (!toolSecretValid(request)) {
+    console.warn("[voice] submit_payment_request rejected: bad or missing X-Countersign-Secret");
+    return text("unauthorized", 401);
+  }
   const body = await readJson(request);
   const requestText = str(body.request_text);
   if (!requestText) return text("request_text is required. Ask the caller what they want paid, then try again.", 400);
@@ -53,6 +56,7 @@ export const submitPaymentRequest = httpAction(async (ctx, request) => {
     // Same call + same text = webhook retry, not a new request.
     externalId: `call:${conversationId}:${await sha8(requestText)}`,
   });
+  console.log(`[voice] submit_payment_request conversation=${conversationId} case=${caseId}`);
   return Response.json({
     case_id: caseId,
     message: "Submitted. Tell the caller you are checking it now, then call get_case_status.",
@@ -60,18 +64,25 @@ export const submitPaymentRequest = httpAction(async (ctx, request) => {
 });
 
 /**
- * Inbound agent tool `get_case_status`. Body: { case_id (dynamic variable) }.
- * Long-polls up to 15 s so the agent usually gets the decision in one call. Returns plain text for the LLM.
+ * Inbound agent tool `get_case_status`.
+ * Body: { case_id (dynamic variable, may be empty), conversation_id (system__conversation_id) }
+ * Falls back to the newest case opened on this call, so it works even if the case_id
+ * assignment hasn't landed yet. Long-polls up to 15 s. Always 200 + plain text, because a
+ * non-2xx reaches the LLM as an opaque error and it tells the caller it "can't see" the request.
  */
 export const getCaseStatus = httpAction(async (ctx, request) => {
-  if (!toolSecretValid(request)) return text("unauthorized", 401);
+  if (!toolSecretValid(request)) {
+    console.warn("[voice] get_case_status rejected: bad or missing X-Countersign-Secret");
+    return text("unauthorized", 401);
+  }
   const body = await readJson(request);
   const caseId = str(body.case_id, 64);
-  if (!caseId) return text("No request has been submitted on this call yet. Use submit_payment_request first.", 400);
+  const conversationId = str(body.conversation_id, 200);
+  console.log(`[voice] get_case_status case=${caseId || "-"} conversation=${conversationId || "-"}`);
 
   const deadline = Date.now() + LONG_POLL_MS;
   for (;;) {
-    const status = await ctx.runQuery(internal.channels.voice.statusForVoice, { caseId });
+    const status = await ctx.runQuery(internal.channels.voice.statusForVoice, { caseId, conversationId });
     if (status.final || Date.now() >= deadline) return text(status.message);
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
@@ -107,11 +118,25 @@ export const recordCallbackOutcome = httpAction(async (ctx, request) => {
 
 /** Voice-friendly status of a case. `final` means the agent should stop polling. */
 export const statusForVoice = internalQuery({
-  args: { caseId: v.string() },
-  handler: async (ctx, { caseId }) => {
-    const id = ctx.db.normalizeId("cases", caseId);
-    const c = id ? await ctx.db.get(id) : null;
-    if (!c) return { final: true, message: "That request could not be found. Ask the caller to repeat it and submit it again." };
+  args: { caseId: v.string(), conversationId: v.string() },
+  handler: async (ctx, { caseId, conversationId }) => {
+    const id = caseId ? ctx.db.normalizeId("cases", caseId) : null;
+    let c = id ? await ctx.db.get(id) : null;
+    if (!c && conversationId) {
+      // Newest case submitted on this call (externalId = call:<conversationId>:<hash>).
+      const prefix = `call:${conversationId}:`;
+      c = await ctx.db
+        .query("cases")
+        .withIndex("by_externalId", (q) => q.gte("externalId", prefix).lt("externalId", `${prefix}\uffff`))
+        .collect()
+        .then((rows) => rows.sort((a, b) => b.createdAt - a.createdAt)[0] ?? null);
+    }
+    if (!c) {
+      return {
+        final: true,
+        message: "No request has been submitted on this call yet. Get the details from the caller and call submit_payment_request first.",
+      };
+    }
 
     const policy = c.policyResult as PolicyResult | undefined;
     const reasons = policy?.reasons?.length ? ` Reasons: ${policy.reasons.join("; ")}.` : "";
