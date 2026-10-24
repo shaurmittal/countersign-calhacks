@@ -9,7 +9,8 @@ import { internalQuery, type ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import type { PaymentRequest, VendorFindings } from "../../shared/types";
-import type { BookVendor, VerificationBook } from "../../shared/verification/types";
+import { MOSS_CALLER_TIMEOUT_MS, withTimeout } from "../../shared/verification/moss";
+import type { BookVendor, SearchHit, VerificationBook } from "../../shared/verification/types";
 import { verifyVendor } from "../../shared/verification/verifyVendor";
 
 function toBookVendor(v: Doc<"vendors">): BookVendor {
@@ -70,18 +71,27 @@ export const loadVerificationBook = internalQuery({
   },
 });
 
+/**
+ * Moss hits for the claimed vendor name (convex/agents/moss.ts runs in Node). [] when the request names
+ * no vendor, Moss isn't set up, or it takes too long, so the in-memory match decides. Never throws.
+ */
+export async function mossHits(ctx: ActionCtx, claimedName: string | null): Promise<SearchHit[]> {
+  const query = claimedName?.trim().slice(0, 200) ?? "";
+  if (query === "") return [];
+  return withTimeout(ctx.runAction(internal.agents.moss.searchVendors, { query }), MOSS_CALLER_TIMEOUT_MS, []);
+}
+
 export async function runVendorVerifier(
   ctx: ActionCtx,
   c: Doc<"cases">,
   request: PaymentRequest,
 ): Promise<VendorFindings> {
-  const book: VerificationBook = await ctx.runQuery(internal.agents.vendorVerifier.loadVerificationBook, {});
-  // TODO(P3): Moss (MOSS_PROJECT_ID, MOSS_API_KEY). @moss-js/moss ships native binaries, so the search
-  // runs in its own "use node" action (node.externalPackages in convex.json); pass its hits as
-  // searchHits here and in runRiskAnalyst. Until then verifyVendor matches in memory.
-  //
+  const [book, searchHits]: [VerificationBook, SearchHit[]] = await Promise.all([
+    ctx.runQuery(internal.agents.vendorVerifier.loadVerificationBook, {}),
+    mossHits(ctx, request.claimedVendorName),
+  ]);
   // TODO(P3): CRS sandbox (CRS_USERNAME, CRS_PASSWORD, CRS_BASE_URL; POST /users/login for a Bearer
   // token): business lookup on the vendor's crsBusinessId and OFAC on any new beneficiary. Any error
   // or timeout returns crs: { status: "unavailable" }, never "ok".
-  return verifyVendor({ request, fromAddress: c.fromAddress, book });
+  return verifyVendor({ request, fromAddress: c.fromAddress, book, searchHits });
 }

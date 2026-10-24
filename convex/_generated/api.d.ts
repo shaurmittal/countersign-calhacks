@@ -11,6 +11,7 @@
 import type * as agentRuns from "../agentRuns.js";
 import type * as agents_callbackVerifier from "../agents/callbackVerifier.js";
 import type * as agents_intake from "../agents/intake.js";
+import type * as agents_moss from "../agents/moss.js";
 import type * as agents_ownerConcierge from "../agents/ownerConcierge.js";
 import type * as agents_payer from "../agents/payer.js";
 import type * as agents_riskAnalyst from "../agents/riskAnalyst.js";
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   agentRuns: typeof agentRuns;
   "agents/callbackVerifier": typeof agents_callbackVerifier;
   "agents/intake": typeof agents_intake;
+  "agents/moss": typeof agents_moss;
   "agents/ownerConcierge": typeof agents_ownerConcierge;
   "agents/payer": typeof agents_payer;
   "agents/riskAnalyst": typeof agents_riskAnalyst;

@@ -26,6 +26,7 @@ Only `decide()` can return PAY. These findings are its inputs. They never claim 
 | `explain.ts` | The two-sentence explanation (a template until Claude is wired) |
 | `verifyVendor.ts` | Combines the above into `VendorFindings` |
 | `assessRisk.ts` | Combines the above into `RiskFindings` |
+| `moss.ts` | What goes into the Moss index, how its hits become `searchHits`, and the score floor |
 | `seedScenarios.test.ts` | Pins what P3 returns for each `scenarios.json` entry on the seed world |
 
 `shared/seedWorld.ts` holds the seed data. `convex/seed.ts` inserts it, and the tests read it through `buildSeedBook()`.
@@ -64,8 +65,40 @@ Flags are for display only and never decide anything. Each one is also backed by
 | Seam | Today | When the key arrives |
 | --- | --- | --- |
 | **CRS** KYB and OFAC (`CRS_USERNAME`, `CRS_PASSWORD`, `CRS_BASE_URL`) | `crs: { status: "not_checked" }`, `ofacHit: false` | In `runVendorVerifier`:<br>• `POST /users/login` for a Bearer token<br>• look up `vendor.crsBusinessId` (business credit, i.e. KYB)<br>• screen any new beneficiary against the OFAC watchlist<br>Any error or timeout must return `crs: { status: "unavailable" }`. The endpoints and test identities are in the CRS Postman collection. |
-| **Moss** index (`MOSS_PROJECT_ID`, `MOSS_API_KEY`) | `matchVendor` runs in memory over the vendors table | `@moss-js/moss` needs native binaries, so it runs only in a separate `"use node"` action, with `node.externalPackages` set in `convex.json`. Pass its hits (vendor id plus a 0..1 score) to `matchVendor` as `searchHits`. The in-memory scores stay as the fallback. |
+| **Moss** index (`MOSS_PROJECT_ID`, `MOSS_API_KEY`) | Wired; see the Moss section below | Done: both agents pass Moss hits to `matchVendor`, and matching falls back to memory when Moss isn't set up |
 | **Claude** explanation (`ANTHROPIC_API_KEY`) | Template text from `explainRisk` | Rewrite the explanation from the flags, falling back to the template on any error. |
+
+## Moss vendor search
+
+`convex/agents/moss.ts` is a `"use node"` file, because `@moss-js/moss` ships native binaries. `convex.json` lists it under `node.externalPackages` and pins Node 22.
+
+**The index**
+- Each deployment gets its own index, named `countersign-vendors-<deployment>`. That way teammates' dev deployments on one Moss project don't collide.
+- It holds one document per vendor name and alias. No phones, emails or bank numbers go in, because Moss sends document text to its cloud and the SDK always sends usage telemetry.
+- `syncVendorIndex` rebuilds the index, and the seed schedules it, since vendor ids change on every seed. To rebuild it by hand, run `npx convex run agents/moss:syncVendorIndex`.
+
+**Searching**
+- `searchVendors` returns `searchHits` for a claimed name. To check it:
+
+  ```bash
+  npx convex run agents/moss:searchVendors '{"query":"NW Cloud"}'
+  ```
+- Convex's Node runtime has a read-only `$HOME`, and `process.env` changes never reach native code. So queries run in a child Node process whose environment points Moss's model and index caches at `/tmp`.
+- The child starts on the first search and is reused while the process stays warm. A cold first search, which includes the model download, can run past the 3-second budget. It then returns no hits.
+
+**Matching**
+
+A hit can raise a vendor's score, never lower it, and only from 0.95 (`MOSS_MIN_SCORE`). The floor comes from scores measured on the seed book. Each one is pinned in `moss.test.ts`:
+
+| Query | Moss's best vendor | Score | Result |
+| --- | --- | --- | --- |
+| NW Cloud | Northwind Cloud | 0.97 | matches, which only Moss can do |
+| Northern Cloud | Northwind Cloud | 1.00 | matches; the team accepted this |
+| Pinewood Design | Pixel & Pine Design | 0.88 | no match |
+| Sam's Club | Sam Ortiz | 0.87 | no match |
+| Harbor Bank | Harbor Legal | 0.83 | no match |
+
+If Moss isn't set up, fails, or runs out of time, matching runs in memory alone.
 
 ## Notes for P1 (`decide()`) and P4 (UI)
 

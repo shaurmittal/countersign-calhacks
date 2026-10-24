@@ -1,0 +1,7 @@
+{
+  "$schema": "./node_modules/convex/schemas/convex.schema.json",
+  "node": {
+    "externalPackages": ["@moss-js/moss"],
+    "nodeVersion": "22"
+  }
+}
