@@ -122,7 +122,7 @@ ESCALATE only; it never lifts a BLOCK or HOLD. PAY requires R12's positive check
 | --- | --- | --- |
 | R1 | No vendor-book match | BLOCK |
 | R2 | New bank details (or change_bank / update_payroll) | HOLD + callback → confirmed: ESCALATE → OTP: PAY (vendor record updated, audited). no_answer: HOLD |
-| R3 | Sender claims to be the payee (vendor or employee) but isn't on file | HOLD + callback → confirmed: OK, no_answer: ESCALATE |
+| R3 | Sender not on file claims to be the payee (vendor or employee), or asks to change the payee's bank or payroll details | HOLD + callback → confirmed: OK, no_answer: ESCALATE |
 | R4 | Amount >25% outside typical range | ESCALATE |
 | R5 | No open invoice matching number/amount | HOLD |
 | R6 | Over auto-pay limit, or vendor `alwaysEscalate` | ESCALATE |

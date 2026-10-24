@@ -113,7 +113,11 @@ export function decide(input: PolicyInput): PolicyResult {
 
     // A trust entry makes senderOnFile true and nothing else: R2, R4-R7 and the invoice check still run below.
     if (vf.trustedByOwner && vf.senderOnFile) hit("R3", "NOTE", `The owner's trust list ties this sender to ${vendor.name}`);
-    if (!vf.senderOnFile && PAYEE_ROLES.has(req.claimedSenderRole)) {
+    // Someone not on file who speaks for the payee, or who asks to change where the payee is paid. The second
+    // part doesn't depend on how the model labelled the sender: "it's Sam, send my pay here" reads as vendor,
+    // employee or unknown from run to run, and only the payee would ask to change the payee's own account.
+    const actsForPayee = PAYEE_ROLES.has(req.claimedSenderRole) || BANK_CHANGE_ACTIONS.has(req.requestedAction);
+    if (!vf.senderOnFile && actsForPayee) {
       if (cb === null) hit("R3", "HOLD", `Sender is not on file for ${vendor.name}: calling back on the number on file`, true);
       else if (cb === "confirmed") hit("R3", "NOTE", `Sender not on file, but ${vendor.name} confirmed by callback`);
       else if (cb === "denied") hit("R3", "NOTE", "Sender not on file (denied by the vendor)");

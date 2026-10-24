@@ -160,6 +160,16 @@ describe("policy engine", () => {
       expect(r.needs.callback).toBe(true);
     });
 
+    it("a payroll change from a sender not on file fires even when the role reads as unknown", () => {
+      const r = decide(input({ request: { claimedSenderRole: "unknown", requestedAction: "update_payroll" } }));
+      expect(r.firedRules).toEqual(expect.arrayContaining(["R2", "R3"]));
+      expect(r.needs.callback).toBe(true);
+    });
+
+    it("an unknown sender paying an open invoice to the account on file is not R3", () => {
+      expect(decide(input({ request: { claimedSenderRole: "unknown" } })).firedRules).not.toContain("R3");
+    });
+
     it("sender on file -> no callback", () => {
       const r = decide(input({ ...base, vendorFindings: { senderOnFile: true } }));
       expect(r.firedRules).not.toContain("R3");
