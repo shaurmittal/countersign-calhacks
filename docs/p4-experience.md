@@ -7,7 +7,7 @@ owner's approval page, the Payer, and Countersign on Agentverse / ASI:One.
 | --- | --- |
 | `/` War Room | Projector. Follows the newest case; click a case in the queue to pin it. |
 | `/owner` | The teammate playing Priya, on their phone. Approve, decline, cancel. |
-| `/judge` | Printable judge card. Set `NEXT_PUBLIC_COUNTERSIGN_PHONE` (and optionally `NEXT_PUBLIC_TRY_URL`). |
+| `/judge-card` | Printable judge card (P2). Set `NEXT_PUBLIC_TRY_URL` for its QR code. |
 | `/try` | Judge chat (P2). |
 
 ## One-time setup
@@ -109,7 +109,7 @@ Every route needs `X-Agent-Bridge-Secret`. Only `fetch-agents/countersign_agent.
    sorted-key hashing landed shows "Audit chain broken" in the War Room.
 2. `npm run seed` on prod, enroll Priya's authenticator against prod, and approve one test payment.
 3. Keep the cooling-off at 60 s (demo policy) so a cancel can be shown live.
-4. Print `/judge`.
+4. Print `/judge-card`.
 
 ## Testing locally without a Convex login
 

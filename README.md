@@ -75,7 +75,6 @@ convex/
   scoreboard.ts             P4  top-bar numbers
 app/                        P4  War Room (Next.js + Convex React hooks)
 app/owner/                  P4  owner approvals, opened on the owner's phone
-app/judge/                  P4  printable judge card
 app/try/                    P2  judge chat page (QR code on the judge card)
 scenarios/scenarios.json    P1  30-scenario answer key (spec §9)
 scenarios/world.ts          P1  seed world as data + reference verifier (what VendorFindings must contain)
