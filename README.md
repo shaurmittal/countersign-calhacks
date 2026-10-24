@@ -107,7 +107,7 @@ ESCALATE only; it never lifts a BLOCK or HOLD. PAY requires R12's positive check
 | R11 | Sender claims to be the owner | ESCALATE (the claim is worth nothing; real owner approves via OTP) |
 | R12 | Known vendor, open invoice, amount matches, nothing else blocking | PAY |
 | R13 | Invoice already paid | BLOCK, not overridable |
-| R14 | Parse failure, verifier/risk didn't run, non-USD (HOLD); CRS unavailable/unverified (ESCALATE) | HOLD / ESCALATE |
+| R14 | Parse failure, several payments in one message, verifier/risk didn't run, non-USD (HOLD); CRS unavailable/unverified (ESCALATE) | HOLD / ESCALATE |
 | R15 | Injection attempt (model OR regex prescan) | ESCALATE: never auto-paid |
 
 ### Contract notes for P2-P4

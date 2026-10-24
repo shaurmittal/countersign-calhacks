@@ -39,6 +39,7 @@ export function templateReply(result: PolicyResult, ctx: ReplyContext): string {
         return `I can't make that payment until I've confirmed it with ${vendor} directly. I'm calling them now on the number we have on file.`;
       }
       if (/cooling-off/i.test(reasons)) return "The owner has approved this payment. It will be released after a short cooling-off period.";
+      if (/several payments/i.test(reasons)) return "Please send one payment request per message so each can be verified separately.";
       if (/could not be read/i.test(reasons)) {
         return "Sorry, we couldn't read that request. Please send the vendor, invoice number and amount as plain text.";
       }

@@ -315,6 +315,12 @@ describe("policy engine", () => {
       expect(decide(input({ riskFindings: null })).decision).toBe("HOLD");
     });
 
+    it("several payments in one message -> HOLD, never PAY the first one", () => {
+      const r = decide(input({ request: { multipleRequests: true } }));
+      expect(r.decision).toBe("HOLD");
+      expect(r.firedRules).toContain("R14");
+    });
+
     it("non-USD -> HOLD", () => {
       expect(decide(input({ request: { currency: "EUR" } })).decision).toBe("HOLD");
     });

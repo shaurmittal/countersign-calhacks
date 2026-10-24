@@ -16,6 +16,7 @@ const MODEL_OUT: IntakeOutput = {
   urgencyClaims: [],
   requestedAction: "pay_invoice",
   injectionAttempt: false,
+  paymentCount: 1,
 };
 
 describe("prescan", () => {
@@ -76,6 +77,11 @@ describe("merge (model output + prescan)", () => {
 
   it("the model cannot downgrade gift cards to a plain payment", () => {
     expect(merge(MODEL_OUT, prescan("buy apple gift cards for the client")).requestedAction).toBe("gift_cards");
+  });
+
+  it("flags several payments in one message", () => {
+    expect(merge({ ...MODEL_OUT, paymentCount: 2 }, prescan("x")).multipleRequests).toBe(true);
+    expect(merge(MODEL_OUT, prescan("x")).multipleRequests).toBeUndefined();
   });
 
   it("drops absurd amounts", () => {

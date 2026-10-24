@@ -59,6 +59,7 @@ export function decide(input: PolicyInput): PolicyResult {
 
   // ---- Missing or unavailable data: never pay on what we could not check ----
   if (req.parseFailed) hit("R14", "HOLD", "The request could not be read reliably");
+  if (req.multipleRequests) hit("R14", "HOLD", "Several payments in one message; each must be sent separately");
   if (!req.parseFailed && !vf) hit("R14", "HOLD", "The vendor check did not complete");
   if (!req.parseFailed && !rf) hit("R14", "HOLD", "The risk check did not complete");
   if (vf?.crs.status === "unavailable") hit("R14", "ESCALATE", "Identity service (CRS) was unavailable");

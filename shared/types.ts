@@ -36,6 +36,8 @@ export type PaymentRequest = {
   injectionAttempt: boolean;
   /** Set when the parser could not produce a valid request (model error, bad JSON). Forces HOLD. */
   parseFailed?: boolean;
+  /** The message asks for more than one payment. Each must arrive as its own request; forces HOLD. */
+  multipleRequests?: boolean;
 };
 
 export type CaseStatus =
