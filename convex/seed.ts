@@ -1,10 +1,20 @@
 // Seed world (owner: P3 freezes the data). Spec §7.1. Fictional company and vendors.
+// The data itself lives in shared/seedWorld.ts so the tests run against the same world.
 // Real phone numbers come from Convex env vars, never from the repo:
 //   npx convex env set SEED_OWNER_PHONE +1...   (teammate playing Priya; receives OTPs)
 //   npx convex env set SEED_VENDOR_B_PHONE +1... (teammate B playing Pixel & Pine)
 // Run: npm run seed   (wipes the seed tables, then inserts)
 import { internalMutation } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { DEMO_POLICY } from "../shared/config";
+import {
+  SEED_INVOICES,
+  SEED_OWNER,
+  SEED_VENDOR_B_PHONE,
+  SEED_VENDORS,
+  seedDueDate,
+  type SeedVendorKey,
+} from "../shared/seedWorld";
 import { appendAudit } from "./audit";
 
 const TABLES = ["owner", "vendors", "invoices", "cases", "agentRuns", "callbacks", "approvals", "payments"] as const;
@@ -16,70 +26,35 @@ export const run = internalMutation({
       for (const row of await ctx.db.query(table).collect()) await ctx.db.delete(row._id);
     }
 
-    const ownerPhone = process.env.SEED_OWNER_PHONE ?? "+15555550100";
-    const vendorBPhone = process.env.SEED_VENDOR_B_PHONE ?? "+15555550101";
+    const ownerPhone = process.env.SEED_OWNER_PHONE ?? SEED_OWNER.phone;
+    const vendorBPhone = process.env.SEED_VENDOR_B_PHONE ?? SEED_VENDOR_B_PHONE;
 
     await ctx.db.insert("owner", {
-      name: "Priya Raman",
-      company: "Lumen Labs",
+      name: SEED_OWNER.name,
+      company: SEED_OWNER.company,
       phone: ownerPhone,
-      email: "priya@lumenlabs.example",
+      email: SEED_OWNER.email,
       otpPhone: ownerPhone,
       policy: DEMO_POLICY,
     });
 
-    const pixel = await ctx.db.insert("vendors", {
-      name: "Pixel & Pine Design",
-      aliases: ["Pixel and Pine", "Pixel & Pine", "PixelPine"],
-      domains: ["pixelandpine.example"],
-      phoneOnFile: vendorBPhone,
-      emailsOnFile: ["billing@pixelandpine.example"],
-      bankLast4: "4417",
-      bankRouting: "121000248",
-      typicalAmountRange: [4_800_00, 4_800_00],
-      cadence: "monthly",
-    });
-    const northwind = await ctx.db.insert("vendors", {
-      name: "Northwind Cloud",
-      aliases: ["Northwind", "Northwind Hosting"],
-      domains: ["northwindcloud.example"],
-      phoneOnFile: "+15555550102",
-      emailsOnFile: ["invoices@northwindcloud.example"],
-      bankLast4: "2290",
-      bankRouting: "026009593",
-      typicalAmountRange: [310_00, 420_00],
-      cadence: "monthly",
-    });
-    const harbor = await ctx.db.insert("vendors", {
-      name: "Harbor Legal",
-      aliases: ["Harbor Legal LLP", "Harbor Law"],
-      domains: ["harborlegal.example"],
-      phoneOnFile: "+15555550103",
-      emailsOnFile: ["accounts@harborlegal.example"],
-      bankLast4: "8812",
-      bankRouting: "322271627",
-      typicalAmountRange: [500_00, 15_000_00],
-      cadence: "irregular",
-      alwaysEscalate: true,
-    });
-    const sam = await ctx.db.insert("vendors", {
-      name: "Sam Ortiz",
-      aliases: ["Sam", "Samuel Ortiz"],
-      domains: [],
-      phoneOnFile: "+15555550104",
-      emailsOnFile: ["sam.ortiz@mail.example"],
-      bankLast4: "6634",
-      bankRouting: "091000019",
-      typicalAmountRange: [1_200_00, 1_200_00],
-      cadence: "weekly",
-    });
+    const vendorIds = {} as Record<SeedVendorKey, Id<"vendors">>;
+    for (const key of Object.keys(SEED_VENDORS) as SeedVendorKey[]) {
+      const vendor = SEED_VENDORS[key];
+      // Pixel & Pine's phone on file is teammate B's, who answers the demo callback.
+      vendorIds[key] = await ctx.db.insert("vendors", key === "pixel" ? { ...vendor, phoneOnFile: vendorBPhone } : vendor);
+    }
 
-    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
-    await ctx.db.insert("invoices", { vendorId: pixel, number: "1042", amountCents: 4_800_00, dueDate: tomorrow, status: "open" });
-    await ctx.db.insert("invoices", { vendorId: northwind, number: "NW-889", amountCents: 362_00, dueDate: tomorrow, status: "open" });
-    await ctx.db.insert("invoices", { vendorId: sam, number: "W42", amountCents: 1_200_00, dueDate: tomorrow, status: "open" });
-    // Mirrors scenarios/world.ts, so the answer key and the live seed agree.
-    await ctx.db.insert("invoices", { vendorId: harbor, number: "HL-2210", amountCents: 1_500_00, dueDate: tomorrow, status: "open" });
+    const dueDate = seedDueDate(Date.now());
+    for (const inv of SEED_INVOICES) {
+      await ctx.db.insert("invoices", {
+        vendorId: vendorIds[inv.vendor],
+        number: inv.number,
+        amountCents: inv.amountCents,
+        dueDate,
+        status: "open",
+      });
+    }
 
     await appendAudit(ctx, { actor: "system", action: "seed.loaded" });
   },
