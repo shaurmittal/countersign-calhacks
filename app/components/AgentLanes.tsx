@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import type { api } from "../../convex/_generated/api";
 import type { AgentName, PaymentRequest, PolicyResult, RiskFindings, VendorFindings } from "../../shared/types";
 import { formatCents, RAIL_LABEL } from "../../shared/ledger";
+import { crsLaneText } from "../../shared/verification/crs";
 import { clockTime, last4, ruleInfo, secondsLeft, useNow } from "./format";
 
 export type CaseDetail = NonNullable<FunctionReturnType<typeof api.warRoom.caseDetail>>;
@@ -106,7 +107,7 @@ function VendorDetail({ findings: f, detail }: { findings: VendorFindings; detai
       {f.bankMatches != null && (
         <span className={`chip ${f.bankMatches ? "ok" : "bad"}`}>Bank {f.bankMatches ? "matches file" : "differs from file"}</span>
       )}
-      <span className={`chip ${crsTone(f)}`}>CRS: {crsLabel(f)}</span>
+      <span className={`chip ${crsTone(f)}`}>{crsLaneText(f.crs) ?? "CRS: not checked"}</span>
       <span className={`chip ${f.ofacHit ? "bad" : "ok"}`}>OFAC: {f.ofacHit ? "HIT" : "clear"}</span>
       {f.alreadyPaidAt != null ? (
         <span className="chip bad">Invoice already paid</span>
@@ -117,11 +118,6 @@ function VendorDetail({ findings: f, detail }: { findings: VendorFindings; detai
       )}
     </Chips>
   );
-}
-
-function crsLabel(f: VendorFindings): string {
-  if (f.crs?.status === "ok") return f.crs.businessVerified === false ? "not verified" : "business verified";
-  return f.crs?.status === "unavailable" ? "unavailable" : "not checked";
 }
 
 function crsTone(f: VendorFindings): string {

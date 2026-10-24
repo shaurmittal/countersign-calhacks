@@ -12,6 +12,7 @@ import {
   crsApiBase,
   crsConfig,
   crsFromFraudFinder,
+  crsLaneText,
   crsUnavailable,
   emailToScreen,
   emailsToScreen,
@@ -218,6 +219,37 @@ function fakeCrs(replies: { login?: () => [number, unknown]; screen?: () => [num
   };
   return { calls, fetchFn };
 }
+
+describe("crsLaneText", () => {
+  const summary = parseFraudFinder(SANDBOX_BODY)!;
+
+  it("shows the live Fraud Finder score and email status in the lane", () => {
+    expect(crsLaneText(crsFromFraudFinder(summary))).toBe("CRS fraud score 100/100 · email invalid");
+    expect(crsLaneText(crsFromFraudFinder({ ...summary, score: 12, emailStatus: "valid" }))).toBe(
+      "CRS fraud score 12/100 · email valid",
+    );
+  });
+
+  it("counts the emails when more than one was screened", () => {
+    const crs = combineCrs([
+      { source: "sender", crs: crsFromFraudFinder({ ...summary, score: 20, emailStatus: "valid" }) },
+      { source: "message", crs: crsFromFraudFinder(summary) },
+    ]);
+    expect(crsLaneText(crs)).toBe("CRS fraud score 100/100 · email invalid · 2 emails checked");
+  });
+
+  it("says why CRS was unavailable, and shows nothing when it didn't run", () => {
+    expect(crsLaneText(crsUnavailable("timeout"))).toBe("CRS unavailable (timeout)");
+    expect(crsLaneText({ status: "unavailable" })).toBe("CRS unavailable");
+    expect(crsLaneText({ status: "not_checked" })).toBeNull();
+    expect(crsLaneText(undefined)).toBeNull();
+  });
+
+  it("never shows an email address", () => {
+    const crs = combineCrs([{ source: "sender", crs: crsFromFraudFinder(summary) }]);
+    expect(crsLaneText(crs)).not.toMatch(/@/);
+  });
+});
 
 describe("createCrsClient", () => {
   afterEach(() => {

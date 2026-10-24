@@ -173,6 +173,27 @@ export function combineCrs(checks: readonly ScreenedCheck[]): CrsResult {
   return { ...worst.crs, raw: { ...record(worst.crs.raw), source: worst.source, checks: lines } };
 }
 
+/**
+ * The CRS result as one line for the War Room's Vendor Verifier lane, e.g.
+ * "CRS fraud score 100/100 · email invalid". null when CRS didn't run. Never holds an address.
+ */
+export function crsLaneText(crs: CrsResult | undefined): string | null {
+  if (!crs || crs.status === "not_checked") return null;
+  const raw = record(crs.raw);
+  if (crs.status === "unavailable") {
+    const reason = shortText(raw?.reason);
+    return reason ? `CRS unavailable (${reason})` : "CRS unavailable";
+  }
+  const score = finite(raw?.score);
+  if (score === null) return crs.businessVerified === false ? "CRS: not verified" : "CRS checked";
+  const parts = [`CRS fraud score ${score}/100`];
+  const emailStatus = shortText(raw?.emailStatus);
+  if (emailStatus) parts.push(`email ${emailStatus}`);
+  const checks = Array.isArray(raw?.checks) ? raw.checks.length : 0;
+  if (checks > 1) parts.push(`${checks} emails checked`);
+  return parts.join(" · ");
+}
+
 /** The part of fetch the client uses, so tests can pass a fake. */
 export type CrsFetch = (
   url: string,
