@@ -9,6 +9,7 @@ export const channel = v.union(
   v.literal("sms"),
   v.literal("email"),
   v.literal("agent"),
+  v.literal("whatsapp"),
 );
 
 export const caseStatus = v.union(
