@@ -11,8 +11,23 @@ async function sha256Hex(text: string): Promise<string> {
   return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Keys are sorted recursively: Convex returns stored objects with sorted keys, so hashing
+// insertion order would make verifyChain fail on any multi-key payload.
+function stable(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stable);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, v]) => v !== undefined)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([k, v]) => [k, stable(v)]),
+    );
+  }
+  return value;
+}
+
 function canonical(e: { seq: number; caseId?: string; actor: string; action: string; payload: unknown; at: number }) {
-  return JSON.stringify([e.seq, e.caseId ?? null, e.actor, e.action, e.payload ?? null, e.at]);
+  return JSON.stringify(stable([e.seq, e.caseId ?? null, e.actor, e.action, e.payload ?? null, e.at]));
 }
 
 /** Call from any mutation. Use `internal.audit.append` from actions. */
