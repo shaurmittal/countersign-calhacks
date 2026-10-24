@@ -179,6 +179,37 @@ are in [docs/cartesia-setup.md](docs/cartesia-setup.md).
 - **Waits:** a callback takes about 30–60 s end to end. Tools time out after 25 s, so long waits
   arrive as several 20 s checks.
 
+## Backend: how we use Convex
+
+Convex is the whole backend: the database, every agent step, the timers and the live War Room.
+
+**Features used**
+- **Reactive queries:** the War Room, `/owner` and `/try` subscribe with `useQuery`. When an agent
+  writes its `agentRuns` row, every open screen updates. We wrote no websocket or polling code.
+- **Mutations are transactions:** the payment lock (`cases.claimPayment`) and the audit chain
+  (`appendAudit` reads the last hash and writes the next) each run in one transaction, so two
+  triggers can't both pay a case or fork the chain.
+- **Actions** make every outside call (Claude, Cartesia, Moss, CRS, Increase) and write results back
+  through mutations, each with an audit event.
+- **Scheduler:** the pipeline runs as scheduled steps; the vendor callback retries and times out on
+  timers; after the owner approves a large payment, the pipeline schedules its own wake-up at
+  `coolingOffUntil` and pays only if the approval still stands.
+- **HTTP actions:** Cartesia's webhook tools, the WhatsApp webhook and the Fetch.ai agent bridge, each
+  authenticated (a secret header, or Meta's signature for WhatsApp).
+- **Indexes** for every lookup, e.g. cases by `externalId` (dedupes webhook retries), payments by
+  idempotency key, audit events by sequence.
+- **Node runtime** (`"use node"`) only for the Moss SDK. **Environment variables** hold every key.
+- **convex-test:** the pipeline tests run the real pipeline, Policy Engine and audit chain against an
+  in-memory Convex backend.
+
+**Known limits**
+- Actions aren't transactional. A payment call that times out is retried with the same Increase
+  `Idempotency-Key`, so it can't be sent twice.
+- `audit.verifyChain` re-reads the whole log whenever it changes: fine for a demo, a production
+  version would checkpoint.
+- No sign-in: the War Room and `/owner` are public read-only views of fictional data. Approving a
+  payment still needs the owner's authenticator code.
+
 ## Team rules
 
 - **Only `decide()` can say PAY.** No model output, tool or webhook moves money directly.
