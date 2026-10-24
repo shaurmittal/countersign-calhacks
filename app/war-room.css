@@ -1,86 +1,164 @@
-/* War Room (spec §7.2). Built for a projector: large type, high contrast, one glance per panel. */
-.war-room { display: grid; grid-template-rows: auto 1fr; height: 100dvh; }
+/* War Room (spec §7.2). Built for a projector. Reuses the /demo landing stylesheet (landing.css, the .lp tokens
+   and film classes); everything here is scoped under .wr-root so it wins over landing.css's generic rules. */
+body:has(.wr-root) { overflow: hidden; }
+.wr-root { height: 100dvh; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); overflow: hidden; }
+/* landing.css's `.lp > *` puts the grain back in flow; keep it as an overlay so it takes no grid row. */
+.wr-root > .lp-grain { position: absolute; inset: 0; z-index: 0; }
 
-/* ---- Scoreboard ---- */
-.scoreboard { display: flex; align-items: center; gap: 28px; padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--panel); font-variant-numeric: tabular-nums; flex-wrap: wrap; }
-.brand { display: flex; flex-direction: column; margin-right: auto; }
-.brand strong { font-size: 22px; letter-spacing: -0.01em; }
-.brand span { font-size: 13px; color: var(--muted); }
-.metric { display: flex; flex-direction: column; min-width: 96px; }
-.metric dt { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
-.metric dd { margin: 0; font-size: 28px; font-weight: 700; line-height: 1.2; }
-.metric dd small { font-size: 15px; font-weight: 500; color: var(--muted); margin-left: 6px; }
-.metric.good dd { color: var(--pay); }
+/* ---- Nav ---- */
+.wr-root .wr-kicker { margin-left: 4px; font-size: 11px; }
 
-/* ---- Main grid ---- */
-.grid { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(420px, 1.5fr) minmax(320px, 1.1fr); gap: 16px; padding: 16px; min-height: 0; }
-.column { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
-.panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; overflow: auto; min-height: 0; }
-.panel h2 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); display: flex; align-items: center; gap: 8px; }
-.panel.grow { flex: 1; }
-@media (max-width: 1100px) {
-  .war-room { height: auto; }
-  .grid { grid-template-columns: 1fr; }
+/* ---- Scoreboard strip ---- */
+.wr-root .lp-livestrip.wr-strip { max-width: none; margin: 10px 16px 0; border-radius: 14px; padding: 10px 18px; gap: 10px 26px; }
+.wr-root .wr-strip dd { font-size: 22px; font-family: var(--lp-mono); font-variant-numeric: tabular-nums; }
+.wr-root .wr-strip dd small { font-size: 13px; color: var(--lp-muted); margin-left: 4px; }
+.wr-root .wr-strip dt { font-size: 13px; color: var(--lp-muted); }
+.wr-root .wr-strip .wr-good { color: var(--lp-green); }
+.wr-root .wr-chain { margin-left: auto; font-family: var(--lp-mono); font-size: 12.5px; }
+.wr-root .chain-ok { color: var(--lp-ice); }
+.wr-root .chain-bad { color: var(--lp-red); }
+
+/* ---- The frame (the film box) ---- */
+.wr-root .wr-frame { margin: 10px 16px 12px; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+/* Grid items default to min-width:auto; the nowrap ticker would otherwise widen the whole frame. */
+.wr-root > *, .wr-root .wr-frame > * { min-width: 0; }
+
+/* ---- Bar: case tabs and the case clock ---- */
+.wr-root .wr-bar { flex-wrap: nowrap; }
+.wr-root .wr-tabs-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.wr-root .wr-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+.wr-root .wr-tabs button { white-space: nowrap; }
+.wr-root .wr-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; margin-left: 2px; }
+.wr-root .wr-dot:not([data-decision]) { background: transparent; border: 1.5px solid var(--lp-muted); }
+.wr-root .wr-follow { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid #6b4d1c; background: var(--lp-amber-deep); color: var(--lp-amber-hi); white-space: nowrap; }
+.wr-root .wr-empty-tabs { color: var(--lp-muted); font-family: var(--lp-mono); font-size: 13px; }
+.wr-root .lp-caseclock b { font-size: 17px; }
+
+/* ---- Stage: agent graph left, case file right, caption as the lower third ---- */
+/* Two rows: graph | case file (spans both rows), caption under the graph. Nothing overlaps. */
+.wr-root .wr-stage { position: relative; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(380px, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 12px; padding: 14px 16px 14px; }
+/* The Payer node sits at 92% of the graph box and its labels hang below it; the padding is their reserve. */
+.wr-root .wr-graph-cell { position: relative; min-height: 0; grid-column: 1; grid-row: 1; padding-bottom: 84px; }
+.wr-root .wr-casefile { grid-column: 2; grid-row: 1 / span 2; min-height: 0; overflow: auto; scrollbar-width: thin; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+.wr-root .wr-stage > .lp-caption { position: static; grid-column: 1; grid-row: 2; width: auto; transform: none; padding: 10px 18px 12px; }
+.wr-root .wr-poster { top: 45%; }
+.wr-root .lp-poster-main { gap: 14px; padding: 16px 28px; }
+
+/* ---- Caption: the caller's words and the agent's reply ---- */
+.wr-root .wr-caption { display: grid; gap: 8px; }
+.wr-root .wr-caption-caller .lp-caption-who { color: var(--lp-red); }
+.wr-root .wr-caption-caller .lp-caption-text { font-size: clamp(15px, 1vw, 18px); color: var(--lp-soft); display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; min-height: 0; }
+.wr-root .wr-caption-reply { padding-top: 8px; border-top: 1px solid var(--lp-line); }
+.wr-root .wr-caption-reply .lp-caption-text { font-size: clamp(18px, 1.3vw, 25px); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 0; }
+
+/* Laptop screens: the 1000x620 room gets squashed, so drop the tech lines and shrink the orbs. */
+@media (max-height: 960px) {
+  .wr-root .lp-node-tech { display: none; }
+  .wr-root .lp-node { width: 150px; margin-left: -75px; margin-top: -26px; }
+  .wr-root .lp-node-orb { width: 52px; height: 52px; }
+  .wr-root .lp-node-leader .lp-node-orb { width: 66px; height: 66px; margin-top: -7px; }
+  .wr-root .lp-node-name { font-size: 14px; }
+  .wr-root .wr-graph-cell { padding-bottom: 58px; }
+  .wr-root .wr-verdict-word { font-size: clamp(36px, 3vw, 48px); }
+  /* Reclaim height for the graph: tighter chrome and a one-row caller line in the caption. */
+  .wr-root .lp-nav { padding-top: 10px; padding-bottom: 10px; }
+  .wr-root .lp-livestrip.wr-strip { margin-top: 8px; padding: 7px 18px; }
+  .wr-root .wr-strip dd { font-size: 19px; }
+  .wr-root .wr-frame { margin: 8px 16px 10px; }
+  .wr-root .wr-bar { padding: 9px 18px; }
+  .wr-root .wr-stage { padding: 10px 16px; gap: 10px; }
+  .wr-root .wr-foot { padding: 8px 18px 9px; min-height: 36px; }
+  .wr-root .wr-stage > .lp-caption { padding: 8px 16px 10px; }
+  .wr-root .wr-caption { gap: 4px; }
+  .wr-root .wr-caption-caller { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+  .wr-root .wr-caption-caller .lp-caption-who { margin-bottom: 0; flex: none; }
+  .wr-root .wr-caption-caller .lp-caption-text { flex: 1; min-width: 0; font-size: 15px; }
+  .wr-root .wr-caption-reply { padding-top: 6px; }
+  .wr-root .wr-caption-reply .lp-caption-who { margin-bottom: 2px; }
+  .wr-root .wr-caption-reply .lp-caption-text { -webkit-line-clamp: 2; font-size: clamp(17px, 1.3vw, 21px); line-height: 1.28; }
 }
 
-/* ---- Incoming ---- */
-.incoming-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; font-size: 14px; }
-.incoming-text { font-size: 22px; line-height: 1.4; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.reply { margin-top: 16px; padding: 12px 14px; border-left: 3px solid var(--decision, var(--border)); background: var(--surface-2); border-radius: 0 8px 8px 0; font-size: 16px; }
-.reply b { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 4px; }
+/* ---- Verdict (the lock panel) ---- */
+.wr-root .wr-verdict { padding: 14px 16px; }
+.wr-root .wr-verdict-word { display: inline-block; margin: 2px 0 8px; padding: 2px 14px 6px; border: 4px solid currentColor; border-radius: 12px; font-size: clamp(40px, 3.2vw, 60px); font-weight: 800; letter-spacing: 0.06em; line-height: 1; animation: wr-slam 0.35s var(--lp-ease) both; box-shadow: 0 0 50px color-mix(in srgb, currentColor 22%, transparent); }
+.wr-root .wr-verdict-word:not([data-decision]) { color: var(--lp-ice); border-style: dashed; font-size: 22px; letter-spacing: 0.14em; text-transform: uppercase; font-family: var(--lp-mono); font-weight: 600; animation: none; box-shadow: none; }
+@keyframes wr-slam { from { opacity: 0; transform: rotate(-4deg) scale(1.9); } to { opacity: 1; transform: none; } }
+.wr-root .wr-verdict-line { font-size: 16px; color: var(--lp-soft); margin: 0 0 10px; }
+.wr-root .wr-verdict .lp-fired { margin-bottom: 10px; }
+/* The key pill takes the decision's color (landing.css hard-codes red, which reads as an error on a HOLD). */
+.wr-root [data-verdict="PAY"] { --wr-decision: var(--lp-green); }
+.wr-root [data-verdict="HOLD"] { --wr-decision: var(--lp-amber); }
+.wr-root [data-verdict="ESCALATE"] { --wr-decision: var(--lp-violet); }
+.wr-root [data-verdict="BLOCK"] { --wr-decision: var(--lp-red); }
+.wr-root [data-verdict="NO_ACTION"] { --wr-decision: var(--lp-soft); }
+.wr-root .wr-verdict .lp-fired li[data-key] { border-color: var(--wr-decision, var(--lp-line-2)); }
+.wr-root .wr-verdict .lp-fired li[data-key] b { color: var(--wr-decision, var(--lp-amber)); }
+.wr-root .lp-rules li { font-size: 12.5px; color: #707a88; }
+.wr-root .lp-rules li[data-state="checked"] { color: var(--lp-ice); }
+.wr-root .lp-rules li[data-state="fired"] { color: #140f07; }
+.wr-root .wr-countdown { margin-top: 10px; font-family: var(--lp-mono); font-size: 13.5px; color: var(--lp-amber-hi); }
 
-/* ---- Queue ---- */
-.queue { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.queue button { width: 100%; text-align: left; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; min-height: 44px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text); transition: background 150ms var(--ease-out); }
-.queue button:hover { background: var(--surface-2); }
-.queue button[aria-current="true"] { border-color: var(--focus); background: var(--surface-2); }
-.queue .preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
-.follow { margin-left: auto; font-size: 12px; text-transform: none; letter-spacing: 0; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--text); }
+/* ---- Disclosure blocks ---- */
+.wr-root details.wr-more { margin-top: 8px; }
+.wr-root details.wr-more > summary { font-family: var(--lp-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--lp-muted); cursor: pointer; list-style: none; }
+.wr-root details.wr-more > summary::before { content: "▸ "; }
+.wr-root details[open].wr-more > summary::before { content: "▾ "; }
+.wr-root details.wr-more > :not(summary) { margin-top: 6px; font-size: 14px; color: var(--lp-soft); }
 
-/* ---- Agent lanes ---- */
-.lanes { display: flex; flex-direction: column; gap: 10px; }
-.lane { position: relative; overflow: hidden; border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 8px; padding: 10px 14px; background: var(--bg); transition: border-color 200ms var(--ease-out), background 200ms var(--ease-out); }
-.lane[data-status="running"] { border-left-color: var(--running); background: color-mix(in srgb, var(--running) 7%, var(--bg)); }
-.lane[data-status="done"] { border-left-color: var(--text); }
-.lane[data-status="failed"] { border-left-color: var(--block); }
-.lane[data-status="idle"] { opacity: 0.55; }
-.lane[data-status="running"]::after { content: ""; position: absolute; left: 0; top: 0; height: 2px; width: 40%; background: var(--running); animation: sweep 1.2s var(--ease-out) infinite; }
-@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
-.lane-head { display: flex; align-items: baseline; gap: 10px; }
-.lane-head strong { font-size: 16px; }
-.lane-head .tech { font-size: 12px; color: var(--muted); }
-.lane-status { margin-left: auto; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
-.lane-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-.lane[data-status="running"] .lane-status { color: var(--running); }
-.lane[data-status="running"] .lane-status::before { animation: blink 1s ease-in-out infinite; }
-.lane[data-status="done"] .lane-status { color: var(--text); }
-.lane[data-status="failed"] .lane-status { color: var(--block); }
-@keyframes blink { 50% { opacity: 0.25; } }
-.lane-summary { font-size: 17px; font-weight: 600; margin-top: 4px; overflow-wrap: anywhere; }
-.lane-body { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.lane-note { margin: 8px 0 0; font-size: 14px; color: var(--muted); }
-.lane-error { margin: 8px 0 0; font-size: 14px; color: #fecaca; }
-.transcript { margin: 8px 0 0; max-height: 120px; overflow: auto; font-size: 13px; white-space: pre-wrap; background: var(--panel); border-radius: 6px; padding: 8px 10px; }
-.meter { flex-basis: 100%; height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
-.meter span { display: block; height: 100%; background: linear-gradient(90deg, var(--hold), var(--block)); transform-origin: left; transition: transform 300ms var(--ease-out); }
-.journal { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
-.journal th, .journal td { padding: 4px 6px; border-bottom: 1px solid var(--border); text-align: left; }
-.journal td.amt, .journal th.amt { text-align: right; }
+/* ---- Agent lanes as finding cards ---- */
+.wr-root .lanes { display: flex; flex-direction: column; gap: 10px; }
+.wr-root .lane { position: relative; transition: border-color 0.3s, opacity 0.3s; }
+.wr-root .lane[data-status="running"] { border-color: var(--lp-amber); box-shadow: 0 0 24px rgba(242, 176, 76, 0.15); }
+.wr-root .lane[data-status="failed"] { border-color: var(--lp-red); }
+.wr-root .lane[data-status="idle"] { opacity: 0.45; }
+.wr-root .lp-finding-title { display: flex; align-items: center; gap: 10px; }
+.wr-root .lane-status { margin-left: auto; font-size: 11px; letter-spacing: 0.1em; color: var(--lp-muted); display: inline-flex; align-items: center; gap: 6px; }
+.wr-root .lane-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.wr-root .lane[data-status="running"] .lane-status { color: var(--lp-amber); }
+.wr-root .lane[data-status="running"] .lane-status::before { animation: wr-blink 1s ease-in-out infinite; }
+@keyframes wr-blink { 50% { opacity: 0.25; } }
+.wr-root .lane[data-status="done"] .lane-status { color: var(--lp-soft); }
+.wr-root .lane[data-status="failed"] .lane-status { color: var(--lp-red); }
+.wr-root .lane-summary { font-size: 15.5px; font-weight: 600; line-height: 1.35; margin: 2px 0 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wr-root .lane-body { display: flex; flex-wrap: wrap; gap: 5px; }
+.wr-root .lane-error { margin: 6px 0 0; color: var(--lp-red); font-size: 14px; }
 
-/* ---- Decision card ---- */
-.decision-card { border: 2px solid var(--decision, var(--border)); }
-.decision-word { display: flex; align-items: center; gap: 14px; font-size: 56px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; color: var(--decision, var(--muted)); margin: 4px 0 12px; }
-.decision-word svg { width: 44px; height: 44px; flex-shrink: 0; }
-.decision-line { font-size: 17px; margin: 0 0 12px; }
-.rules { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-.reasons { margin: 0; padding-left: 18px; font-size: 15px; display: flex; flex-direction: column; gap: 4px; }
-.countdown { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: color-mix(in srgb, var(--hold) 12%, transparent); border: 1px solid color-mix(in srgb, var(--hold) 50%, transparent); font-size: 16px; font-variant-numeric: tabular-nums; }
+/* Chips, retinted to the landing palette (overrides globals.css). */
+.wr-root .chip { font-size: 12.5px; padding: 2px 9px; background: var(--lp-panel-2); border-color: var(--lp-line-2); color: var(--lp-soft); }
+.wr-root .chip.ok { color: var(--lp-green); border-color: #24412f; background: #0f2419; }
+.wr-root .chip.warn { color: var(--lp-amber-hi); border-color: #6b4d1c; background: var(--lp-amber-deep); }
+.wr-root .chip.bad { color: #ffb3a1; border-color: #5a2a1f; background: var(--lp-red-deep); }
+.wr-root .chip.info { color: var(--lp-ice-hi); border-color: #24506e; background: var(--lp-ice-deep); }
 
-/* ---- Audit trail ---- */
-.audit { list-style: none; margin: 0; padding: 0; font-family: var(--font-mono); font-size: 12px; }
-.audit li { display: grid; grid-template-columns: 52px 1fr auto; gap: 8px; padding: 4px 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
-.audit .hash { color: var(--muted); }
-.chain-ok { color: var(--pay); }
-.chain-bad { color: var(--block); }
+/* Meter, transcript and journal inside a lane. */
+.wr-root .meter { flex-basis: 100%; height: 6px; border-radius: 999px; background: var(--lp-line); overflow: hidden; }
+.wr-root .meter span { display: block; height: 100%; background: linear-gradient(90deg, var(--lp-amber), var(--lp-red)); transform-origin: left; transition: transform 0.3s var(--lp-ease); }
+.wr-root .transcript { max-height: 140px; overflow: auto; font-family: var(--lp-mono); font-size: 12.5px; white-space: pre-wrap; background: var(--lp-bg); border-radius: 8px; padding: 8px 10px; margin: 0; }
+.wr-root .journal { width: 100%; margin-top: 6px; border-collapse: collapse; font-family: var(--lp-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.wr-root .journal th, .wr-root .journal td { padding: 3px 6px; border-bottom: 1px solid var(--lp-line); text-align: left; }
+.wr-root .journal .amt { text-align: right; }
 
-.empty { color: var(--muted); font-size: 15px; margin: 0; }
+/* Anything new rises in. */
+.wr-root .wr-rise { animation: lp-rise 0.45s var(--lp-ease) both; }
+
+/* ---- Foot: the audit chain as a ticker ---- */
+.wr-root .wr-foot { padding: 10px 18px 12px; border-top: 1px solid var(--lp-line); min-height: 44px; }
+.wr-root .lp-chain.wr-ticker { flex-wrap: nowrap; overflow: hidden; gap: 4px 10px; }
+.wr-root .wr-ticker li { font-size: 12px; white-space: nowrap; }
+.wr-root .wr-ticker li + li::before { content: "← "; }
+.wr-root .wr-ticker .wr-hash { color: var(--lp-muted); margin-left: 6px; }
+.wr-root .wr-muted { color: var(--lp-muted); font-family: var(--lp-mono); font-size: 13px; }
+
+/* ---- Smaller screens: let the page scroll and stack the stage ---- */
+@media (max-width: 1100px) {
+  .wr-root { height: auto; overflow: visible; }
+  body:has(.wr-root) { overflow: auto; }
+  .wr-root .wr-stage { grid-template-columns: minmax(0, 1fr); grid-template-rows: 420px auto auto; padding-bottom: 16px; }
+  .wr-root .wr-graph-cell { height: 420px; }
+  .wr-root .wr-stage > .lp-caption { grid-row: 2; }
+  .wr-root .wr-casefile { grid-column: 1; grid-row: 3; overflow: visible; }
+}
+@media (max-height: 760px) {
+  .wr-root { height: auto; overflow: visible; }
+  body:has(.wr-root) { overflow: auto; }
+}

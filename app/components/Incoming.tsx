@@ -1,30 +1,31 @@
 "use client";
-// Left column (spec §7.2): the selected request, the reply Countersign sent, and the case queue
-// so two judges can test at once.
+// Left column (spec §7.2): the selected request as a caption, the reply Countersign sent, and the
+// case tabs so two judges can test at once.
 import type { Id } from "../../convex/_generated/dataModel";
 import type { CaseRow } from "./DecisionCard";
 import { channelLabel, clockTime } from "./format";
 
-const PREVIEW_CHARS = 80;
-
 export function Incoming({ c }: { c: CaseRow }) {
   return (
-    <section className="panel" aria-labelledby="incoming-heading" data-decision={c.decision}>
-      <h2 id="incoming-heading">Incoming</h2>
-      <div className="incoming-meta">
-        <span className="chip">{channelLabel(c.channel)}</span>
-        <span className="muted">
-          from {c.fromAddress} · {clockTime(c.createdAt)}
-        </span>
+    <div className="lp-caption wr-caption" aria-live="polite">
+      <div className="wr-caption-caller">
+        <p className="lp-caption-who">
+          {channelLabel(c.channel)}{" "}
+          <span>
+            from {c.fromAddress} · {clockTime(c.createdAt)}
+          </span>
+        </p>
+        <p className="lp-caption-text">{c.rawContent}</p>
       </div>
-      <p className="incoming-text">{c.rawContent}</p>
       {c.replyText && (
-        <div className="reply">
-          <b>Countersign replied</b>
-          {c.replyText}
+        <div key={c.replyText} className="wr-caption-reply wr-rise">
+          <p className="lp-caption-who">
+            Countersign <span>reply</span>
+          </p>
+          <p className="lp-caption-text">{c.replyText}</p>
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -36,34 +37,28 @@ export function CaseQueue(props: {
   onFollow: () => void;
 }) {
   return (
-    <section className="panel grow" aria-labelledby="queue-heading">
-      <h2 id="queue-heading">
-        Cases
-        {!props.following && (
-          <button type="button" className="follow" onClick={props.onFollow}>
-            Follow newest
-          </button>
-        )}
-      </h2>
-      <ul className="queue">
+    <div className="wr-tabs-wrap">
+      <ol className="lp-chapters wr-tabs" aria-label="Cases">
         {props.cases.map((c) => (
           <li key={c._id}>
             <button
               type="button"
-              aria-current={c._id === props.selectedId}
+              aria-current={c._id === props.selectedId ? "step" : undefined}
               onClick={() => props.onSelect(c._id)}
             >
-              <span className="muted mono">{clockTime(c.createdAt)}</span>
-              <span className="preview">
-                {channelLabel(c.channel)}: {c.rawContent.slice(0, PREVIEW_CHARS)}
-              </span>
-              <span className="chip" data-decision={c.decision} style={{ color: "var(--decision, var(--muted))" }}>
-                {c.decision ?? c.status.toLowerCase().replace("_", " ")}
-              </span>
+              <span className="lp-chapter-num">{clockTime(c.createdAt)}</span>
+              <span className="lp-chapter-title">{channelLabel(c.channel)}</span>
+              <span className="wr-dot" data-decision={c.decision} aria-hidden="true" />
+              <span className="sr-only">{c.decision ?? c.status.toLowerCase().replace("_", " ")}</span>
             </button>
           </li>
         ))}
-      </ul>
-    </section>
+      </ol>
+      {!props.following && (
+        <button type="button" className="wr-follow" onClick={props.onFollow}>
+          Follow newest
+        </button>
+      )}
+    </div>
   );
 }

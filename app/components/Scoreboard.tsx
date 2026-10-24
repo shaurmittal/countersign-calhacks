@@ -1,5 +1,5 @@
 "use client";
-// Top bar (spec §7.2). Numbers come from convex/scoreboard.ts; definitions in shared/scoreboard.ts.
+// Live numbers strip (spec §7.2). Numbers come from convex/scoreboard.ts; definitions in shared/scoreboard.ts.
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { formatCents } from "../../shared/ledger";
@@ -10,23 +10,22 @@ export function Scoreboard() {
   const median = score?.medianDecisionMs;
 
   return (
-    <header className="scoreboard">
-      <div className="brand">
-        <strong>Countersign</strong>
-        <span>The second signer a one-person company never had</span>
-      </div>
-      <dl style={{ display: "contents" }}>
-        <Metric label="Requests" value={score?.requests} />
-        <Metric label="Scam attempts" value={score?.scamAttempts} />
-        <Metric label="Dollars lost" value={score ? formatCents(score.dollarsLostCents) : undefined} good />
+    <header className="lp-livestrip wr-strip" aria-label="Live numbers">
+      <p>
+        <span className="lp-live-dot" aria-hidden="true" /> Live
+      </p>
+      <dl>
+        <Metric label="requests" value={score?.requests} />
+        <Metric label="scam attempts" value={score?.scamAttempts} />
+        <Metric label="lost to scams" value={score ? formatCents(score.dollarsLostCents) : undefined} good />
         <Metric
-          label="Real bills paid"
+          label="bills paid"
           value={score?.realBillsPaid}
           extra={score ? formatCents(score.dollarsPaidCents) : undefined}
         />
-        <Metric label="Median decision" value={median != null ? seconds(median) : score ? "—" : undefined} />
+        <Metric label="median decision" value={median != null ? seconds(median) : score ? "—" : undefined} />
       </dl>
-      <div className="mono" role="status" aria-live="polite">
+      <p className="wr-chain" role="status" aria-live="polite">
         {chain == null ? (
           <span className="muted">Checking audit chain…</span>
         ) : chain.ok ? (
@@ -34,7 +33,7 @@ export function Scoreboard() {
         ) : (
           <span className="chain-bad">Audit chain broken at #{chain.brokenAtSeq}</span>
         )}
-      </div>
+      </p>
     </header>
   );
 }
@@ -44,14 +43,15 @@ function seconds(ms: number): string {
   return ms < 10_000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms / 1000)}s`;
 }
 
+/** One strip metric. The value comes before its label: the demo CSS orders `dd` before `dt`. */
 function Metric(props: { label: string; value: string | number | undefined; extra?: string; good?: boolean }) {
   return (
-    <div className={`metric${props.good ? " good" : ""}`}>
-      <dt>{props.label}</dt>
-      <dd>
+    <div>
+      <dd className={props.good ? "wr-good" : undefined}>
         {props.value ?? "–"}
-        {props.extra && <small>{props.extra}</small>}
+        {props.extra && <small> {props.extra}</small>}
       </dd>
+      <dt>{props.label}</dt>
     </div>
   );
 }
