@@ -38,10 +38,19 @@ function envLocal(): Record<string, string> {
   }
 }
 
+/** One CLI call, retried on a network blip ("fetch failed") so a flaky connection doesn't end the rehearsal. */
 async function convex<T = unknown>(fn: string, args: object = {}): Promise<T> {
-  const { stdout } = await run("npx", ["convex", "run", fn, JSON.stringify(args)], { maxBuffer: 10_000_000 });
-  const text = stdout.trim();
-  return (text ? JSON.parse(text) : null) as T;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const { stdout } = await run("npx", ["convex", "run", fn, JSON.stringify(args)], { maxBuffer: 10_000_000 });
+      const text = stdout.trim();
+      return (text ? JSON.parse(text) : null) as T;
+    } catch (err) {
+      const transient = /fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|50[234]/i.test(String(err));
+      if (!transient || attempt >= 4) throw err;
+      await sleep(1_000 * attempt);
+    }
+  }
 }
 
 async function envGet(name: string): Promise<string | null> {
