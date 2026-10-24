@@ -188,6 +188,47 @@ describe("leader pipeline", () => {
     expect(runPayer).not.toHaveBeenCalled();
   });
 
+  it("bank change with no account details: closes HOLD asking for them, never reaches the Payer or the bank update", async () => {
+    const { t, w } = await setup();
+    given({ claimedVendorName: "Pixel & Pine", requestedAction: "update_payroll", newBankDetails: null }, findings(w.pixel._id, w.inv1042._id, { senderOnFile: true }));
+    const caseId = await open(t);
+    await drain(t);
+    const c = await getCase(t, caseId);
+    expect(c?.status).toBe("CLOSED");
+    expect(c?.decision).toBe("HOLD");
+    expect(c?.policyResult.firedRules).toContain("R2");
+    expect(c?.replyText).toMatch(/routing and account numbers/);
+    expect(await callbacksFor(t, caseId)).toHaveLength(0);
+    expect(runPayer).not.toHaveBeenCalled();
+    const pixel = await t.run((ctx) => ctx.db.get(w.pixel._id));
+    expect(pixel?.bankLast4).toBe(w.pixel.bankLast4);
+  });
+
+  it("a vendor's yes without the matched invoice number is unclear; saying the number confirms", async () => {
+    const { t, w } = await setup();
+    const sam = await t.run(async (ctx) => (await ctx.db.query("vendors").collect()).find((v) => v.name === "Sam Ortiz")!);
+    const w42 = await t.run(async (ctx) => (await ctx.db.query("invoices").collect()).find((i) => i.number === "W42")!);
+    // "It's Sam, pay me": no invoice number in the request; the verifier matched Sam's one open invoice.
+    given({ claimedVendorName: "Sam Ortiz", claimedSenderRole: "vendor", invoiceNumber: null }, findings(sam._id, w42._id, { senderOnFile: false }));
+    const caseId = await open(t);
+    await step(t); // intake + agents + policy -> R3 callback scheduled
+    await step(t); // callback start
+    const [cb] = await callbacksFor(t, caseId);
+    expect(cb).toBeDefined();
+
+    const yesOnly = await t.mutation(internal.agents.callbackVerifier.reportFromAgent, { callbackId: cb._id, outcome: "confirmed" });
+    expect(yesOnly.ok).toBe(true);
+    expect((await callbacksFor(t, caseId))[0].outcome).toBe("unclear");
+
+    // A second callback on another case of the same shape: the vendor states the invoice, in a spoken form.
+    const caseId2 = await open(t, "Sam here, can you pay me for this week?", "+15555559002");
+    await step(t);
+    await step(t);
+    const cb2 = (await callbacksFor(t, caseId2))[0];
+    await t.mutation(internal.agents.callbackVerifier.reportFromAgent, { callbackId: cb2._id, outcome: "confirmed", invoiceNumberStated: "invoice number W-42" });
+    expect((await callbacksFor(t, caseId2))[0].outcome).toBe("confirmed");
+  });
+
   it("genuine bank change: callback confirmed -> owner OTP -> vendor record updated (audited) -> PAY", async () => {
     const { t, w } = await setup();
     given(

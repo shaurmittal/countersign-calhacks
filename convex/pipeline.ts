@@ -232,13 +232,17 @@ export const advance = internalAction({
     if (result.decision === "PAY") {
       const claimed = await ctx.runMutation(internal.cases.claimPayment, { caseId });
       if (!claimed) return; // another run is already paying this case
-      if (result.firedRules.includes("R2")) {
-        await ctx.runMutation(internal.cases.applyConfirmedBankChange, { caseId });
-      }
+      // The bank update runs after the lock, so a failure here must close the case like a Payer failure
+      // would; a throw would leave it locked in AWAITING_OWNER forever.
+      const bankUpdated = result.firedRules.includes("R2")
+        ? await safely(async () => (await ctx.runMutation(internal.cases.applyConfirmedBankChange, { caseId }), true))
+        : true;
       const fresh = await ctx.runQuery(internal.cases.get, { caseId });
-      const paid = await safely(() =>
-        withAgentRun(ctx, caseId, "payer", () => runPayer(ctx, fresh ?? c), (p) => (p.ok ? `Paid: ${p.externalId}` : `Failed: ${p.error}`)),
-      );
+      const paid = bankUpdated
+        ? await safely(() =>
+            withAgentRun(ctx, caseId, "payer", () => runPayer(ctx, fresh ?? c), (p) => (p.ok ? `Paid: ${p.externalId}` : `Failed: ${p.error}`)),
+          )
+        : { ok: false as const, error: "the new bank details could not be saved" };
       if (paid?.ok) {
         await finish(result, true);
       } else {

@@ -79,7 +79,9 @@ async function applyOwnerCode(
 
   const notAllowed = actionNotAllowed(c, approval, action, now);
   if (notAllowed) return fail(notAllowed);
-  if (approval.lockedUntil && approval.lockedUntil > now) {
+  // The lock never applies to cancel. Case ids are public, so anyone could enter five wrong codes
+  // during the cooling-off and stop the owner from cancelling; a cancel still needs the right code.
+  if (action !== "cancel" && approval.lockedUntil && approval.lockedUntil > now) {
     return fail(`Too many wrong codes. Try again in ${Math.ceil((approval.lockedUntil - now) / 1000)}s.`);
   }
 

@@ -43,6 +43,9 @@ export function templateReply(result: PolicyResult, ctx: ReplyContext): string {
       if (/could not be read/i.test(reasons)) {
         return "Sorry, we couldn't read that request. Please send the vendor, invoice number and amount as plain text.";
       }
+      if (/needs the new account details/i.test(reasons)) {
+        return `To change where ${vendor} is paid, please send the new routing and account numbers as text so they can be verified directly with ${vendor}.`;
+      }
       if (fired.has("R5")) return `We couldn't find an open invoice from ${vendor} that matches this request. Please send the invoice number and amount.`;
       if (fired.has("R2")) return `We couldn't confirm the new bank details with ${vendor}, so nothing will be paid to them. The business owner has been notified.`;
       return "We've received your request and are verifying it before any payment is made.";
