@@ -5,7 +5,7 @@ This folder (owner: P3) holds the pure, unit-tested logic behind two agents:
 - the Vendor Verifier (spec §6.2);
 - the Risk Analyst (§6.3).
 
-It has no Convex, Node or network imports, so vitest, Convex and the browser can all run it. The Convex agents only load the vendor book and call these functions:
+It has no Convex, Node or network imports, so vitest, Convex and the browser can all run it. `crs.ts` makes its calls through a `fetch` its caller passes in. The Convex agents only load the vendor book and call these functions:
 
 - `convex/agents/vendorVerifier.ts`
 - `convex/agents/riskAnalyst.ts`
@@ -28,6 +28,7 @@ Only `decide()` can return PAY. These findings are its inputs. They never claim 
 | `assessRisk.ts` | Combines the above into `RiskFindings` |
 | `moss.ts` | What goes into the Moss index, how its hits become `searchHits`, and the score floor |
 | `policyLookup.ts` | Policy sentences for the voice agents' mid-call lookup, and their keyword fallback |
+| `crs.ts` | Which senders CRS screens, the CRS client (login, token reuse, timeouts), and how an AtData Fraud Finder result becomes `crs` |
 | `seedScenarios.test.ts` | Pins what P3 returns for each `scenarios.json` entry on the seed world |
 
 `shared/seedWorld.ts` holds the seed data. `convex/seed.ts` inserts it, and the tests read it through `buildSeedBook()`.
@@ -41,7 +42,8 @@ Only `decide()` can return PAY. These findings are its inputs. They never claim 
 | `bankMatches` | `null` when the request has no bank details. Otherwise it is true only when every supplied part matches: the routing number equals `bankRouting`, and the account's last 4 equal `bankLast4`. |
 | `matchingInvoiceId` | Only the matched vendor's invoices are checked. A request with an invoice number matches by that number, and a stated amount must equal the invoice. With no number, it matches the single open invoice with that amount. With neither number nor amount, it matches the vendor's only open invoice. |
 | `alreadyPaidAt` | Set when the invoice is paid or has a sent or pending payment. Pending counts, so a second request can't pay the same invoice twice. |
-| `crs`, `ofacHit` | Always `{ status: "not_checked" }` and `false` until CRS is wired. `ofacHit: false` with a status other than `"ok"` means OFAC **did not run**. |
+| `crs` | AtData Fraud Finder on the sender's email, for senders the book doesn't know (see the CRS section below). `verifyVendor` itself always returns `"not_checked"`; `runVendorVerifier` fills in the CRS result. |
+| `ofacHit` | Always `false`: the team's CRS account has no OFAC product, so `false` means OFAC **did not run**, never that the payee is clear. |
 
 ## Risk flags
 
@@ -65,9 +67,42 @@ Flags are for display only and never decide anything. Each one is also backed by
 
 | Seam | Today | When the key arrives |
 | --- | --- | --- |
-| **CRS** KYB and OFAC (`CRS_USERNAME`, `CRS_PASSWORD`, `CRS_BASE_URL`) | `crs: { status: "not_checked" }`, `ofacHit: false` | In `runVendorVerifier`:<br>• `POST /users/login` for a Bearer token<br>• look up `vendor.crsBusinessId` (business credit, i.e. KYB)<br>• screen any new beneficiary against the OFAC watchlist<br>Any error or timeout must return `crs: { status: "unavailable" }`. The endpoints and test identities are in the CRS Postman collection. |
+| **CRS** (`CRS_USERNAME`, `CRS_PASSWORD`, `CRS_BASE_URL`) | Wired: AtData Fraud Finder screens strangers' emails; see the CRS section below | Done. KYB and OFAC are dropped, because the team's CRS account has neither product. |
 | **Moss** index (`MOSS_PROJECT_ID`, `MOSS_API_KEY`) | Wired; see the Moss section below | Done: both agents pass Moss hits to `matchVendor`, and matching falls back to memory when Moss isn't set up |
 | **Claude** explanation (`ANTHROPIC_API_KEY`) | Template text from `explainRisk` | Rewrite the explanation from the flags, falling back to the template on any error. |
+
+## CRS sender screening (AtData Fraud Finder)
+
+The team's CRS sandbox account has the Cal Hacks products only: credit reports, criminal, eviction, Accurate Append, AtData Fraud Finder, TransUnion identity verification, and PitchPoint liens and judgments. Business InstantID answered 401 `CRS111` on 2026-10-24, and no product screens OFAC. So KYB is dropped, and `ofacHit` stays `false`.
+
+The consumer reports (credit, criminal, eviction, liens) are regulated by the FCRA and have no permissible purpose for a vendor. Fraud Finder fits invoice fraud: it scores how risky an email address is (`risk.score`, 0 to 100) from its validity, domain risk, and when the address and its domain were first seen.
+
+**Who gets screened.** Only an email sender the book doesn't know (`emailToScreen`). Phones, agent addresses, the owner's email and any address on a vendor's file or domains are never sent to CRS.
+
+This matters for the demo. Every seed and scenario address is on a reserved `*.example` domain, and AtData gives those `risk.score` 100, `domain_risk_score` 10 and `invalid`. The sandbox returned exactly that for both `invoices@northwind-cloud-billing.example` and the seed vendor's `billing@pixelandpine.example`. Screening senders on file would therefore escalate every legitimate email.
+
+**What `decide()` sees:**
+
+| Fraud Finder result | `crs` | Effect |
+| --- | --- | --- |
+| `risk.score` ≥ 70 (AtData suggests 70–80) | `{ status: "ok", businessVerified: false, raw }` | R14 escalates: CRS couldn't vouch for the sender |
+| `risk.score` < 70 | `{ status: "ok", raw }` | Nothing. A low score proves nothing about a business, so `businessVerified` stays unset. |
+| Error, timeout (4 s budget, 3 s per request), unreadable body, 401 | `{ status: "unavailable", raw: { reason } }` | R14 escalates |
+| No `CRS_USERNAME`/`CRS_PASSWORD`, `CRS_BASE_URL` not the sandbox host, or a sender the book knows | `{ status: "not_checked" }` | Nothing |
+
+`raw` holds the scores, the email status and the first-seen dates, never the address: public queries return `vendorFindings` as they are. A `reason` is an HTTP status or a CRS code such as `CRS111`, never a credential.
+
+On the answer key, three scenarios get screened: `google-workspace-lookalike`, `northwind-lookalike-invoice` and `ofac-hit`. All three already BLOCK. `seedScenarios.test.ts` checks that no decision changes whether AtData scores them 100, scores them low, or is down.
+
+**Login.** `POST /users/login` once per Convex isolate, and the token is reused for 45 minutes (it lasts 60). After a 401 on a check, the token is dropped and the next check logs in again.
+
+Repeated failed logins lock the CRS account (`CRS113`, then `CRS114`). So a rejected login waits 10 minutes before the next try, and a network error or timeout waits 30 seconds. Check the password before setting it.
+
+To try it on your deployment. This makes one login and one Fraud Finder call:
+
+```bash
+npx convex run agents/vendorVerifier:screenEmail '{"email":"invoices@northwind-cloud-billing.example"}'
+```
 
 ## Moss vendor search
 
@@ -171,11 +206,14 @@ npx convex run agents/moss:lookupPolicy '{"question":"Can I pay you in bitcoin?"
 ## Notes for P1 (`decide()`) and P4 (UI)
 
 - **The answer key with real P3:** `seedScenarios.test.ts` runs all of `scenarios.json` through `verifyVendor`, `assessRisk` and `decide()` the way `pipeline.advance` does, and expects every decision. `scenarios/world.ts` could call these functions instead of its reference verifier.
-- **CRS status:** `"not_checked"` fires no rule today, so PAY doesn't wait for CRS. Once CRS is wired, an error or timeout returns `"unavailable"`, which escalates through R14.
+- **CRS status:** only strangers' emails are screened, so a sender on file still gets `"not_checked"`, and PAY doesn't wait for CRS. For a screened sender, an error or timeout returns `"unavailable"`, which escalates through R14. A high AtData score sets `businessVerified: false`, so R14's reason reads "could not verify the business", although the check was on the sender's email.
+- **OFAC isn't screened live.** In the demo, `ofac-hit` blocks on R1 (unknown vendor) only. The answer key's R8 comes from its stubbed `world.ofacHit`. Don't claim OFAC screening in the pitch.
+- **`crs-outage`** stubs CRS as down for the owner's SMS. Live, CRS never screens phones, so that path can only happen in tests.
+- **Lane summary:** `summarizeVendor` shows "CRS unavailable" but not a high score. `crs.raw.score` and `crs.raw.emailStatus` are ready to show, for example "CRS: sender email risk 100/100 (invalid)".
 - **R9 blocks on `forbidden_rail`, and no one can override it.** So its text check covers only R9's own list: gift cards, crypto, and a personal account. A Zelle or Venmo mention raises the display-only `bank_change` instead, and the Payer only ever pays the bank on file.
 - **R11 and R15** read the `owner_impersonation` and `injection_attempt` flags. Their text checks ignore greetings ("Hi Priya"), negations and ordinary billing phrases.
 - **`isAmountAnomalous`** (`riskFlags.ts`) is the same definition as R4.
 - **Known-bad senders:** addresses that `cases.markSenderKnownBad` writes for R10 are never on file again, even when the sender is the vendor's own number.
 - **Spoofing:** caller ID and an email's From can be faked, so "on file" isn't proof. The owner's registered phone also counts as on file. Bank changes always go through R2's callback, whoever sends them.
 - **Lane summaries:** `advance` passes no `summarize` function for the P3 lanes. `riskFindings.explanation` is ready-made display text.
-- **Public data:** case documents, including both findings, are returned by public queries. The explanation therefore never contains on-file phones, banks or amount ranges.
+- **Public data:** case documents, including both findings, are returned by public queries. The explanation therefore never contains on-file phones, banks or amount ranges, and `crs.raw` never contains the sender's address.
