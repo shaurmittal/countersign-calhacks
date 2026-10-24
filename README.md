@@ -7,6 +7,9 @@ Full spec: [docs/spec.md](docs/spec.md).
 **Telephony is Cartesia only (no Twilio, no SMS).** Judges call the Countersign line or type at
 `/try`. Agent prompts, tool configs and numbers: [docs/cartesia-setup.md](docs/cartesia-setup.md).
 
+**WhatsApp** (Meta Cloud API) is a second text channel. Its free test number reaches only 5
+registered phones. Setup: [docs/whatsapp-setup.md](docs/whatsapp-setup.md).
+
 ## Setup (everyone)
 
 ```bash
@@ -46,6 +49,7 @@ shared/                     pure TS, no Convex imports, runs in tests/Convex/bro
   totp.ts                   P4  owner step-up code check (RFC 6238, replay guard)
   ledger.ts                 P4  double-entry journal lines per payment
   scoreboard.ts             P4  scoreboard definitions (scam attempt, dollars lost, decision time)
+  whatsapp.ts               P2  WhatsApp webhook handshake, signature check, payload parsing, E.164
 convex/
   schema.ts                 P1  tables (spec §4)
   pipeline.ts               P1  leader: `advance(caseId)` step function
@@ -67,8 +71,10 @@ convex/
   lib/increase.ts           P4  Increase REST client (fetch, idempotency keys, one retry)
   channels/voice.ts         P2  Cartesia webhook tools (submit request, case status, callback outcome)
   channels/web.ts           P2  web chat channel (replaces SMS), used by app/try
+  channels/whatsapp.ts      P2  WhatsApp Cloud API webhook (/whatsapp/webhook): opens cases, never approves
   channels/reply.ts         P2/P4 send replyText back on the original channel
   lib/cartesia.ts           P2  Cartesia API client + tool secret check
+  lib/whatsapp.ts           P2  WhatsApp Graph API client (sends text replies; logs failures, never throws)
   channels/agentBridge.ts   P4  Fetch.ai → Convex bridge (/agent/message, /agent/case, /agent/pending, /agent/approval)
   http.ts                       HTTP routes (https://<deployment>.convex.site/...)
   seed.ts                   P3  fictional world (spec §7.1)

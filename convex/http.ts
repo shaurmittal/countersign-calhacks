@@ -2,6 +2,7 @@
 import { httpRouter } from "convex/server";
 import { getCaseStatus, recordCallbackOutcome, submitPaymentRequest } from "./channels/voice";
 import { caseStatus, inboundMessage, ownerApproval, pendingApprovals } from "./channels/agentBridge";
+import { receiveWebhook, verifyWebhook } from "./channels/whatsapp";
 
 const http = httpRouter();
 
@@ -9,6 +10,10 @@ const http = httpRouter();
 http.route({ path: "/cartesia/tools/submit-payment-request", method: "POST", handler: submitPaymentRequest });
 http.route({ path: "/cartesia/tools/case-status", method: "POST", handler: getCaseStatus });
 http.route({ path: "/cartesia/tools/callback-outcome", method: "POST", handler: recordCallbackOutcome });
+
+// P2: WhatsApp Cloud API webhook (see docs/whatsapp-setup.md)
+http.route({ path: "/whatsapp/webhook", method: "GET", handler: verifyWebhook });
+http.route({ path: "/whatsapp/webhook", method: "POST", handler: receiveWebhook });
 
 // P4
 http.route({ path: "/agent/message", method: "POST", handler: inboundMessage });
