@@ -104,7 +104,11 @@ export function decide(input: PolicyInput): PolicyResult {
   if (vendorKnown && vf && vendor) {
     const bankChange =
       (req.newBankDetails != null && vf.bankMatches !== true) || BANK_CHANGE_ACTIONS.has(req.requestedAction);
-    if (bankChange) {
+    // "I switched banks, details to follow": nothing to confirm and nothing to save, so no callback and
+    // no PAY path; the requester is asked for the account. (The pipeline's bank update needs the details.)
+    if (bankChange && req.newBankDetails == null) {
+      hit("R2", "HOLD", `A bank change for ${vendor.name} needs the new account details; none were given`);
+    } else if (bankChange) {
       if (cb === null) hit("R2", "HOLD", `New bank details: calling ${vendor.name} on the number on file`, true);
       else if (cb === "confirmed") hit("R2", "ESCALATE", `${vendor.name} confirmed the new account; the owner must approve it`);
       else if (cb === "denied") hit("R2", "NOTE", "New bank details (denied by the vendor)");

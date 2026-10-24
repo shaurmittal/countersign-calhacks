@@ -129,6 +129,15 @@ describe("policy engine", () => {
       expect(r.decision).toBe("HOLD");
     });
 
+    it("a bank change with no account details asks for them: HOLD even after a confirmed callback and owner approval", () => {
+      const base = { request: { requestedAction: "update_payroll" as const }, vendorFindings: { senderOnFile: true } };
+      const r = decide(input(base));
+      expect(r.decision).toBe("HOLD");
+      expect(r.needs.callback).toBe(false);
+      expect(r.reasons.join(" ")).toMatch(/needs the new account details/);
+      expect(decide(input({ ...base, callbackOutcome: "confirmed", approval: APPROVED })).decision).toBe("HOLD");
+    });
+
     it("bank details that match the file are not a change", () => {
       const r = decide(input({ request: BANK_CHANGE, vendorFindings: { bankMatches: true } }));
       expect(r.firedRules).not.toContain("R2");

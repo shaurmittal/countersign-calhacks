@@ -15,6 +15,7 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { CallbackOutcome, PaymentRequest, VendorFindings } from "../../shared/types";
 import { LIMITS } from "../../shared/config";
+import { normalizeInvoiceNumber } from "../../shared/verification/invoices";
 import { appendAudit } from "../audit";
 import { finishRun, startRun } from "../agentRuns";
 import { getCall, placeOutboundCall, spokenAmount } from "../lib/cartesia";
@@ -144,11 +145,16 @@ export const reportFromAgent = internalMutation({
     let final: CallbackOutcome = outcome;
     let note = notes;
     if (outcome === "confirmed") {
+      // The number the vendor must say is the invoice we matched, whether or not the request named one:
+      // "it's Sam, pay me" matches Sam's one open invoice, and a yes alone must not confirm it.
       const c = await ctx.db.get(cb.caseId);
-      const expected = (c?.request as PaymentRequest | undefined)?.invoiceNumber ?? null;
+      const matchedId = (c?.vendorFindings as VendorFindings | undefined)?.matchingInvoiceId;
+      const matchedDocId = matchedId ? ctx.db.normalizeId("invoices", matchedId) : null;
+      const matched = matchedDocId ? await ctx.db.get(matchedDocId) : null;
+      const expected = matched?.number ?? (c?.request as PaymentRequest | undefined)?.invoiceNumber ?? null;
       if (expected && normalizeInvoice(invoiceNumberStated) !== normalizeInvoice(expected)) {
         final = "unclear";
-        note = `Vendor said yes but gave invoice "${invoiceNumberStated ?? "none"}"; request was for "${expected}". ${notes ?? ""}`.trim();
+        note = `Vendor said yes but gave invoice "${invoiceNumberStated ?? "none"}"; the matched invoice is "${expected}". ${notes ?? ""}`.trim();
       }
     }
     if (conversationId && cb.callSid && conversationId !== cb.callSid) {
@@ -283,6 +289,7 @@ export const saveTranscript = internalMutation({
   },
 });
 
+/** Same canonical form as the vendor book uses, so "invoice number 01042" and "#1042" agree. "" when nothing is left. */
 function normalizeInvoice(s: string | null | undefined): string {
-  return (s ?? "").toLowerCase().replace(/^(invoice|inv|number|no\.?|#)\s*/g, "").replace(/[^a-z0-9]/g, "");
+  return normalizeInvoiceNumber(s) ?? "";
 }
