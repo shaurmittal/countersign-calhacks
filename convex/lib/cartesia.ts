@@ -39,6 +39,31 @@ export async function placeOutboundCall(args: {
   return call.agent_call_id;
 }
 
+export type CallRecord = { status: string; endReason: string | null; summary: string | null; transcript: string | null };
+
+/** Fetches a finished call's transcript and summary. Speaker labels: our agent is "Countersign". */
+export async function getCall(callId: string, otherParty: string): Promise<CallRecord> {
+  const res = await fetch(`${API_BASE}/agents/calls/${encodeURIComponent(callId)}`, {
+    headers: { "X-API-Key": env("CARTESIA_API_KEY"), "Cartesia-Version": API_VERSION },
+  });
+  if (!res.ok) throw new Error(`Cartesia get call failed: HTTP ${res.status}`);
+  const body = (await res.json()) as {
+    status?: string;
+    end_reason?: string;
+    summary?: string;
+    transcript?: { role?: string; text?: string }[];
+  };
+  const lines = (body.transcript ?? [])
+    .filter((t) => t.text?.trim())
+    .map((t) => `${t.role === "assistant" ? "Countersign" : otherParty}: ${t.text!.trim()}`);
+  return {
+    status: body.status ?? "unknown",
+    endReason: body.end_reason ?? null,
+    summary: body.summary ?? null,
+    transcript: lines.length ? lines.join("\n") : null,
+  };
+}
+
 /**
  * Webhook tools send our shared secret in the X-Countersign-Secret header (configured as a
  * "secret" header on each tool). Reject anything without it.
