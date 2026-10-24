@@ -12,8 +12,6 @@ import { openCase } from "../cases";
 
 // Must stay under the get_case_status tool timeout in Cartesia (25 s).
 const LONG_POLL_MS = 20_000;
-// A callback that started this recently still gets announced straight away.
-const JUST_STARTED_MS = 5_000;
 const UNKNOWN_CALLER = "unknown-caller";
 const POLL_INTERVAL_MS = 1_000;
 
@@ -100,11 +98,9 @@ export const getCaseStatus = httpAction(async (ctx, request) => {
   let alreadyAnnounced: boolean | null = null;
   for (;;) {
     const status = await ctx.runQuery(internal.channels.voice.statusForVoice, { caseId, conversationId });
-    if (alreadyAnnounced === null) {
-      // Callback was already under way when this check began (and not just now): the caller has heard it.
-      alreadyAnnounced =
-        status.callbackStartedAt !== null && Date.now() - status.callbackStartedAt > JUST_STARTED_MS;
-    }
+    // A check that begins while the callback is already under way waits quietly; only the check
+    // that sees the callback start returns straight away so the agent can announce it.
+    if (alreadyAnnounced === null) alreadyAnnounced = status.callbackPending;
     const quietWait = alreadyAnnounced && status.callbackPending;
     if (status.final && !quietWait) return text(status.message);
     if (Date.now() >= deadline) return text(quietWait ? stillHolding(status.vendorName) : status.message);
@@ -114,8 +110,9 @@ export const getCaseStatus = httpAction(async (ctx, request) => {
 
 function stillHolding(vendorName: string | null) {
   return (
-    `Still on the line with ${vendorName ?? "the vendor"}; no answer from them yet. Do not repeat what you already ` +
-    `told the caller. If they speak, say only something short like "Thanks for holding, still waiting on them." ` +
+    `Countersign is still on the line with ${vendorName ?? "the vendor"} on the number already on file; no answer ` +
+    `from them yet. If you haven't told the caller you're calling them, say so now and ask them to hold. Otherwise ` +
+    `don't repeat yourself: if they speak, say only something short like "Thanks for holding, still waiting on them." ` +
     `Then call get_case_status again.`
   );
 }
@@ -172,7 +169,7 @@ export const statusForVoice = internalQuery({
         .collect()
         .then((rows) => rows.sort((a, b) => b.createdAt - a.createdAt)[0] ?? null);
     }
-    const none = { callbackPending: false, callbackStartedAt: null as number | null, vendorName: null as string | null };
+    const none = { callbackPending: false, vendorName: null as string | null };
     if (!c) {
       return {
         ...none,
@@ -187,14 +184,9 @@ export const statusForVoice = internalQuery({
 
     if (c.status === "CALLBACK_PENDING") {
       const vendor = c.vendorId ? await ctx.db.get(c.vendorId) : null;
-      const callbacks = await ctx.db
-        .query("callbacks")
-        .withIndex("by_case", (q) => q.eq("caseId", c._id))
-        .collect();
       const vendorName = vendor?.name ?? null;
       return {
         callbackPending: true,
-        callbackStartedAt: callbacks.length ? Math.min(...callbacks.map((cb) => cb.startedAt)) : Date.now(),
         vendorName,
         final: true,
         message:
