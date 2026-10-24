@@ -118,7 +118,7 @@ ESCALATE only; it never lifts a BLOCK or HOLD. PAY requires R12's positive check
 ### Contract notes for P2-P4
 
 - **P3 `runVendorVerifier`:** `vendorId` and `matchingInvoiceId` must be real Convex `_id`s (the pipeline loads the invoice by id). Match an invoice by number, or when no number is given, the single open invoice for that vendor with the same amount. `bankMatches`: `null` when the request has no bank details. See `scenarios/world.ts` for a reference implementation. If a verifier throws, the case HOLDs (R14).
-- **P2 `callbackVerifier.start`:** may be called twice for one case (one retry after `no_answer`, 20 s later); insert a new `callbacks` row each time with `attempt = existing + 1`. The pipeline sends the "I'm calling them now on the number on file" SMS itself.
+- **P2 `callbackVerifier.start`:** may be called twice for one case (one retry after `no_answer`, 20 s later); insert a new `callbacks` row each time with `attempt = existing + 1`. The pipeline writes the "I'm calling them now on the number on file" reply itself (shown on /try; read out by the voice agent via `get_case_status`).
 - **P4 `ownerConcierge`:** on OTP success set `approvedAt` and, when `policyResult.needs.coolingOffSeconds > 0`, `coolingOffUntil = approvedAt + seconds*1000`; on decline/cancel set `cancelledAt`. Then schedule `internal.pipeline.advance`. The pipeline schedules its own wake-up at `coolingOffUntil`.
 - **P4 `runPayer`:** runs only after `cases.claimPayment` took the lock. For an approved bank change the vendor record has already been updated when the Payer is called; read destination details from the vendor record.
 

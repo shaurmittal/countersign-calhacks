@@ -7,7 +7,8 @@
 //   start → prepare (callbacks row + War Room lane) → Cartesia outbound call → markDialed
 //   the callback agent calls the record_callback_outcome tool → reportFromAgent → applyOutcome
 //   expire() fires after CALL_DEADLINE_MS and records no_answer if nothing came back
-//   applyOutcome retries a no_answer once, otherwise re-runs the pipeline
+//   applyOutcome re-runs the pipeline, which owns the decision to retry a no_answer
+//   (it calls start() again; each call gets a new callbacks row with attempt = existing + 1)
 import { v } from "convex/values";
 import { internalAction, internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -18,7 +19,6 @@ import { appendAudit } from "../audit";
 import { finishRun, startRun } from "../agentRuns";
 import { placeOutboundCall, spokenAmount } from "../lib/cartesia";
 
-const MAX_ATTEMPTS = 2;
 // Ringing timeout plus a short conversation; after this a missing outcome counts as no_answer.
 const CALL_DEADLINE_MS = (LIMITS.callbackAnswerTimeoutSeconds + 135) * 1000;
 
@@ -30,9 +30,9 @@ const outcomeValidator = v.union(
 );
 
 export const start = internalAction({
-  args: { caseId: v.id("cases"), attempt: v.optional(v.number()) },
-  handler: async (ctx, { caseId, attempt }) => {
-    const prep = await ctx.runMutation(internal.agents.callbackVerifier.prepare, { caseId, attempt: attempt ?? 1 });
+  args: { caseId: v.id("cases") },
+  handler: async (ctx, { caseId }) => {
+    const prep = await ctx.runMutation(internal.agents.callbackVerifier.prepare, { caseId });
     if (!prep) return;
     try {
       const callSid = await placeOutboundCall({
@@ -56,9 +56,15 @@ export const start = internalAction({
 
 /** Creates the callbacks row and the War Room lane. Returns null when there is no vendor to call. */
 export const prepare = internalMutation({
-  args: { caseId: v.id("cases"), attempt: v.number() },
-  handler: async (ctx, { caseId, attempt }) => {
+  args: { caseId: v.id("cases") },
+  handler: async (ctx, { caseId }) => {
     const c = await ctx.db.get(caseId);
+    const previous = await ctx.db
+      .query("callbacks")
+      .withIndex("by_case", (q) => q.eq("caseId", caseId))
+      .collect();
+    if (previous.some((cb) => !cb.outcome)) return null; // a call for this case is already in progress
+    const attempt = previous.length + 1;
     const vendor = c?.vendorId ? await ctx.db.get(c.vendorId) : null;
     const owner = await ctx.db.query("owner").first();
     const runId = await startRun(ctx, { caseId, agent: "callback", input: { attempt } });
@@ -193,13 +199,6 @@ async function applyOutcome(
     });
   }
 
-  if (outcome === "no_answer" && cb.attempt < MAX_ATTEMPTS) {
-    await ctx.scheduler.runAfter(LIMITS.callbackRetryDelaySeconds * 1000, internal.agents.callbackVerifier.start, {
-      caseId: cb.caseId,
-      attempt: cb.attempt + 1,
-    });
-    return;
-  }
   await ctx.scheduler.runAfter(0, internal.pipeline.advance, { caseId: cb.caseId as Id<"cases"> });
 }
 

@@ -151,14 +151,15 @@ export const statusForVoice = internalQuery({
           `already on file to confirm this request. Tell the caller that, ask them to hold, then call get_case_status again in about 20 seconds.`,
       };
     }
+    // The leader writes replyText just after the decision; keep polling until it lands.
     if (c.status === "AWAITING_OWNER") {
       return {
-        final: true,
+        final: !!c.replyText,
         message: `Decision: ${c.decision ?? "ESCALATE"}. The owner must approve this from her registered device; nothing is paid until she does.${reasons}${say}`,
       };
     }
     if (c.status === "CLOSED") {
-      return { final: true, message: `Decision: ${c.decision ?? "HOLD"}.${reasons}${say}` };
+      return { final: !!c.replyText, message: `Decision: ${c.decision ?? "HOLD"}.${reasons}${say}` };
     }
     return {
       final: false,
