@@ -1,7 +1,8 @@
 // Vendor Verifier core (owner: P3). Spec §6.2.
 // Pure: matches the claimed vendor, checks the sender and bank details against its record, and finds
-// the invoice. CRS (KYB + OFAC) isn't wired yet, so crs is "not_checked" and ofacHit: false only
-// means OFAC did not run; decide() must not read either as a pass.
+// the invoice. CRS runs in the Convex seam (runVendorVerifier, with shared/verification/crs.ts), so crs
+// is "not_checked" here. ofacHit: false only means OFAC did not run (the team's CRS account has no OFAC
+// product); decide() must not read it as a pass.
 import type { PaymentRequest, VendorFindings } from "../types";
 import { compareBank } from "./bank";
 import { matchInvoice } from "./invoices";

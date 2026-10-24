@@ -1,4 +1,5 @@
-// Deterministic risk explanation (owner: P3). Spec §6.3: two plain-English sentences, used until Claude writes them.
+// Deterministic risk explanation (owner: P3). Spec §6.3: two plain-English sentences. Claude rewrites them from the
+// flags (explainRewrite.ts), and this template stands whenever the rewrite can't be used.
 // Display only, and it never states a decision. It is given no vendor data on purpose: case documents are returned
 // by public queries and the text may be sent to the requester. Lookalike domains came from the request itself.
 import type { RiskFlag } from "../types";

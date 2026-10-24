@@ -9,6 +9,7 @@ import { decide } from "../policy/engine";
 import { buildSeedBook } from "../seedWorld";
 import type { PaymentRequest, PolicyResult, RiskFindings, RiskFlag, VendorFindings } from "../types";
 import { assessRisk } from "./assessRisk";
+import { crsFromFraudFinder, crsUnavailable, emailsToScreen, parseFraudFinder } from "./crs";
 import type { CaseInfo, VerificationBook } from "./types";
 import { verifyVendor } from "./verifyVendor";
 
@@ -48,15 +49,16 @@ function findingsAndRisk(m: Message, request: PaymentRequest, book: Verification
 }
 
 /** What pipeline.advance does with the two P3 agents' output, ending in decide(). */
-function runThroughP3(s: Scenario): Outcome {
+function runThroughP3(s: Scenario, crs?: VendorFindings["crs"]): Outcome {
   const request = requestFor(s);
   const book = bookFor(s);
   // advance skips both agents when nothing was asked for.
   const ran = request.requestedAction === "none" ? null : findingsAndRisk(s, request, book);
-  // CRS isn't wired: a world that says what CRS returned stands in for the CRS seam in runVendorVerifier.
+  // CRS runs in runVendorVerifier's Convex seam. The crs argument, or a world that says what CRS
+  // returned, stands in for it.
   const findings: VendorFindings | null = ran && {
     ...ran.findings,
-    crs: { status: s.world?.crs ?? ran.findings.crs.status },
+    crs: crs ?? { status: s.world?.crs ?? ran.findings.crs.status },
     ofacHit: s.world?.ofacHit ?? ran.findings.ofacHit,
   };
   // loadContext: the vendor comes from findings.vendorId and the invoice from findings.matchingInvoiceId.
@@ -151,7 +153,7 @@ describe("safety properties over the answer key", () => {
     }
   });
 
-  it("CRS is never reported as checked before it is wired", () => {
+  it("verifyVendor alone never reports CRS or OFAC as checked (CRS runs in the Convex seam)", () => {
     for (const s of SCENARIOS.filter((x) => x.request.requestedAction !== "none")) {
       const { findings } = findingsAndRisk(s, requestFor(s), bookFor(s));
       expect(findings.crs, s.id).toEqual({ status: "not_checked" });
@@ -172,6 +174,47 @@ describe("safety properties over the answer key", () => {
       expect(risk.riskScore, s.id).toBeGreaterThanOrEqual(0);
       expect(risk.riskScore, s.id).toBeLessThanOrEqual(100);
       expect(risk.explanation.split(/(?<=\.)\s+/), s.id).toHaveLength(2);
+    }
+  });
+});
+
+describe("CRS screening on the answer key", () => {
+  // The scores the CRS sandbox gave on 2026-10-24 to a stranger's and to a seed vendor's *.example address.
+  const sandbox = parseFraudFinder({
+    risk: { score: 100, domain: { domain_risk_score: 10 } },
+    email_validation: { status: "invalid", role_account: true },
+  })!;
+  const screened = SCENARIOS.filter(
+    (s) => s.request.requestedAction !== "none" && emailsToScreen(s.from, s.text, bookFor(s)).length > 0,
+  );
+
+  it("screens only strangers' emails (sender or message), never the owner or a vendor's address on file", () => {
+    expect(screened.map((s) => s.id).sort()).toEqual(["google-workspace-lookalike", "northwind-lookalike-invoice", "ofac-hit"]);
+  });
+
+  it("an unknown email written into a legitimate request escalates it instead of paying", () => {
+    const happy = scenario("northwind-happy");
+    const s = { ...happy, text: `${happy.text} Remit to billing@northwind-cloud-billing.example.` };
+    expect(emailsToScreen(s.from, s.text, bookFor(s))).toEqual([
+      { email: "billing@northwind-cloud-billing.example", source: "message" },
+    ]);
+    expect(runThroughP3(happy).result.decision).toBe("PAY");
+    for (const crs of [crsFromFraudFinder(sandbox), crsUnavailable("timeout")]) {
+      const { result } = runThroughP3(s, crs);
+      expect(result.decision, JSON.stringify(crs)).toBe("ESCALATE");
+      expect(result.firedRules).toContain("R14");
+    }
+  });
+
+  it.each<[string, VendorFindings["crs"]]>([
+    ["AtData scores the sender 100, as the sandbox does any *.example address", crsFromFraudFinder(sandbox)],
+    ["AtData scores the sender low", crsFromFraudFinder({ ...sandbox, score: 5 })],
+    ["CRS is down", crsUnavailable("timeout")],
+  ])("no decision changes when %s", (_label, crs) => {
+    for (const s of screened) {
+      const { result } = runThroughP3(s, crs);
+      expect(result.decision, s.id).toBe(s.expectedDecision);
+      if (s.expectOverridable !== undefined) expect(result.overridable, s.id).toBe(s.expectOverridable);
     }
   });
 });

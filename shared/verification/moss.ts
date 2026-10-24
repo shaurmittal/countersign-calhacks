@@ -1,10 +1,13 @@
-// Moss vendor search: what goes into the index and how its hits feed matchVendor (owner: P3). Spec §3.2, §6.2.
-// Pure. The "use node" actions in convex/agents/moss.ts talk to Moss. Only vendor names and aliases are
-// indexed: the Moss SDK sends document text to its cloud, and nothing else is needed to match a name.
+// Moss: what goes into the shared index, how its hits feed matchVendor, and the score floor (owner: P3).
+// Spec §3.2, §6.2. Pure. The "use node" actions in convex/agents/moss.ts talk to Moss.
+// One index serves every Countersign deployment, because the Moss plan caps a project at three indexes.
+// Each document has a `scope`: "vendor:<deployment>" for that deployment's vendor names, "policy" for the
+// shared policy sentences. Every query filters on it. Only names, aliases and policy sentences go in:
+// the Moss SDK sends document text to its cloud.
 import type { BookVendor, SearchHit } from "./types";
 
-/** Each deployment gets its own index, so teammates' dev deployments on one Moss project don't collide. */
-export const VENDOR_INDEX_PREFIX = "countersign-vendors";
+export const MOSS_INDEX = "countersign";
+export const POLICY_SCOPE = "policy";
 
 /**
  * Moss's similarity floor for a hit to lift a vendor match. Measured on the seed book with moss-minilm
@@ -20,31 +23,45 @@ export const MOSS_CALLER_TIMEOUT_MS = 5_000;
 
 export type MossDoc = { id: string; text: string; metadata: Record<string, string> };
 
-/** "https://happy-otter-123.convex.cloud" -> "countersign-vendors-happy-otter-123". */
-export function vendorIndexName(deploymentUrl: string | undefined): string {
+/** "https://happy-otter-123.convex.cloud" -> "happy-otter-123", or "default" without a URL (tests). */
+export function deploymentSlug(deploymentUrl: string | undefined): string {
   let host = "";
   try {
     host = new URL(deploymentUrl ?? "").hostname;
   } catch {
-    // No deployment URL (tests): the bare prefix.
+    // No deployment URL.
   }
   const slug = (host.split(".")[0] ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  return slug ? `${VENDOR_INDEX_PREFIX}-${slug}` : VENDOR_INDEX_PREFIX;
+  return slug || "default";
 }
 
-/** One document per name and alias, so a short alias isn't averaged with the others. Ids are "<vendorId>#<n>". */
-export function vendorSearchDocs(vendors: readonly BookVendor[]): MossDoc[] {
+export function vendorScope(slug: string): string {
+  return `vendor:${slug}`;
+}
+
+/** The Moss metadata filter that keeps one scope. */
+export function scopeFilter(scope: string): { field: string; condition: { $eq: string } } {
+  return { field: "scope", condition: { $eq: scope } };
+}
+
+/** One document per name and alias, so a short alias isn't averaged with the others. Ids are "vendor:<deployment>:<vendorId>:<n>". */
+export function vendorSearchDocs(vendors: readonly BookVendor[], slug: string): MossDoc[] {
   return vendors.flatMap((v) =>
     [v.name, ...v.aliases]
-      .map((text, n) => ({ id: `${v.id}#${n}`, text: text.trim(), metadata: { vendorId: v.id, kind: n === 0 ? "name" : "alias" } }))
+      .map((text, n) => ({
+        id: `vendor:${slug}:${v.id}:${n}`,
+        text: text.trim(),
+        metadata: { scope: vendorScope(slug), vendorId: v.id, kind: n === 0 ? "name" : "alias" },
+      }))
       .filter((doc) => doc.text !== ""),
   );
 }
 
-/** The vendor a document belongs to, or null for an id vendorSearchDocs didn't write. */
+/** The vendor in a document id vendorSearchDocs wrote, or null for anything else (a policy sentence). */
 export function vendorIdFromDocId(docId: string): string | null {
-  const cut = docId.lastIndexOf("#");
-  return cut > 0 && /^\d+$/.test(docId.slice(cut + 1)) ? docId.slice(0, cut) : null;
+  const parts = docId.split(":");
+  const [kind, slug, vendorId, n] = parts;
+  return parts.length === 4 && kind === "vendor" && slug !== "" && vendorId !== "" && /^\d+$/.test(n) ? vendorId : null;
 }
 
 /** Moss results as searchHits: each vendor's best score, clamped to 0..1, dropped below minScore. */

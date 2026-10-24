@@ -5,7 +5,7 @@ This folder (owner: P3) holds the pure, unit-tested logic behind two agents:
 - the Vendor Verifier (spec §6.2);
 - the Risk Analyst (§6.3).
 
-It has no Convex, Node or network imports, so vitest, Convex and the browser can all run it. The Convex agents only load the vendor book and call these functions:
+It has no Convex, Node or network imports, so vitest, Convex and the browser can all run it. `crs.ts` makes its calls through a `fetch` its caller passes in. The Convex agents only load the vendor book and call these functions:
 
 - `convex/agents/vendorVerifier.ts`
 - `convex/agents/riskAnalyst.ts`
@@ -23,10 +23,13 @@ Only `decide()` can return PAY. These findings are its inputs. They never claim 
 | `invoices.ts` | Normalizes and matches invoice numbers, and detects duplicates |
 | `lookalike.ts` | Detects lookalike domains |
 | `riskFlags.ts` | The nine red flags, Pacific off-hours, and `riskScore` |
-| `explain.ts` | The two-sentence explanation (a template until Claude is wired) |
+| `explain.ts` | The two-sentence template explanation: the fixed no-flags sentence, and the fallback whenever Claude's rewrite can't be used |
+| `explainRewrite.ts` | What Claude reads to rewrite the explanation (the flag names and the template), and the check its answer must pass |
 | `verifyVendor.ts` | Combines the above into `VendorFindings` |
 | `assessRisk.ts` | Combines the above into `RiskFindings` |
 | `moss.ts` | What goes into the Moss index, how its hits become `searchHits`, and the score floor |
+| `policyLookup.ts` | Policy sentences for the voice agents' mid-call lookup, and their keyword fallback |
+| `crs.ts` | Which senders CRS screens, the CRS client (login, token reuse, timeouts), and how an AtData Fraud Finder result becomes `crs` |
 | `seedScenarios.test.ts` | Pins what P3 returns for each `scenarios.json` entry on the seed world |
 
 `shared/seedWorld.ts` holds the seed data. `convex/seed.ts` inserts it, and the tests read it through `buildSeedBook()`.
@@ -40,7 +43,8 @@ Only `decide()` can return PAY. These findings are its inputs. They never claim 
 | `bankMatches` | `null` when the request has no bank details. Otherwise it is true only when every supplied part matches: the routing number equals `bankRouting`, and the account's last 4 equal `bankLast4`. |
 | `matchingInvoiceId` | Only the matched vendor's invoices are checked. A request with an invoice number matches by that number, and a stated amount must equal the invoice. With no number, it matches the single open invoice with that amount. With neither number nor amount, it matches the vendor's only open invoice. |
 | `alreadyPaidAt` | Set when the invoice is paid or has a sent or pending payment. Pending counts, so a second request can't pay the same invoice twice. |
-| `crs`, `ofacHit` | Always `{ status: "not_checked" }` and `false` until CRS is wired. `ofacHit: false` with a status other than `"ok"` means OFAC **did not run**. |
+| `crs` | AtData Fraud Finder on the sender's email, for senders the book doesn't know (see the CRS section below). `verifyVendor` itself always returns `"not_checked"`; `runVendorVerifier` fills in the CRS result. |
+| `ofacHit` | Always `false`: the team's CRS account has no OFAC product, so `false` means OFAC **did not run**, never that the payee is clear. |
 
 ## Risk flags
 
@@ -64,18 +68,66 @@ Flags are for display only and never decide anything. Each one is also backed by
 
 | Seam | Today | When the key arrives |
 | --- | --- | --- |
-| **CRS** KYB and OFAC (`CRS_USERNAME`, `CRS_PASSWORD`, `CRS_BASE_URL`) | `crs: { status: "not_checked" }`, `ofacHit: false` | In `runVendorVerifier`:<br>• `POST /users/login` for a Bearer token<br>• look up `vendor.crsBusinessId` (business credit, i.e. KYB)<br>• screen any new beneficiary against the OFAC watchlist<br>Any error or timeout must return `crs: { status: "unavailable" }`. The endpoints and test identities are in the CRS Postman collection. |
+| **CRS** (`CRS_USERNAME`, `CRS_PASSWORD`, `CRS_BASE_URL`) | Wired: AtData Fraud Finder screens strangers' emails; see the CRS section below | Done. KYB and OFAC are dropped, because the team's CRS account has neither product. |
 | **Moss** index (`MOSS_PROJECT_ID`, `MOSS_API_KEY`) | Wired; see the Moss section below | Done: both agents pass Moss hits to `matchVendor`, and matching falls back to memory when Moss isn't set up |
-| **Claude** explanation (`ANTHROPIC_API_KEY`) | Template text from `explainRisk` | Rewrite the explanation from the flags, falling back to the template on any error. |
+| **Claude** explanation (`ANTHROPIC_API_KEY`) | Wired; see the Claude explanation section below. Without the key, the template from `explainRisk` stands | Done: Claude rewrites the explanation of every flagged case, and the template stands on any failure |
+
+## CRS sender screening (AtData Fraud Finder)
+
+The team's CRS sandbox account has the Cal Hacks products only: credit reports, criminal, eviction, Accurate Append, AtData Fraud Finder, TransUnion identity verification, and PitchPoint liens and judgments. Business InstantID answered 401 `CRS111` on 2026-10-24, and no product screens OFAC. So KYB is dropped, and `ofacHit` stays `false`.
+
+The consumer reports (credit, criminal, eviction, liens) are regulated by the FCRA and have no permissible purpose for a vendor. Fraud Finder fits invoice fraud: it scores how risky an email address is (`risk.score`, 0 to 100) from its validity, domain risk, and when the address and its domain were first seen.
+
+**Who gets screened.** The email addresses the book doesn't know: the sender's, if it is an email, and any written in the message (`emailsToScreen`). Each case screens at most 3, deduped, the sender's first. Phones, agent addresses, the owner's email and any address on a vendor's file or domains are never sent to CRS. The checks run in parallel, and the worst result wins: a high score first, then a check that didn't complete.
+
+**Privacy.** A message can contain a real person's email address, for example one a judge types into `/try`. That address goes to the CRS sandbox (AtData) for scoring. Nothing else from the message is sent, and `crs.raw` doesn't repeat the address.
+
+This matters for the demo. Every seed and scenario address is on a reserved `*.example` domain, and AtData gives those `risk.score` 100, `domain_risk_score` 10 and `invalid`. The sandbox returned exactly that for both `invoices@northwind-cloud-billing.example` and the seed vendor's `billing@pixelandpine.example`. Screening senders on file would therefore escalate every legitimate email.
+
+**What `decide()` sees:**
+
+| Fraud Finder result | `crs` | Effect |
+| --- | --- | --- |
+| `risk.score` ≥ 70 (AtData suggests 70–80) | `{ status: "ok", businessVerified: false, raw }` | R14 escalates: CRS couldn't vouch for the sender |
+| `risk.score` < 70 | `{ status: "ok", raw }` | Nothing. A low score proves nothing about a business, so `businessVerified` stays unset. |
+| Error, timeout (4 s budget, 3 s per request), unreadable body, 401 | `{ status: "unavailable", raw: { reason } }` | R14 escalates |
+| No `CRS_USERNAME`/`CRS_PASSWORD`, `CRS_BASE_URL` not the sandbox host, or no address the book doesn't know | `{ status: "not_checked" }` | Nothing |
+
+`raw` holds the scores, the email status and the first-seen dates, never the address: public queries return `vendorFindings` as they are. A `reason` is an HTTP status or a CRS code such as `CRS111`, never a credential. `raw` describes the worst check, adds its `source` (`sender` or `message`), and lists every check's status and score in `checks`.
+
+On the answer key, three scenarios get screened: `google-workspace-lookalike`, `northwind-lookalike-invoice` and `ofac-hit`. All three already BLOCK. `seedScenarios.test.ts` checks that no decision changes whether AtData scores them 100, scores them low, or is down.
+
+**Login.** `POST /users/login` once per Convex isolate, and the token is reused for 45 minutes (it lasts 60). After a 401 on a check, the token is dropped and the next check logs in again.
+
+Repeated failed logins lock the CRS account (`CRS113`, then `CRS114`). So a rejected login waits 10 minutes before the next try, and a network error or timeout waits 30 seconds. Check the password before setting it.
+
+To try it on your deployment. This makes one login and one Fraud Finder call:
+
+```bash
+npx convex run agents/vendorVerifier:screenEmail '{"email":"invoices@northwind-cloud-billing.example"}'
+```
 
 ## Moss vendor search
 
 `convex/agents/moss.ts` is a `"use node"` file, because `@moss-js/moss` ships native binaries. `convex.json` lists it under `node.externalPackages` and pins Node 22.
 
 **The index**
-- Each deployment gets its own index, named `countersign-vendors-<deployment>`. That way teammates' dev deployments on one Moss project don't collide.
-- It holds one document per vendor name and alias. No phones, emails or bank numbers go in, because Moss sends document text to its cloud and the SDK always sends usage telemetry.
-- `syncVendorIndex` rebuilds the index, and the seed schedules it, since vendor ids change on every seed. To rebuild it by hand, run `npx convex run agents/moss:syncVendorIndex`.
+- **One shared index.** Every Countersign deployment shares one index, `countersign`. The Moss plan caps a project at 3 indexes, and the team's project has only one.
+- **Scopes.** Each document has a `scope`, and every query filters on it:
+  - `vendor:<deployment>`: that deployment's vendor names and aliases, with ids `vendor:<deployment>:<vendorId>:<n>`;
+  - `policy`: the policy sentences, one copy shared by all deployments, with ids `policy:<id>`.
+- **No contact details.** No phones, emails or bank numbers go in, because Moss sends document text to its cloud and the SDK always sends usage telemetry.
+- **Syncing.** A sync touches only its own scope: it upserts that scope's documents, then deletes the scope's stale ones. It never deletes the index, so a refused write leaves the old documents working.
+  - `syncVendorIndex` syncs this deployment's vendors.
+  - `syncPolicyIndex` syncs the policy sentences.
+  - The seed schedules both, because vendor ids change on every seed.
+
+  To sync by hand:
+
+  ```bash
+  npx convex run agents/moss:syncVendorIndex
+  ```
+- **Ops.** `listIndexes` shows what's in the project. `deleteLegacyIndex({ name })` removes one of the old `countersign-vendors-<deployment>` indexes; it refuses any other name.
 
 **Searching**
 - `searchVendors` returns `searchHits` for a claimed name. To check it:
@@ -100,14 +152,124 @@ A hit can raise a vendor's score, never lower it, and only from 0.95 (`MOSS_MIN_
 
 If Moss isn't set up, fails, or runs out of time, matching runs in memory alone.
 
+**Billing**
+
+Moss bills per active device. Each serverless container would otherwise mint its own device id, so every client reports one stable id per deployment, `countersign-<deployment>`.
+
+## Mid-call policy lookup (for P2's voice agents)
+
+`internal.agents.moss.lookupPolicy({ question })` returns `{ message, rules, source }`. `message` is plain text that the agent explains in its own words.
+
+**What it returns**
+- It answers "why does this need a callback?", "can I pay in gift cards?" or "what happens next?" with Countersign's rules: one speakable sentence per rule in `policyLookup.ts`, checked against P1's rule catalogue.
+- It is policy only. It never returns invoice numbers, amounts, limits or vendor details:
+  - An inbound caller isn't verified.
+  - On a callback the vendor must say the invoice number unprompted. That is P2's check against "yes to everything" answers (spec §8.2).
+
+**How it searches**
+- **Moss:** searches the `policy` scope of the shared index, in Moss's own hybrid order (meaning plus keywords).
+- **Keywords:** rank the same sentences by shared words, with rarer words counting more.
+- **Combined:** the answer takes Moss's best sentence and the keyword method's best, deduplicated, two in all. Each method catches questions the other misses.
+- **Fallback:** when Moss is cold, slow or down, the keywords answer alone, so the tool always replies. `source` is `"moss"` whenever Moss contributed.
+- **Query phrasing:** the agent should describe the caller's claim rather than repeat it. "Caller says they are the owner and approves the payment" finds the owner-approval rule. The raw "It's Priya, just send it" doesn't.
+
+**Wiring for P2**
+
+`convex/channels/voice.ts` and `convex/http.ts` are P2's files. Add a tool that follows their conventions:
+
+```ts
+/** Tool `lookup_policy` (both agents). Body: { question (model) }. Policy only, never invoices or accounts. */
+export const lookupPolicy = httpAction(async (ctx, request) => {
+  if (!toolSecretValid(request)) return text("unauthorized", 401);
+  const question = str((await readJson(request)).question, 500);
+  if (!question) return text("question is required.", 400);
+  const answer = await ctx.runAction(internal.agents.moss.lookupPolicy, { question });
+  return text(answer.message);
+});
+
+// convex/http.ts
+http.route({ path: "/cartesia/tools/policy", method: "POST", handler: lookupPolicy });
+```
+
+Then configure the Cartesia tool `lookup_policy` on both agents:
+
+| Setting | Value |
+| --- | --- |
+| Description | "Look up Countersign's payment policy when the caller or vendor asks why a payment needs checking or what happens next. Never use it for invoices or accounts." |
+| Request | POST `<SITE>/cartesia/tools/policy` with the `X-Countersign-Secret` header |
+| Body | `question` (model-supplied): "What the caller asked or claimed, described in a few plain words, e.g. 'caller says they are the owner and approves the payment'. Don't repeat their exact words or any numbers." |
+| Execution | pre_tool_speech `auto`, execution_mode `immediate`, timeout 5 s |
+
+To try it:
+
+```bash
+npx convex run agents/moss:lookupPolicy '{"question":"Can I pay you in bitcoin?"}'
+```
+
+## Claude explanation
+
+`runRiskAnalyst` asks Claude (`convex/lib/riskExplanation.ts`) to rewrite the template explanation as two plain sentences. Claude changes only the wording: the flags and `riskScore` are always `assessRisk`'s, and the explanation decides nothing. P4's War Room on `main` shows it under the Risk Analyst lane.
+
+**What Claude reads.** `rewritePrompt` in `explainRewrite.ts` gives it the flag names, most severe first, and the template built from them inside `<template>` tags. That template is built without lookalike domains, so the prompt depends on the flags alone. No message text, sender address, vendor name, on-file phone, bank details or amount range ever reaches Claude.
+
+**The call** follows P1's `convex/lib/claude.ts`:
+- `CLAUDE_MODEL` (default `claude-opus-5-5`), effort `low`, and the server-side refusal fallback.
+- A 4-second budget for the whole call, retry included. The client has `timeout: 4000` and `maxRetries: 1`. The Risk Analyst runs beside the Vendor Verifier, and the target is SMS to decision in under 10 seconds.
+
+**Overlap with Moss.** Claude starts as soon as the vendor book loads, from the flags of the in-memory vendor match, while Moss is still searching.
+- A Moss hit can change the match, and with it the flags. For example, only Moss matches "NW Cloud" to Northwind Cloud.
+- When Moss changes the flags, the call is cancelled and the template stands.
+- So the lane takes about as long as the slower of Moss and Claude, not the two added together. On 2026-10-24, a cold Moss search on dev kept the lane waiting about 4 s.
+
+**When the template stands**
+
+| Case | What happens |
+| --- | --- |
+| No `ANTHROPIC_API_KEY` | No call |
+| No flags in the in-memory match | No call: the fixed no-flags sentence needs no rewrite, and the happy path stays fast |
+| Moss changes the flags | The call is cancelled, without a log line |
+| An API error, a refusal or `max_tokens` | Logged |
+| No answer within 4 s | The call is cancelled and logged |
+| The answer fails `checkRewrite` | Logged, with the rule it broke |
+
+**The output check.** `checkRewrite` tidies the whitespace, then requires all of these:
+- Exactly two sentences, each ending with a period, 40 to 400 characters in all.
+- Only letters, spaces and light punctuation. So no digits, `@`, `/`, `$`, quotes, markdown or emoji. Any other period (a domain, an abbreviation) fails too.
+- Nothing that only `decide()` or the owner may say:
+  - `decide()`'s words: PAY, HOLD, BLOCK, ESCALATE;
+  - an outcome: "approved", "paid", "blocked", "on hold";
+  - a prediction: "will", "is calling", "needs the owner's approval";
+  - a verdict: "looks like a scam", "the vendor is genuine", "safe to pay".
+
+Every template with flags passes this check, except the lone off-hours reason, which gives the hours in digits.
+
+**Logs.** A failure logs one line: `[riskAnalyst] Claude explanation: <reason>; showing the template`. The reason is one of:
+- the API's status and message;
+- a stop reason;
+- `timeout`;
+- `failed the output check (<rule>: <culprit>)`, for example `(outcome: "approved")` or `(plain text only: "?" (U+003F))`.
+
+The culprit is the one word, phrase or character that broke the rule. The log never includes Claude's whole answer or the key.
+
+**To try it.** On a deployment with `ANTHROPIC_API_KEY` set, this makes one Claude call. Without the key, it returns the template:
+
+```bash
+npx convex run agents/riskAnalyst:explainFlags '{"flags":["owner_impersonation","new_sender","urgency"]}'
+```
+
+It returns `{ text, source }`, where `source` is `"claude"` or `"template"`.
+
 ## Notes for P1 (`decide()`) and P4 (UI)
 
 - **The answer key with real P3:** `seedScenarios.test.ts` runs all of `scenarios.json` through `verifyVendor`, `assessRisk` and `decide()` the way `pipeline.advance` does, and expects every decision. `scenarios/world.ts` could call these functions instead of its reference verifier.
-- **CRS status:** `"not_checked"` fires no rule today, so PAY doesn't wait for CRS. Once CRS is wired, an error or timeout returns `"unavailable"`, which escalates through R14.
+- **CRS status:** only strangers' emails are screened, so a sender on file still gets `"not_checked"`, and PAY doesn't wait for CRS. For a screened sender, an error or timeout returns `"unavailable"`, which escalates through R14. A high AtData score sets `businessVerified: false`, so R14's reason reads "could not verify the business", although the check was on the sender's email.
+- **OFAC isn't screened live.** In the demo, `ofac-hit` blocks on R1 (unknown vendor) only. The answer key's R8 comes from its stubbed `world.ofacHit`. Don't claim OFAC screening in the pitch.
+- **`crs-outage`** stubs CRS as down for the owner's SMS. Live, CRS never screens phones, so that path can only happen in tests.
+- **Lane summary:** `summarizeVendor` shows "CRS unavailable" but not a high score. `crs.raw.score` and `crs.raw.emailStatus` are ready to show, for example "CRS: sender email risk 100/100 (invalid)".
 - **R9 blocks on `forbidden_rail`, and no one can override it.** So its text check covers only R9's own list: gift cards, crypto, and a personal account. A Zelle or Venmo mention raises the display-only `bank_change` instead, and the Payer only ever pays the bank on file.
 - **R11 and R15** read the `owner_impersonation` and `injection_attempt` flags. Their text checks ignore greetings ("Hi Priya"), negations and ordinary billing phrases.
 - **`isAmountAnomalous`** (`riskFlags.ts`) is the same definition as R4.
 - **Known-bad senders:** addresses that `cases.markSenderKnownBad` writes for R10 are never on file again, even when the sender is the vendor's own number.
 - **Spoofing:** caller ID and an email's From can be faked, so "on file" isn't proof. The owner's registered phone also counts as on file. Bank changes always go through R2's callback, whoever sends them.
 - **Lane summaries:** `advance` passes no `summarize` function for the P3 lanes. `riskFindings.explanation` is ready-made display text.
-- **Public data:** case documents, including both findings, are returned by public queries. The explanation therefore never contains on-file phones, banks or amount ranges.
+- **Public data:** case documents, including both findings, are returned by public queries. The explanation therefore never contains on-file phones, banks or amount ranges, and `crs.raw` never contains the sender's address. Claude's rewrite meets the same rule: Claude never sees that data, and `checkRewrite` rejects digits, emails and links.

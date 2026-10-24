@@ -2,30 +2,38 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildSeedBook } from "../seedWorld";
 import {
   MOSS_MIN_SCORE,
-  VENDOR_INDEX_PREFIX,
+  deploymentSlug,
+  scopeFilter,
   toSearchHits,
   vendorIdFromDocId,
-  vendorIndexName,
+  vendorScope,
   vendorSearchDocs,
   withTimeout,
 } from "./moss";
 import { matchVendor } from "./vendorMatch";
 
-describe("vendorIndexName", () => {
+describe("deploymentSlug", () => {
   it.each([
-    ["https://handsome-dove-614.convex.cloud", `${VENDOR_INDEX_PREFIX}-handsome-dove-614`],
-    ["https://Odd_Name.convex.cloud", `${VENDOR_INDEX_PREFIX}-odd-name`],
-    [undefined, VENDOR_INDEX_PREFIX],
-    ["not a url", VENDOR_INDEX_PREFIX],
+    ["https://handsome-dove-614.convex.cloud", "handsome-dove-614"],
+    ["https://Odd_Name.convex.cloud", "odd-name"],
+    [undefined, "default"],
+    ["not a url", "default"],
   ])("%s -> %s", (url, expected) => {
-    expect(vendorIndexName(url)).toBe(expected);
+    expect(deploymentSlug(url)).toBe(expected);
+  });
+});
+
+describe("scopes", () => {
+  it("give each deployment its own vendor scope, filtered by equality", () => {
+    expect(vendorScope("handsome-dove-614")).toBe("vendor:handsome-dove-614");
+    expect(scopeFilter("vendor:handsome-dove-614")).toEqual({ field: "scope", condition: { $eq: "vendor:handsome-dove-614" } });
   });
 });
 
 describe("vendorSearchDocs", () => {
-  const docs = vendorSearchDocs(buildSeedBook().vendors);
+  const docs = vendorSearchDocs(buildSeedBook().vendors, "dove");
 
-  it("writes one document per vendor name and alias", () => {
+  it("writes one document per vendor name and alias, in the deployment's scope", () => {
     expect(docs).toHaveLength(13);
     expect(docs.filter((d) => d.metadata.vendorId === "pixel").map((d) => d.text)).toEqual([
       "Pixel & Pine Design",
@@ -33,8 +41,13 @@ describe("vendorSearchDocs", () => {
       "Pixel & Pine",
       "PixelPine",
     ]);
-    expect(docs[0]).toEqual({ id: "pixel#0", text: "Pixel & Pine Design", metadata: { vendorId: "pixel", kind: "name" } });
+    expect(docs[0]).toEqual({
+      id: "vendor:dove:pixel:0",
+      text: "Pixel & Pine Design",
+      metadata: { scope: "vendor:dove", vendorId: "pixel", kind: "name" },
+    });
     expect(docs[1].metadata.kind).toBe("alias");
+    expect(new Set(docs.map((d) => d.metadata.scope))).toEqual(new Set(["vendor:dove"]));
   });
 
   it("sends Moss's cloud names only: no emails, phones or account numbers", () => {
@@ -46,18 +59,19 @@ describe("vendorSearchDocs", () => {
   it("skips blank aliases", () => {
     const [vendor] = buildSeedBook().vendors;
     vendor.aliases = ["  ", "Pixel and Pine"];
-    expect(vendorSearchDocs([vendor]).map((d) => d.id)).toEqual(["pixel#0", "pixel#2"]);
+    expect(vendorSearchDocs([vendor], "dove").map((d) => d.id)).toEqual(["vendor:dove:pixel:0", "vendor:dove:pixel:2"]);
   });
 });
 
 describe("vendorIdFromDocId", () => {
   it.each([
-    ["pixel#0", "pixel"],
-    ["k178x1qg01xgvs1vmzdfywnd9h8gxpxg#12", "k178x1qg01xgvs1vmzdfywnd9h8gxpxg"],
-    ["a#b#3", "a#b"],
-    ["pixel", null],
-    ["#3", null],
-    ["pixel#x", null],
+    ["vendor:dove:pixel:0", "pixel"],
+    ["vendor:handsome-dove-614:k178x1qg01xgvs1vmzdfywnd9h8gxpxg:12", "k178x1qg01xgvs1vmzdfywnd9h8gxpxg"],
+    ["policy:bank-change", null],
+    ["vendor:dove:pixel", null],
+    ["vendor::pixel:0", null],
+    ["vendor:dove:pixel:x", null],
+    ["pixel#0", null],
   ])("%s -> %s", (docId, expected) => {
     expect(vendorIdFromDocId(docId)).toBe(expected);
   });
@@ -66,9 +80,9 @@ describe("vendorIdFromDocId", () => {
 describe("toSearchHits", () => {
   it("keeps each vendor's best score, best first", () => {
     const docs = [
-      { id: "northwind#2", score: 0.86 },
-      { id: "pixel#0", score: 0.9 },
-      { id: "northwind#0", score: 0.97 },
+      { id: "vendor:dove:northwind:2", score: 0.86 },
+      { id: "vendor:dove:pixel:0", score: 0.9 },
+      { id: "vendor:dove:northwind:0", score: 0.97 },
     ];
     expect(toSearchHits(docs, 0)).toEqual([
       { vendorId: "northwind", score: 0.97 },
@@ -77,16 +91,16 @@ describe("toSearchHits", () => {
   });
 
   it("drops scores below the floor, and the floor is adjustable", () => {
-    const docs = [{ id: "sam#0", score: MOSS_MIN_SCORE - 0.01 }];
+    const docs = [{ id: "vendor:dove:sam:0", score: MOSS_MIN_SCORE - 0.01 }];
     expect(toSearchHits(docs)).toEqual([]);
     expect(toSearchHits(docs, 0)).toEqual([{ vendorId: "sam", score: MOSS_MIN_SCORE - 0.01 }]);
   });
 
-  it("clamps scores to 0..1 and ignores non-finite scores and foreign ids", () => {
+  it("clamps scores to 0..1 and ignores non-finite scores and policy sentences", () => {
     const docs = [
-      { id: "pixel#0", score: 1.7 },
-      { id: "harbor#0", score: Number.NaN },
-      { id: "policy-faq", score: 0.99 },
+      { id: "vendor:dove:pixel:0", score: 1.7 },
+      { id: "vendor:dove:harbor:0", score: Number.NaN },
+      { id: "policy:callback", score: 0.99 },
     ];
     expect(toSearchHits(docs, 0)).toEqual([{ vendorId: "pixel", score: 1 }]);
   });
@@ -131,7 +145,7 @@ describe("the 0.95 floor on the scores Moss returned for the seed book", () => {
     ["Google Cloud", "northwind", 0.505, null],
     ["AWS", "northwind", 0.326, null],
   ])("%s (Moss %s %s) -> %s", (query, vendorId, score, expected) => {
-    const hits = toSearchHits([{ id: `${vendorId}#0`, score }]);
+    const hits = toSearchHits([{ id: `vendor:test:${vendorId}:0`, score }]);
     expect(matchVendor(query, UNKNOWN, vendors, hits).vendorId).toBe(expected);
   });
 });

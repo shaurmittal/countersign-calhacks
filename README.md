@@ -59,7 +59,7 @@ convex/
   lib/withAgentRun.ts           wrap any agent step so it shows up in the War Room
   agents/intake.ts          P1  Claude → PaymentRequest
   lib/claude.ts             P1  Claude calls (intake + reply); no Convex imports, shared with scripts/
-  agents/vendorVerifier.ts  P3  vendor book (Moss), CRS KYB + OFAC
+  agents/vendorVerifier.ts  P3  vendor book (Moss), CRS email screening (AtData Fraud Finder)
   agents/riskAnalyst.ts     P3  red flags + Claude explanation
   agents/callbackVerifier.ts P2 Cartesia outbound call to phoneOnFile; outcome, retry, timeout
   agents/ownerConcierge.ts  P4  authenticator-code approval (owner page / ASI:One), cooling-off, owner alerts
@@ -125,13 +125,13 @@ ESCALATE only; it never lifts a BLOCK or HOLD. PAY requires R12's positive check
 | R5 | No open invoice matching number/amount | HOLD |
 | R6 | Over auto-pay limit, or vendor `alwaysEscalate` | ESCALATE |
 | R7 | Over cooling-off threshold | ESCALATE, then HOLD until `coolingOffUntil` |
-| R8 | OFAC hit | BLOCK, not overridable |
+| R8 | OFAC hit (no live source: the team's CRS account has no OFAC product) | BLOCK, not overridable |
 | R9 | Gift cards / crypto | BLOCK, not overridable |
 | R10 | Callback denied | BLOCK; sender marked known-bad |
 | R11 | Sender claims to be the owner | ESCALATE (the claim is worth nothing; real owner approves via OTP) |
 | R12 | Known vendor, open invoice, amount matches, nothing else blocking | PAY |
 | R13 | Invoice already paid | BLOCK, not overridable |
-| R14 | Parse failure, several payments in one message, verifier/risk didn't run, non-USD (HOLD); CRS unavailable/unverified (ESCALATE) | HOLD / ESCALATE |
+| R14 | Parse failure, several payments in one message, verifier/risk didn't run, non-USD (HOLD); CRS unavailable, or a high email-risk score for a sender not on file (ESCALATE) | HOLD / ESCALATE |
 | R15 | Injection attempt (model OR regex prescan) | ESCALATE: never auto-paid |
 
 ### Contract notes for P2-P4
@@ -196,7 +196,8 @@ are in [docs/cartesia-setup.md](docs/cartesia-setup.md).
 | Claude parses every request and writes every reply | Teammates play the owner and the vendor on their own phones |
 | The Policy Engine, rules R1-R15 and the 30-scenario answer key | Money: the mock ledger, or the Increase **sandbox** (no real funds) |
 | Owner step-up: real TOTP codes from an authenticator app, checked server-side | Vendor bank accounts store only routing + last 4; the sandbox uses a stand-in account number ending in those 4 digits |
-| Hash-chained audit log, recomputed live in the War Room | CRS business checks and OFAC screening are not wired yet; the vendor lane shows them as not checked |
+| Hash-chained audit log, recomputed live in the War Room | No KYB or OFAC screening: the team's CRS account has neither product, so R8 never fires live |
+| CRS sandbox: AtData Fraud Finder scores the email of any sender not in the vendor book; a high score escalates (R14) | Seed and scenario addresses use reserved `*.example` domains, which AtData always scores 100, so senders on file are not screened |
 | Fetch.ai agents on Agentverse speaking the Chat Protocol; the owner flow in ASI:One | The vendor billing agent is ours, playing a compromised vendor |
 
 Every lane in the War Room is a real database row written by the agent that did the work.

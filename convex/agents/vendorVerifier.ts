@@ -3,12 +3,24 @@
 // the record, and finds the open invoice: shared/verification/verifyVendor.ts. Actions can't read
 // ctx.db, so the book comes from loadVerificationBook. The Risk Analyst loads it too, because the
 // two agents run in parallel.
-// CRS (KYB + OFAC) isn't wired yet, so crs stays "not_checked" and ofacHit: false means OFAC did
-// not run. Never guess: once CRS is wired, an error or timeout must return crs "unavailable".
-import { internalQuery, type ActionCtx } from "../_generated/server";
+// CRS: AtData Fraud Finder screens the emails the book doesn't know, the sender's and any written in
+// the message (shared/verification/crs.ts). The team's CRS account has no KYB or OFAC product, so ofacHit
+// stays false and only means OFAC did not run. Any CRS error or timeout returns crs "unavailable", never "ok".
+import { v } from "convex/values";
+import { internalAction, internalQuery, type ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import type { PaymentRequest, VendorFindings } from "../../shared/types";
+import {
+  CRS_BUDGET_MS,
+  combineCrs,
+  createCrsClient,
+  crsConfig,
+  crsUnavailable,
+  emailsToScreen,
+  type CrsClient,
+  type CrsResult,
+} from "../../shared/verification/crs";
 import { MOSS_CALLER_TIMEOUT_MS, withTimeout } from "../../shared/verification/moss";
 import type { BookVendor, SearchHit, VerificationBook } from "../../shared/verification/types";
 import { verifyVendor } from "../../shared/verification/verifyVendor";
@@ -81,17 +93,52 @@ export async function mossHits(ctx: ActionCtx, claimedName: string | null): Prom
   return withTimeout(ctx.runAction(internal.agents.moss.searchVendors, { query }), MOSS_CALLER_TIMEOUT_MS, []);
 }
 
+// One CRS client per set of settings, kept while this isolate lives, so cases reuse the token.
+let crs: { settings: string; client: CrsClient } | null = null;
+
+/** null when the deployment has no CRS_USERNAME and CRS_PASSWORD, or CRS_BASE_URL isn't the sandbox. */
+function crsClient(): CrsClient | null {
+  const config = crsConfig(process.env);
+  if (!config) return null;
+  const settings = JSON.stringify(config);
+  if (crs?.settings !== settings) crs = { settings, client: createCrsClient(config, fetch) };
+  return crs.client;
+}
+
+/**
+ * CRS on the case's unknown emails: the sender's and any written in the message, checked in parallel,
+ * worst result kept. "not_checked" when the book knows every address (owner or vendor on file), there
+ * is none, or CRS isn't set up. Never throws.
+ */
+async function screenCase(c: Doc<"cases">, book: VerificationBook): Promise<CrsResult> {
+  const emails = emailsToScreen(c.fromAddress, c.rawContent, book);
+  const client = emails.length > 0 ? crsClient() : null;
+  if (!client) return { status: "not_checked" };
+  const checks = Promise.all(emails.map(async ({ email, source }) => ({ source, crs: await client.screenEmail(email) })));
+  return withTimeout(checks.then(combineCrs), CRS_BUDGET_MS, crsUnavailable("timeout"));
+}
+
 export async function runVendorVerifier(
   ctx: ActionCtx,
   c: Doc<"cases">,
   request: PaymentRequest,
 ): Promise<VendorFindings> {
-  const [book, searchHits]: [VerificationBook, SearchHit[]] = await Promise.all([
-    ctx.runQuery(internal.agents.vendorVerifier.loadVerificationBook, {}),
-    mossHits(ctx, request.claimedVendorName),
-  ]);
-  // TODO(P3): CRS sandbox (CRS_USERNAME, CRS_PASSWORD, CRS_BASE_URL; POST /users/login for a Bearer
-  // token): business lookup on the vendor's crsBusinessId and OFAC on any new beneficiary. Any error
-  // or timeout returns crs: { status: "unavailable" }, never "ok".
-  return verifyVendor({ request, fromAddress: c.fromAddress, book, searchHits });
+  const hits = mossHits(ctx, request.claimedVendorName);
+  const book: VerificationBook = await ctx.runQuery(internal.agents.vendorVerifier.loadVerificationBook, {});
+  const [searchHits, crsResult]: [SearchHit[], CrsResult] = await Promise.all([hits, screenCase(c, book)]);
+  return { ...verifyVendor({ request, fromAddress: c.fromAddress, book, searchHits }), crs: crsResult };
 }
+
+/**
+ * One live CRS check from the CLI, for any address (it skips the vendor-book filter). It logs in unless
+ * this isolate already holds a token, then makes one Fraud Finder call:
+ * npx convex run agents/vendorVerifier:screenEmail '{"email":"invoices@northwind-cloud-billing.example"}'
+ */
+export const screenEmail = internalAction({
+  args: { email: v.string() },
+  handler: async (_ctx, { email }): Promise<CrsResult> => {
+    const client = crsClient();
+    if (!client) return { status: "not_checked" };
+    return withTimeout(client.screenEmail(email.trim().toLowerCase()), CRS_BUDGET_MS, crsUnavailable("timeout"));
+  },
+});
