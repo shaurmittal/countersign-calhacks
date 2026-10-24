@@ -122,7 +122,8 @@ export default defineSchema({
     callSid: v.optional(v.string()), // Cartesia agent_call_id
     agentRunId: v.optional(v.id("agentRuns")), // finished when the outcome lands
     attempt: v.number(),
-    transcript: v.optional(v.string()),
+    transcript: v.optional(v.string()), // "Countersign: …" / "Vendor: …" lines, fetched from Cartesia after the call
+    summary: v.optional(v.string()), // Cartesia's post-call summary
     outcome: v.optional(
       v.union(v.literal("confirmed"), v.literal("denied"), v.literal("no_answer"), v.literal("unclear")),
     ),

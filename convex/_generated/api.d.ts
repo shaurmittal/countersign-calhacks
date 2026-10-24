@@ -17,6 +17,7 @@ import type * as agents_payer from "../agents/payer.js";
 import type * as agents_riskAnalyst from "../agents/riskAnalyst.js";
 import type * as agents_vendorVerifier from "../agents/vendorVerifier.js";
 import type * as audit from "../audit.js";
+import type * as callbacks from "../callbacks.js";
 import type * as cases from "../cases.js";
 import type * as channels_agentBridge from "../channels/agentBridge.js";
 import type * as channels_reply from "../channels/reply.js";
@@ -25,8 +26,10 @@ import type * as channels_web from "../channels/web.js";
 import type * as http from "../http.js";
 import type * as lib_cartesia from "../lib/cartesia.js";
 import type * as lib_claude from "../lib/claude.js";
+import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_withAgentRun from "../lib/withAgentRun.js";
 import type * as pipeline from "../pipeline.js";
+import type * as privacy from "../privacy.js";
 import type * as scoreboard from "../scoreboard.js";
 import type * as seed from "../seed.js";
 
@@ -46,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   "agents/riskAnalyst": typeof agents_riskAnalyst;
   "agents/vendorVerifier": typeof agents_vendorVerifier;
   audit: typeof audit;
+  callbacks: typeof callbacks;
   cases: typeof cases;
   "channels/agentBridge": typeof channels_agentBridge;
   "channels/reply": typeof channels_reply;
@@ -54,8 +58,10 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/cartesia": typeof lib_cartesia;
   "lib/claude": typeof lib_claude;
+  "lib/rateLimit": typeof lib_rateLimit;
   "lib/withAgentRun": typeof lib_withAgentRun;
   pipeline: typeof pipeline;
+  privacy: typeof privacy;
   scoreboard: typeof scoreboard;
   seed: typeof seed;
 }>;
