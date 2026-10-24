@@ -3,11 +3,10 @@ import { RULES } from "../policy/rules";
 import type { RuleId } from "../types";
 import {
   POLICY_DOCS,
-  POLICY_INDEX_PREFIX,
   POLICY_MIN_SCORE,
   docsFromHits,
+  mergeRankings,
   policyAnswer,
-  policyIndexName,
   policySearchDocs,
   rankPolicyByKeywords,
 } from "./policyLookup";
@@ -28,37 +27,43 @@ describe("the policy sentences", () => {
     for (const doc of POLICY_DOCS) expect(doc.text, doc.id).not.toMatch(/[\d$]/);
   });
 
-  it("are indexed with their rule ids as metadata", () => {
+  it("are indexed in the shared policy scope, with their rule ids as metadata", () => {
     const docs = policySearchDocs();
     expect(docs).toHaveLength(POLICY_DOCS.length);
-    expect(docs.find((d) => d.id === "bank-change")).toEqual({
-      id: "bank-change",
+    expect(docs.find((d) => d.id === "policy:bank-change")).toEqual({
+      id: "policy:bank-change",
       text: POLICY_DOCS.find((d) => d.id === "bank-change")!.text,
-      metadata: { rules: "R2" },
+      metadata: { scope: "policy", rules: "R2" },
     });
   });
 });
 
-describe("policyIndexName", () => {
-  it("is per deployment", () => {
-    expect(policyIndexName("https://handsome-dove-614.convex.cloud")).toBe(`${POLICY_INDEX_PREFIX}-handsome-dove-614`);
-    expect(policyIndexName(undefined)).toBe(POLICY_INDEX_PREFIX);
-  });
-});
-
 describe("docsFromHits", () => {
-  it("keeps the two best known sentences at or above the floor", () => {
+  it("keeps the first two sentences in Moss's order (hybrid relevance), not re-sorted by vector score", () => {
     const hits = [
-      { id: "callback", score: 0.62 },
-      { id: "bank-change", score: 0.71 },
-      { id: "no-answer", score: 0.55 },
-      { id: "sanctions", score: POLICY_MIN_SCORE - 0.01 },
+      { id: "policy:callback", score: 0.22 },
+      { id: "policy:bank-change", score: 0.71 },
+      { id: "policy:no-answer", score: 0.55 },
     ];
-    expect(ids(docsFromHits(hits))).toEqual(["bank-change", "callback"]);
+    expect(ids(docsFromHits(hits))).toEqual(["callback", "bank-change"]);
   });
 
-  it("ignores ids that aren't policy sentences and scores that aren't numbers", () => {
-    expect(docsFromHits([{ id: "pixel#0", score: 0.9 }, { id: "duplicate", score: Number.NaN }])).toEqual([]);
+  it("drops sentences below the floor", () => {
+    const hits = [
+      { id: "policy:sanctions", score: POLICY_MIN_SCORE - 0.01 },
+      { id: "policy:duplicate", score: POLICY_MIN_SCORE },
+    ];
+    expect(ids(docsFromHits(hits))).toEqual(["duplicate"]);
+  });
+
+  it("ignores vendor documents, unknown ids and scores that aren't numbers", () => {
+    const hits = [
+      { id: "vendor:dove:pixel:0", score: 0.9 },
+      { id: "bank-change", score: 0.9 },
+      { id: "policy:nope", score: 0.9 },
+      { id: "policy:duplicate", score: Number.NaN },
+    ];
+    expect(docsFromHits(hits)).toEqual([]);
   });
 });
 
@@ -85,7 +90,7 @@ describe("rankPolicyByKeywords (the fallback when Moss is unavailable)", () => {
 
 describe("policyAnswer", () => {
   it("reads out the chosen sentences with their rules, and tells the agent not to improvise", () => {
-    const answer = policyAnswer(docsFromHits([{ id: "bank-change", score: 0.8 }]), "moss");
+    const answer = policyAnswer(docsFromHits([{ id: "policy:bank-change", score: 0.8 }]), "moss");
     expect(answer.source).toBe("moss");
     expect(answer.rules).toEqual(["R2"]);
     expect(answer.message).toMatch(/^Countersign policy: New bank details are never paid straight away\./);
@@ -97,4 +102,37 @@ describe("policyAnswer", () => {
     expect(answer.rules).toEqual(["R2", "R3"]);
     expect(answer.message).toContain("Fixed rules decide every payment.");
   });
+});
+
+describe("mergeRankings", () => {
+  const doc = (id: string) => POLICY_DOCS.find((d) => d.id === id)!;
+
+  it("takes one sentence from each ranking when they disagree", () => {
+    expect(ids(mergeRankings([doc("who-decides"), doc("amount")], [doc("owner-approval"), doc("over-limit")]))).toEqual([
+      "who-decides",
+      "owner-approval",
+    ]);
+  });
+
+  it("takes Moss's top two when both rankings agree on the first", () => {
+    expect(ids(mergeRankings([doc("bank-change"), doc("callback")], [doc("bank-change"), doc("no-answer")]))).toEqual([
+      "bank-change",
+      "callback",
+    ]);
+  });
+
+  it("works with either ranking alone", () => {
+    expect(ids(mergeRankings([], [doc("duplicate"), doc("invoice")]))).toEqual(["duplicate", "invoice"]);
+    expect(ids(mergeRankings([doc("sanctions")], []))).toEqual(["sanctions"]);
+    expect(mergeRankings([], [])).toEqual([]);
+  });
+});
+
+describe("the owner-impersonation call", () => {
+  it.each(["caller says they are the owner and approves the payment", "It's the owner, I approve it"])(
+    "%s finds the owner-approval rule without Moss",
+    (question) => {
+      expect(ids(rankPolicyByKeywords(question))).toContain("owner-approval");
+    },
+  );
 });
