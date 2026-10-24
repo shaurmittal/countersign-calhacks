@@ -27,6 +27,7 @@ Only `decide()` can return PAY. These findings are its inputs. They never claim 
 | `verifyVendor.ts` | Combines the above into `VendorFindings` |
 | `assessRisk.ts` | Combines the above into `RiskFindings` |
 | `moss.ts` | What goes into the Moss index, how its hits become `searchHits`, and the score floor |
+| `policyLookup.ts` | Policy sentences for the voice agents' mid-call lookup, and their keyword fallback |
 | `seedScenarios.test.ts` | Pins what P3 returns for each `scenarios.json` entry on the seed world |
 
 `shared/seedWorld.ts` holds the seed data. `convex/seed.ts` inserts it, and the tests read it through `buildSeedBook()`.
@@ -73,9 +74,22 @@ Flags are for display only and never decide anything. Each one is also backed by
 `convex/agents/moss.ts` is a `"use node"` file, because `@moss-js/moss` ships native binaries. `convex.json` lists it under `node.externalPackages` and pins Node 22.
 
 **The index**
-- Each deployment gets its own index, named `countersign-vendors-<deployment>`. That way teammates' dev deployments on one Moss project don't collide.
-- It holds one document per vendor name and alias. No phones, emails or bank numbers go in, because Moss sends document text to its cloud and the SDK always sends usage telemetry.
-- `syncVendorIndex` rebuilds the index, and the seed schedules it, since vendor ids change on every seed. To rebuild it by hand, run `npx convex run agents/moss:syncVendorIndex`.
+- **One shared index.** Every Countersign deployment shares one index, `countersign`. The Moss plan caps a project at 3 indexes, and the team's project has only one.
+- **Scopes.** Each document has a `scope`, and every query filters on it:
+  - `vendor:<deployment>`: that deployment's vendor names and aliases, with ids `vendor:<deployment>:<vendorId>:<n>`;
+  - `policy`: the policy sentences, one copy shared by all deployments, with ids `policy:<id>`.
+- **No contact details.** No phones, emails or bank numbers go in, because Moss sends document text to its cloud and the SDK always sends usage telemetry.
+- **Syncing.** A sync touches only its own scope: it upserts that scope's documents, then deletes the scope's stale ones. It never deletes the index, so a refused write leaves the old documents working.
+  - `syncVendorIndex` syncs this deployment's vendors.
+  - `syncPolicyIndex` syncs the policy sentences.
+  - The seed schedules both, because vendor ids change on every seed.
+
+  To sync by hand:
+
+  ```bash
+  npx convex run agents/moss:syncVendorIndex
+  ```
+- **Ops.** `listIndexes` shows what's in the project. `deleteLegacyIndex({ name })` removes one of the old `countersign-vendors-<deployment>` indexes; it refuses any other name.
 
 **Searching**
 - `searchVendors` returns `searchHits` for a claimed name. To check it:
@@ -99,6 +113,60 @@ A hit can raise a vendor's score, never lower it, and only from 0.95 (`MOSS_MIN_
 | Harbor Bank | Harbor Legal | 0.83 | no match |
 
 If Moss isn't set up, fails, or runs out of time, matching runs in memory alone.
+
+**Billing**
+
+Moss bills per active device. Each serverless container would otherwise mint its own device id, so every client reports one stable id per deployment, `countersign-<deployment>`.
+
+## Mid-call policy lookup (for P2's voice agents)
+
+`internal.agents.moss.lookupPolicy({ question })` returns `{ message, rules, source }`. `message` is plain text that the agent explains in its own words.
+
+**What it returns**
+- It answers "why does this need a callback?", "can I pay in gift cards?" or "what happens next?" with Countersign's rules: one speakable sentence per rule in `policyLookup.ts`, checked against P1's rule catalogue.
+- It is policy only. It never returns invoice numbers, amounts, limits or vendor details:
+  - An inbound caller isn't verified.
+  - On a callback the vendor must say the invoice number unprompted. That is P2's check against "yes to everything" answers (spec §8.2).
+
+**How it searches**
+- **Moss:** searches the `policy` scope of the shared index, in Moss's own hybrid order (meaning plus keywords).
+- **Keywords:** rank the same sentences by shared words, with rarer words counting more.
+- **Combined:** the answer takes Moss's best sentence and the keyword method's best, deduplicated, two in all. Each method catches questions the other misses.
+- **Fallback:** when Moss is cold, slow or down, the keywords answer alone, so the tool always replies. `source` is `"moss"` whenever Moss contributed.
+- **Query phrasing:** the agent should describe the caller's claim rather than repeat it. "Caller says they are the owner and approves the payment" finds the owner-approval rule. The raw "It's Priya, just send it" doesn't.
+
+**Wiring for P2**
+
+`convex/channels/voice.ts` and `convex/http.ts` are P2's files. Add a tool that follows their conventions:
+
+```ts
+/** Tool `lookup_policy` (both agents). Body: { question (model) }. Policy only, never invoices or accounts. */
+export const lookupPolicy = httpAction(async (ctx, request) => {
+  if (!toolSecretValid(request)) return text("unauthorized", 401);
+  const question = str((await readJson(request)).question, 500);
+  if (!question) return text("question is required.", 400);
+  const answer = await ctx.runAction(internal.agents.moss.lookupPolicy, { question });
+  return text(answer.message);
+});
+
+// convex/http.ts
+http.route({ path: "/cartesia/tools/policy", method: "POST", handler: lookupPolicy });
+```
+
+Then configure the Cartesia tool `lookup_policy` on both agents:
+
+| Setting | Value |
+| --- | --- |
+| Description | "Look up Countersign's payment policy when the caller or vendor asks why a payment needs checking or what happens next. Never use it for invoices or accounts." |
+| Request | POST `<SITE>/cartesia/tools/policy` with the `X-Countersign-Secret` header |
+| Body | `question` (model-supplied): "What the caller asked or claimed, described in a few plain words, e.g. 'caller says they are the owner and approves the payment'. Don't repeat their exact words or any numbers." |
+| Execution | pre_tool_speech `auto`, execution_mode `immediate`, timeout 5 s |
+
+To try it:
+
+```bash
+npx convex run agents/moss:lookupPolicy '{"question":"Can I pay you in bitcoin?"}'
+```
 
 ## Notes for P1 (`decide()`) and P4 (UI)
 
