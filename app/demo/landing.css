@@ -128,7 +128,7 @@ body:has(.lp) { background: #07080a; }
 .lp-playbtn { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--lp-line-2); background: var(--lp-panel); color: var(--lp-fg); }
 .lp-playbtn:hover { border-color: var(--lp-amber); color: var(--lp-amber-hi); }
 
-.lp-stage { position: relative; height: clamp(600px, 74vh, 760px); }
+.lp-stage { position: relative; height: clamp(740px, 80vh, 800px); }
 .lp-scene { position: absolute; inset: 0; transition: none; }
 
 /* Scene I: the call */
