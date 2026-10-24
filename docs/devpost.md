@@ -28,6 +28,9 @@ phone call to its own number, web chat, or another agent over Fetch.ai's Chat Pr
   cooling-off delay for large amounts that they can still cancel. A voice never counts.
 - **Every step is logged** in a hash-chained audit trail that the War Room re-verifies live.
 
+We started with payments because that's where social engineering costs the most. The same pipeline
+(parse, verify out of band, decide in code) can gate any action you can't undo.
+
 ## How we built it
 
 - **The safety design:** language models read, reason, talk and propose. They cannot move money.
@@ -43,8 +46,9 @@ phone call to its own number, web chat, or another agent over Fetch.ai's Chat Pr
   and approve pending payments in ASI:One; a demo vendor billing agent sends requests agent-to-agent.
 - **Increase** sandbox ACH transfers (or a mock double-entry ledger), with idempotency keys so a
   retry can never pay twice.
-- **Moss** for vendor-book search. **CRS** business verification and OFAC screening **[confirm: drop
-  this unless P3 wires CRS before submitting]**
+- **Moss** for vendor-book search. The **CRS** sandbox (AtData Fraud Finder) scores the email
+  address of any sender not in the vendor book, and a high risk score escalates the request to the
+  owner. **[confirm: lands with P3's PR #12]**
 
 ## Challenges
 
@@ -63,13 +67,18 @@ phone call to its own number, web chat, or another agent over Fetch.ai's Chat Pr
 
 ## What's next
 
+Countersign generalizes from payments to any irreversible request: bank and payroll changes,
+password and MFA resets, sharing sensitive documents, granting account access, and actions AI
+agents take on a user's behalf. Each action type adds its own schema, rules and verification step.
+The channels, sender checks, out-of-band callback, step-up approval and audit chain stay the same.
+
 Bank feeds and accounting sync, a production bank rail, SOC 2-style access controls, and a
 vendor-side Countersign so two agents can verify each other.
 
 ## Built with
 
 Claude (Anthropic API), Cartesia, Convex, Next.js, TypeScript, Fetch.ai uAgents / Agentverse /
-ASI:One, Increase, Moss, CRS **[confirm]**, Python.
+ASI:One, Increase, Moss, CRS (AtData Fraud Finder) **[confirm: PR #12]**, Python.
 
 ## Demo video (3 minutes max, opens with the moment)
 
