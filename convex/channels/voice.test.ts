@@ -125,3 +125,32 @@ describe("lookup_policy tool", () => {
     expect(await res.text()).toMatch(/couldn't be looked up/);
   });
 });
+
+describe("get_case_status reads only a current reply", () => {
+  const status = (t: T, caseId: Id<"cases">) => t.query(internal.channels.voice.statusForVoice, { caseId, conversationId: "" });
+  const update = (t: T, caseId: Id<"cases">, fields: Record<string, unknown>) =>
+    t.mutation(internal.cases.update, { caseId, ...fields });
+
+  it("keeps polling while a closed case still carries the callback stage's reply", async () => {
+    const t = makeTest();
+    const caseId = await callCase(t, "conv-3");
+    await update(t, caseId, { status: "CALLBACK_PENDING" });
+    await update(t, caseId, { replyText: "I'm calling them now on the number we have on file." });
+    await update(t, caseId, { status: "CLOSED", decision: "BLOCK" });
+    expect((await status(t, caseId)).final).toBe(false);
+
+    await update(t, caseId, { replyText: "We can't make this payment." });
+    const done = await status(t, caseId);
+    expect(done.final).toBe(true);
+    expect(done.message).toMatch(/We can't make this payment/);
+  });
+
+  it("isn't thrown by the leader re-setting the same status", async () => {
+    const t = makeTest();
+    const caseId = await callCase(t, "conv-4");
+    await update(t, caseId, { status: "AWAITING_OWNER", decision: "ESCALATE" });
+    await update(t, caseId, { replyText: "This payment needs the business owner's approval." });
+    await update(t, caseId, { status: "AWAITING_OWNER" });
+    expect((await status(t, caseId)).final).toBe(true);
+  });
+});

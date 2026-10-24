@@ -233,6 +233,33 @@ async function findCallCase(ctx: QueryCtx, caseId: string, conversationId: strin
   return rows.sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
 }
 
+/**
+ * True once replyText was written at or after the case's latest status change. The leader closes a case
+ * first and writes the new reply a few seconds later, so until then replyText is still the previous
+ * stage's ("I'm calling them now…") and must not be read out as the decision.
+ */
+async function replyIsCurrent(ctx: QueryCtx, c: Doc<"cases">): Promise<boolean> {
+  if (!c.replyText) return false;
+  const updates = await ctx.db
+    .query("auditEvents")
+    .withIndex("by_case", (q) => q.eq("caseId", c._id))
+    .filter((q) => q.eq(q.field("action"), "case.updated"))
+    .collect();
+  let status: unknown;
+  let statusSeq = -1;
+  let replySeq = -1;
+  for (const e of updates.sort((a, b) => a.seq - b.seq)) {
+    const fields = (e.payload ?? {}) as { status?: unknown; replyText?: unknown };
+    // Re-setting the same status (a re-run of the leader) writes no new reply, so it doesn't count.
+    if (fields.status !== undefined && fields.status !== status) {
+      status = fields.status;
+      statusSeq = e.seq;
+    }
+    if (fields.replyText !== undefined) replySeq = e.seq;
+  }
+  return replySeq >= statusSeq;
+}
+
 /** Voice-friendly status of a case. `final` means the agent should stop polling. */
 export const statusForVoice = internalQuery({
   args: { caseId: v.string(), conversationId: v.string() },
@@ -268,12 +295,12 @@ export const statusForVoice = internalQuery({
     if (c.status === "AWAITING_OWNER") {
       return {
         ...none,
-        final: !!c.replyText,
+        final: await replyIsCurrent(ctx, c),
         message: `Decision: ${c.decision ?? "ESCALATE"}. The owner must approve this from her registered device; nothing is paid until she does.${reasons}${say}`,
       };
     }
     if (c.status === "CLOSED") {
-      return { ...none, final: !!c.replyText, message: `Decision: ${c.decision ?? "HOLD"}.${reasons}${say}` };
+      return { ...none, final: await replyIsCurrent(ctx, c), message: `Decision: ${c.decision ?? "HOLD"}.${reasons}${say}` };
     }
     return {
       ...none,
