@@ -69,10 +69,12 @@ Flags are for display only and never decide anything. Each one is also backed by
 
 ## Notes for P1 (`decide()`) and P4 (UI)
 
-- **Invoice amount:** `decide()` can't see the invoice amount, only `matchingInvoiceId`. "Pay Northwind #NW-889" and "Pay Sam Ortiz's invoice for this week" carry no amount. So the pipeline must fill `request.amountCents` from the matched invoice before R4, R6 and R7, or HOLD.
-- **CRS status:** treat `crs.status !== "ok"` as "KYB/OFAC not run". Spec §8.2 makes `"unavailable"` force ESCALATE. P1 decides what `"not_checked"` should do.
-- **R9:** the safest input is `request.requestedAction`. The `forbidden_rail` flag only adds the text backstop.
-- **`isAmountAnomalous`** (`riskFlags.ts`) is the same R4 definition that `amount_anomaly` uses.
-- **R10 ("mark sender as known-bad"):** it needs something to write `vendors.knownBadSenders`. P3 can add an internal mutation.
-- **Lane summaries:** `advance` passes no `summarize` function for the P3 lanes. `riskFindings.explanation` is one line of display text.
+- **The answer key with real P3:** `seedScenarios.test.ts` runs all of `scenarios.json` through `verifyVendor`, `assessRisk` and `decide()` the way `pipeline.advance` does, and expects every decision. `scenarios/world.ts` could call these functions instead of its reference verifier.
+- **CRS status:** `"not_checked"` fires no rule today, so PAY doesn't wait for CRS. Once CRS is wired, an error or timeout returns `"unavailable"`, which escalates through R14.
+- **R9 blocks on `forbidden_rail`, and no one can override it.** So its text check covers only R9's own list: gift cards, crypto, and a personal account. A Zelle or Venmo mention raises the display-only `bank_change` instead, and the Payer only ever pays the bank on file.
+- **R11 and R15** read the `owner_impersonation` and `injection_attempt` flags. Their text checks ignore greetings ("Hi Priya"), negations and ordinary billing phrases.
+- **`isAmountAnomalous`** (`riskFlags.ts`) is the same definition as R4.
+- **Known-bad senders:** addresses that `cases.markSenderKnownBad` writes for R10 are never on file again, even when the sender is the vendor's own number.
+- **Spoofing:** caller ID and an email's From can be faked, so "on file" isn't proof. The owner's registered phone also counts as on file. Bank changes always go through R2's callback, whoever sends them.
+- **Lane summaries:** `advance` passes no `summarize` function for the P3 lanes. `riskFindings.explanation` is ready-made display text.
 - **Public data:** case documents, including both findings, are returned by public queries. The explanation therefore never contains on-file phones, banks or amount ranges.
