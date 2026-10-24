@@ -40,3 +40,36 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-san
 .chat-form button:disabled { opacity: 0.4; cursor: default; }
 .chat-error { color: var(--block); margin: 0; }
 .small { font-size: 12px; }
+
+/* /judge-card: always light, sized for printing */
+.jc-page { --jc-ink: #14171c; --jc-muted: #5b6472; --jc-line: #d9dde3; --jc-accent: #1f3a5f;
+  min-height: 100vh; background: #eef0f3; color: var(--jc-ink); display: flex; flex-direction: column;
+  align-items: center; gap: 16px; padding: 24px 16px; }
+.jc-card { background: #fff; width: 100%; max-width: 5.5in; padding: 28px; border: 1px solid var(--jc-line);
+  border-radius: 12px; display: flex; flex-direction: column; gap: 20px; }
+.jc-card h1 { font-size: 26px; line-height: 1.15; margin: 4px 0 8px; }
+.jc-card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--jc-muted); margin: 0 0 8px; }
+.jc-kicker { margin: 0; font-size: 12px; color: var(--jc-accent); font-weight: 600; letter-spacing: 0.04em; }
+.jc-lede { margin: 0; color: var(--jc-muted); line-height: 1.45; }
+.jc-ways { display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: start;
+  border-top: 1px solid var(--jc-line); border-bottom: 1px solid var(--jc-line); padding: 16px 0; }
+.jc-phone { display: block; font-size: 26px; font-weight: 700; color: var(--jc-ink); text-decoration: none;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.jc-qr { width: 112px; height: 112px; }
+.jc-qr svg { width: 100%; height: 100%; display: block; }
+.jc-qr-missing { display: flex; align-items: center; justify-content: center; text-align: center; font-size: 11px;
+  color: var(--jc-muted); border: 1px dashed var(--jc-line); border-radius: 8px; padding: 8px; }
+.jc-url { font-size: 11px; margin-top: 6px; word-break: break-all; max-width: 112px; }
+.jc-muted { color: var(--jc-muted); font-size: 13px; margin: 6px 0 0; }
+.jc-scams { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; }
+.jc-scams li { line-height: 1.4; }
+.jc-scams strong { display: block; }
+.jc-scams span { color: var(--jc-muted); }
+.jc-foot { font-size: 11px; color: var(--jc-muted); border-top: 1px solid var(--jc-line); padding-top: 12px; line-height: 1.45; }
+.jc-print { font: inherit; padding: 8px 18px; border-radius: 8px; border: 0; background: var(--jc-accent); color: #fff; cursor: pointer; }
+@media (max-width: 480px) { .jc-ways { grid-template-columns: 1fr; } }
+@media print {
+  .jc-page { background: #fff; padding: 0; }
+  .jc-card { border: 0; max-width: none; }
+  .jc-print { display: none; }
+}
