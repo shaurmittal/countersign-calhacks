@@ -10,7 +10,10 @@ import { toolSecretValid } from "../lib/cartesia";
 import { senderOverLimit } from "../lib/rateLimit";
 import { openCase } from "../cases";
 
-const LONG_POLL_MS = 15_000;
+// Must stay under the get_case_status tool timeout in Cartesia (25 s).
+const LONG_POLL_MS = 20_000;
+// A callback that started this recently still gets announced straight away.
+const JUST_STARTED_MS = 5_000;
 const UNKNOWN_CALLER = "unknown-caller";
 const POLL_INTERVAL_MS = 1_000;
 
@@ -76,8 +79,12 @@ export const submitPaymentRequest = httpAction(async (ctx, request) => {
  * Inbound agent tool `get_case_status`.
  * Body: { case_id (dynamic variable, may be empty), conversation_id (system__conversation_id) }
  * Falls back to the newest case opened on this call, so it works even if the case_id
- * assignment hasn't landed yet. Long-polls up to 15 s. Always 200 + plain text, because a
- * non-2xx reaches the LLM as an opaque error and it tells the caller it "can't see" the request.
+ * assignment hasn't landed yet. Always 200 + plain text, because a non-2xx reaches the LLM as an
+ * opaque error and it tells the caller it "can't see" the request.
+ *
+ * Pacing: it long-polls up to 20 s. While the vendor is being called back, only the first check
+ * returns straight away (so the agent can say "I'm calling them now"); later checks wait quietly
+ * until the outcome lands or 20 s pass, so the agent isn't saying "still checking" every second.
  */
 export const getCaseStatus = httpAction(async (ctx, request) => {
   if (!toolSecretValid(request)) {
@@ -90,12 +97,28 @@ export const getCaseStatus = httpAction(async (ctx, request) => {
   console.log(`[voice] get_case_status case=${caseId || "-"} conversation=${conversationId || "-"}`);
 
   const deadline = Date.now() + LONG_POLL_MS;
+  let alreadyAnnounced: boolean | null = null;
   for (;;) {
     const status = await ctx.runQuery(internal.channels.voice.statusForVoice, { caseId, conversationId });
-    if (status.final || Date.now() >= deadline) return text(status.message);
+    if (alreadyAnnounced === null) {
+      // Callback was already under way when this check began (and not just now): the caller has heard it.
+      alreadyAnnounced =
+        status.callbackStartedAt !== null && Date.now() - status.callbackStartedAt > JUST_STARTED_MS;
+    }
+    const quietWait = alreadyAnnounced && status.callbackPending;
+    if (status.final && !quietWait) return text(status.message);
+    if (Date.now() >= deadline) return text(quietWait ? stillHolding(status.vendorName) : status.message);
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
 });
+
+function stillHolding(vendorName: string | null) {
+  return (
+    `Still on the line with ${vendorName ?? "the vendor"}; no answer from them yet. Do not repeat what you already ` +
+    `told the caller. If they speak, say only something short like "Thanks for holding, still waiting on them." ` +
+    `Then call get_case_status again.`
+  );
+}
 
 /**
  * Callback agent tool `record_callback_outcome`.
@@ -149,8 +172,10 @@ export const statusForVoice = internalQuery({
         .collect()
         .then((rows) => rows.sort((a, b) => b.createdAt - a.createdAt)[0] ?? null);
     }
+    const none = { callbackPending: false, callbackStartedAt: null as number | null, vendorName: null as string | null };
     if (!c) {
       return {
+        ...none,
         final: true,
         message: "No request has been submitted on this call yet. Get the details from the caller and call submit_payment_request first.",
       };
@@ -162,26 +187,37 @@ export const statusForVoice = internalQuery({
 
     if (c.status === "CALLBACK_PENDING") {
       const vendor = c.vendorId ? await ctx.db.get(c.vendorId) : null;
+      const callbacks = await ctx.db
+        .query("callbacks")
+        .withIndex("by_case", (q) => q.eq("caseId", c._id))
+        .collect();
+      const vendorName = vendor?.name ?? null;
       return {
+        callbackPending: true,
+        callbackStartedAt: callbacks.length ? Math.min(...callbacks.map((cb) => cb.startedAt)) : Date.now(),
+        vendorName,
         final: true,
         message:
-          `Still verifying. Countersign is calling ${vendor?.name ?? "the vendor"} right now on the phone number ` +
-          `already on file to confirm this request. Tell the caller that, ask them to hold, then call get_case_status again in about 20 seconds.`,
+          `Still verifying. Countersign is calling ${vendorName ?? "the vendor"} right now on the phone number ` +
+          `already on file to confirm this request. Tell the caller that once, ask them to hold, then call get_case_status again. ` +
+          `It will wait quietly for the answer, so you don't need to fill the silence.`,
       };
     }
     // The leader writes replyText just after the decision; keep polling until it lands.
     if (c.status === "AWAITING_OWNER") {
       return {
+        ...none,
         final: !!c.replyText,
         message: `Decision: ${c.decision ?? "ESCALATE"}. The owner must approve this from her registered device; nothing is paid until she does.${reasons}${say}`,
       };
     }
     if (c.status === "CLOSED") {
-      return { final: !!c.replyText, message: `Decision: ${c.decision ?? "HOLD"}.${reasons}${say}` };
+      return { ...none, final: !!c.replyText, message: `Decision: ${c.decision ?? "HOLD"}.${reasons}${say}` };
     }
     return {
+      ...none,
       final: false,
-      message: "Still checking. Tell the caller you are still verifying, then call get_case_status again.",
+      message: "Still checking. Tell the caller briefly that you are still verifying, then call get_case_status again.",
     };
   },
 });
