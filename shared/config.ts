@@ -15,3 +15,11 @@ export const LIMITS = {
   callbackAnswerTimeoutSeconds: 45,
   callbackRetryDelaySeconds: 20,
 };
+
+/** Owner step-up codes (shared/totp.ts): RFC 6238 defaults that every authenticator app supports. */
+export const OWNER_CODE = {
+  digits: 6,
+  periodSeconds: 30,
+  /** Also accept the previous and next step, for clock drift and slow typing. */
+  window: 1,
+};

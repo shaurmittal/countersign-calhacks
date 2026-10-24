@@ -1,26 +1,48 @@
+/* Design tokens and base styles shared by every page. Page styles live next to their pages. */
 :root {
-  --bg: #0b0d10;
-  --panel: #14171c;
-  --border: #252a33;
-  --text: #e6e8eb;
-  --muted: #8a93a3;
-  --pay: #2ecc71;
-  --hold: #f1c40f;
-  --block: #e74c3c;
+  --bg: #020617;
+  --panel: #0f172a;
+  --surface-2: #1e293b;
+  --border: #334155;
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --pay: #22c55e;
+  --hold: #f59e0b;
+  --escalate: #38bdf8;
+  --block: #ef4444;
+  --running: #38bdf8;
+  --focus: #7dd3fc;
+  --radius: 10px;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, sans-serif; }
-.scoreboard { display: flex; gap: 24px; padding: 12px 20px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
-.grid { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 16px; padding: 16px; min-height: calc(100vh - 50px); }
-.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow: auto; }
-.panel h2 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
-.lane { padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; }
-.lane[data-status="running"] { border-color: var(--hold); }
-.lane[data-status="done"] { border-color: var(--pay); }
-.lane[data-status="failed"] { border-color: var(--block); }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-sans); line-height: 1.5; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+button { font: inherit; cursor: pointer; touch-action: manipulation; }
+button:disabled { cursor: not-allowed; opacity: 0.5; }
 .muted { color: var(--muted); }
-.mono { font-family: ui-monospace, monospace; font-size: 12px; }
-@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+.mono { font-family: var(--font-mono); font-size: 13px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Chips: color always paired with text, never color alone. */
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); white-space: nowrap; }
+.chip.ok { border-color: color-mix(in srgb, var(--pay) 60%, transparent); color: #bbf7d0; background: color-mix(in srgb, var(--pay) 14%, transparent); }
+.chip.warn { border-color: color-mix(in srgb, var(--hold) 60%, transparent); color: #fde68a; background: color-mix(in srgb, var(--hold) 14%, transparent); }
+.chip.bad { border-color: color-mix(in srgb, var(--block) 60%, transparent); color: #fecaca; background: color-mix(in srgb, var(--block) 16%, transparent); }
+.chip.info { border-color: color-mix(in srgb, var(--escalate) 60%, transparent); color: #bae6fd; background: color-mix(in srgb, var(--escalate) 14%, transparent); }
+
+/* Decision colors, used by the War Room and the judge chat. */
+[data-decision="PAY"] { --decision: var(--pay); }
+[data-decision="HOLD"] { --decision: var(--hold); }
+[data-decision="ESCALATE"] { --decision: var(--escalate); }
+[data-decision="BLOCK"] { --decision: var(--block); }
+[data-decision="NO_ACTION"] { --decision: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
 
 /* /try chat */
 .chat { max-width: 640px; margin: 0 auto; padding: 16px; min-height: 100vh; display: flex; flex-direction: column; gap: 12px; }

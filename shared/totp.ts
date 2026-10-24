@@ -2,11 +2,9 @@
 // registered device. The device is an authenticator app holding OWNER_TOTP_SECRET (RFC 6238,
 // SHA-1, 6 digits, 30 s), so nothing is ever sent over SMS or voice.
 import { Secret, TOTP } from "otpauth";
+import { OWNER_CODE } from "./config";
 
-export const TOTP_PERIOD_SECONDS = 30;
-export const TOTP_DIGITS = 6;
-/** Also accept the previous and next 30 s step, for clock drift and slow typing. */
-export const TOTP_WINDOW = 1;
+const { digits: TOTP_DIGITS, periodSeconds: TOTP_PERIOD_SECONDS, window: TOTP_WINDOW } = OWNER_CODE;
 
 const CODE_PATTERN = new RegExp(`^\\d{${TOTP_DIGITS}}$`);
 
