@@ -1,7 +1,8 @@
 // Vendor-book name matching and exact sender checks for the Vendor Verifier (owner: P3). Spec §6.2.
 // Pure: a match only says which record to check against, and an address on file is not proof of the sender (§8.2).
+import { isOwnerDeniedSender, isTrustedSender } from "./lists";
 import { emailDomain, isPhoneLike, isSameOrSubdomain, normalizeEmail, normalizePhone, similarity } from "./text";
-import type { BookOwner, BookVendor, SearchHit, SenderCheck, VendorMatch, VerificationBook } from "./types";
+import type { BookListEntry, BookOwner, BookVendor, SearchHit, SenderCheck, VendorMatch, VerificationBook } from "./types";
 
 export const MATCH_THRESHOLD = 0.8;
 export const SENDER_MATCH_CONFIDENCE = 0.9;
@@ -169,6 +170,7 @@ function matchByName(
   fromAddress: string,
   vendors: readonly BookVendor[],
   searchHits: readonly SearchHit[],
+  lists: readonly BookListEntry[],
 ): VendorMatch {
   const hits = hitScores(searchHits);
   // sort is stable, so equal scores keep book order.
@@ -179,10 +181,12 @@ function matchByName(
   const tied = ranked.filter((c) => c.score >= MATCH_THRESHOLD && top - c.score <= TIE_MARGIN + EPSILON);
   let pick = best;
   if (tied.length > 1) {
-    // Only the sender's record can settle a near-tie, and a known-bad sender identifies nobody.
-    const onFile = isKnownBadSender(fromAddress, vendors)
-      ? []
-      : tied.filter((c) => senderMatchesVendor(fromAddress, c.vendor));
+    // Only the sender's record (or the owner's trust list) can settle a near-tie, and a known-bad or
+    // owner-denied sender identifies nobody.
+    const onFile =
+      isKnownBadSender(fromAddress, vendors) || isOwnerDeniedSender(fromAddress, lists)
+        ? []
+        : tied.filter((c) => senderMatchesVendor(fromAddress, c.vendor) || isTrustedSender(fromAddress, c.vendor.id, lists));
     if (onFile.length !== 1) return noMatch();
     pick = onFile[0];
   }
@@ -196,34 +200,42 @@ function matchByName(
 
 /**
  * Which vendor the request refers to. A claimed name decides on its own and never falls back to the sender.
- * Only a request with no name is matched by sender, and a known-bad sender identifies nobody. searchHits
- * (from the Moss index, once wired) only refine a name match; ids not in the book are ignored.
+ * Only a request with no name is matched by sender: its record, or a trust entry the owner added for it.
+ * A known-bad or owner-denied sender identifies nobody. searchHits (from the Moss index, once wired) only
+ * refine a name match; ids not in the book are ignored.
  */
 export function matchVendor(
   claimedName: string | null,
   fromAddress: string,
   vendors: readonly BookVendor[],
   searchHits: readonly SearchHit[] = [],
+  lists: readonly BookListEntry[] = [],
 ): VendorMatch {
   if (claimedName !== null && normalizeName(claimedName) !== "") {
-    return matchByName(claimedName, fromAddress, vendors, searchHits);
+    return matchByName(claimedName, fromAddress, vendors, searchHits, lists);
   }
-  if (isKnownBadSender(fromAddress, vendors)) return noMatch();
-  const onFile = vendors.filter((v) => senderMatchesVendor(fromAddress, v));
+  if (isKnownBadSender(fromAddress, vendors) || isOwnerDeniedSender(fromAddress, lists)) return noMatch();
+  const onFile = vendors.filter((v) => senderMatchesVendor(fromAddress, v) || isTrustedSender(fromAddress, v.id, lists));
   if (onFile.length !== 1) return noMatch();
   return { vendorId: onFile[0].id, confidence: SENDER_MATCH_CONFIDENCE, method: "sender", matchedOn: null };
 }
 
-/** Raw facts about the sender. knownBad is not folded into the other fields: the caller does that. */
+/**
+ * Raw facts about the sender. knownBad and ownerDenied are not folded into the other fields, and
+ * onMatchedVendorFile is the vendor's own record only, without the trust list: the caller combines them.
+ */
 export function checkSender(
   fromAddress: string,
   vendor: BookVendor | null,
-  book: Pick<VerificationBook, "vendors" | "owner">,
+  book: Pick<VerificationBook, "vendors" | "owner" | "lists">,
 ): SenderCheck {
+  const lists = book.lists ?? [];
   return {
     isOwner: isOwnerAddress(fromAddress, book.owner),
     knownBad: isKnownBadSender(fromAddress, book.vendors),
     onMatchedVendorFile: vendor ? senderMatchesVendor(fromAddress, vendor) : false,
     onAnyVendorFile: book.vendors.some((v) => senderMatchesVendor(fromAddress, v)),
+    ownerDenied: isOwnerDeniedSender(fromAddress, lists),
+    trustedByOwner: isTrustedSender(fromAddress, vendor?.id ?? null, lists),
   };
 }

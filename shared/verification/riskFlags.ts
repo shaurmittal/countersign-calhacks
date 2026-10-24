@@ -217,7 +217,9 @@ function hasAmountAnomaly(request: PaymentRequest, vendor: BookVendor | null, po
 /** Every raised flag once, in FLAG_ORDER. */
 export function computeFlags(signals: RiskSignals): RiskFlag[] {
   const { request, rawContent, vendor, sender } = signals;
-  const senderOnFile = sender.isOwner || (vendor ? sender.onMatchedVendorFile : sender.onAnyVendorFile);
+  // A trust entry the owner added counts as on file, the same as in verifyVendor.
+  const senderOnFile =
+    sender.isOwner || sender.trustedByOwner === true || (vendor ? sender.onMatchedVendorFile : sender.onAnyVendorFile);
   // One entry per flag, so the compiler catches a RiskFlag that has no rule.
   const raised: Record<RiskFlag, boolean> = {
     forbidden_rail: detectForbiddenRail(request, rawContent),
@@ -226,7 +228,7 @@ export function computeFlags(signals: RiskSignals): RiskFlag[] {
     bank_change: detectBankChange(request, rawContent, signals.bankMatches),
     lookalike_domain: signals.lookalikeDomains.length > 0,
     amount_anomaly: hasAmountAnomaly(request, vendor, signals.policy),
-    new_sender: sender.knownBad || !senderOnFile,
+    new_sender: sender.knownBad || sender.ownerDenied === true || !senderOnFile,
     urgency: detectUrgency(request, rawContent),
     off_hours: isOffHours(signals.receivedAt),
   };

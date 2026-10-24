@@ -9,6 +9,7 @@ import { api } from "../../convex/_generated/api";
 import { OWNER_CODE } from "../../shared/config";
 import { formatCents } from "../../shared/ledger";
 import { channelLabel, clockTime, ruleInfo, secondsLeft, useNow } from "../components/format";
+import { ListsSection } from "./ListsSection";
 import "./owner.css";
 
 type Pending = FunctionReturnType<typeof api.owner.pending>[number];
@@ -50,6 +51,8 @@ export default function OwnerPage() {
       ) : (
         <p className="muted">No alerts yet.</p>
       )}
+
+      <ListsSection />
 
       <footer className="owner-footer">
         Countersign will never ask for your code by phone, text or email. Enter it only on this page or in your own

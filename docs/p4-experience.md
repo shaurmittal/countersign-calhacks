@@ -6,7 +6,7 @@ owner's approval page, the Payer, and Countersign on Agentverse / ASI:One.
 | Page | Who uses it |
 | --- | --- |
 | `/` War Room | Projector. Follows the newest case; click a case in the queue to pin it. |
-| `/owner` | The teammate playing Priya, on their phone. Approve, decline, cancel. |
+| `/owner` | The teammate playing Priya, on their phone. Approve, decline, cancel; block or trust senders (each change needs a code). |
 | `/judge-card` | Printable judge card (P2). Set `NEXT_PUBLIC_TRY_URL` for its QR code. |
 | `/try` | Judge chat (P2). |
 
