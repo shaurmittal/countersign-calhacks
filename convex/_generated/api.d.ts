@@ -25,13 +25,18 @@ import type * as channels_voice from "../channels/voice.js";
 import type * as channels_web from "../channels/web.js";
 import type * as http from "../http.js";
 import type * as lib_cartesia from "../lib/cartesia.js";
+import type * as lib_caseView from "../lib/caseView.js";
 import type * as lib_claude from "../lib/claude.js";
+import type * as lib_increase from "../lib/increase.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_withAgentRun from "../lib/withAgentRun.js";
+import type * as owner from "../owner.js";
+import type * as payments from "../payments.js";
 import type * as pipeline from "../pipeline.js";
 import type * as privacy from "../privacy.js";
 import type * as scoreboard from "../scoreboard.js";
 import type * as seed from "../seed.js";
+import type * as warRoom from "../warRoom.js";
 
 import type {
   ApiFromModules,
@@ -57,13 +62,18 @@ declare const fullApi: ApiFromModules<{
   "channels/web": typeof channels_web;
   http: typeof http;
   "lib/cartesia": typeof lib_cartesia;
+  "lib/caseView": typeof lib_caseView;
   "lib/claude": typeof lib_claude;
+  "lib/increase": typeof lib_increase;
   "lib/rateLimit": typeof lib_rateLimit;
   "lib/withAgentRun": typeof lib_withAgentRun;
+  owner: typeof owner;
+  payments: typeof payments;
   pipeline: typeof pipeline;
   privacy: typeof privacy;
   scoreboard: typeof scoreboard;
   seed: typeof seed;
+  warRoom: typeof warRoom;
 }>;
 
 /**
