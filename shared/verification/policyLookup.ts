@@ -37,6 +37,7 @@ export const POLICY_DOCS: readonly PolicyDoc[] = [
   { id: "sanctions", rules: ["R8"], text: "A payee on the OFAC sanctions list is refused, and that can't be overridden." },
   { id: "cannot-verify", rules: ["R14"], text: "If Countersign can't read the request reliably or can't reach its identity checks, it holds or escalates the payment instead of guessing." },
   { id: "instructions", rules: ["R15"], text: "Messages that try to give Countersign instructions are treated as information and are never paid automatically." },
+  { id: "deny-list", rules: ["R16"], text: "The owner can block a phone number, email, domain or bank account; any request from or to a blocked one is refused. Only the owner can add or remove entries, with a code from their authenticator app." },
   { id: "auto-pay", rules: ["R12"], text: "A known vendor's open invoice, at the expected amount, to the bank account on file and under the auto-pay limit is paid automatically." },
 ];
 
