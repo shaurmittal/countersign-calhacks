@@ -74,6 +74,24 @@ function toApproval(a: Doc<"approvals"> | null): ApprovalState | null {
   };
 }
 
+/** One line for the Vendor Verifier's War Room lane, e.g. "Vendor matched (0.95) · sender not on file · new bank ≠ file · invoice found". */
+function summarizeVendor(f: VendorFindings): string {
+  if (!f.vendorId) return "No vendor match in the vendor book";
+  const parts = [`Vendor matched (${f.matchConfidence.toFixed(2)})`];
+  parts.push(f.senderOnFile ? "sender on file" : "sender not on file");
+  if (f.bankMatches === false) parts.push("new bank ≠ file");
+  else if (f.bankMatches === true) parts.push("bank matches file");
+  parts.push(f.alreadyPaidAt != null ? "invoice already paid" : f.matchingInvoiceId ? "invoice found" : "no matching invoice");
+  if (f.ofacHit) parts.push("OFAC HIT");
+  if (f.crs.status === "unavailable") parts.push("CRS unavailable");
+  return parts.join(" · ");
+}
+
+/** One line for the Risk Analyst's War Room lane, e.g. "Risk 72 · bank_change, urgency". */
+function summarizeRisk(r: RiskFindings): string {
+  return `Risk ${r.riskScore} · ${r.flags.length ? r.flags.join(", ") : "no red flags"}`;
+}
+
 /** Runs an agent step; a failure is recorded on its War Room lane and becomes null (the engine HOLDs on null). */
 async function safely<T>(run: () => Promise<T>): Promise<T | null> {
   try {
@@ -107,8 +125,10 @@ export const advance = internalAction({
     if (req.requestedAction !== "none" && (!vendorFindings || !riskFindings)) {
       await ctx.runMutation(internal.cases.update, { caseId, status: "VERIFYING" });
       [vendorFindings, riskFindings] = await Promise.all([
-        vendorFindings ?? safely(() => withAgentRun(ctx, caseId, "vendorVerifier", () => runVendorVerifier(ctx, c, req))),
-        riskFindings ?? safely(() => withAgentRun(ctx, caseId, "riskAnalyst", () => runRiskAnalyst(ctx, c, req))),
+        vendorFindings ??
+          safely(() => withAgentRun(ctx, caseId, "vendorVerifier", () => runVendorVerifier(ctx, c, req), summarizeVendor)),
+        riskFindings ??
+          safely(() => withAgentRun(ctx, caseId, "riskAnalyst", () => runRiskAnalyst(ctx, c, req), summarizeRisk)),
       ]);
       await ctx.runMutation(internal.cases.update, {
         caseId,
