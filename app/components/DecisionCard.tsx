@@ -2,12 +2,16 @@
 // Decision card (spec §7.2, right): what the Policy Engine decided, which rules fired and why.
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../../convex/_generated/api";
-import type { Decision, PolicyResult } from "../../shared/types";
 import { formatCents, RAIL_LABEL } from "../../shared/ledger";
+import { RULES } from "../../shared/policy/rules";
+import type { Decision, PolicyResult, RuleId } from "../../shared/types";
 import type { CaseDetail } from "./AgentLanes";
 import { ruleInfo, secondsLeft, useNow } from "./format";
 
 export type CaseRow = FunctionReturnType<typeof api.cases.recent>[number];
+
+/** When several rules fired, the first of these present is the one worth reading first. */
+const KEY_RULE_ORDER: RuleId[] = ["R10", "R16", "R13", "R9", "R8", "R1", "R12"];
 
 export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | undefined }) {
   const now = useNow();
@@ -18,42 +22,46 @@ export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | u
     approval?.approvedAt && !approval.cancelledAt && approval.coolingOffUntil && approval.coolingOffUntil > now
       ? approval.coolingOffUntil
       : null;
+  const fired = new Set<RuleId>(result?.firedRules ?? []);
+  const keyRule = KEY_RULE_ORDER.find((id) => fired.has(id)) ?? result?.firedRules[0];
+  const reasonFor = (id: RuleId) => result?.reasons.find((reason) => reason.startsWith(`${id} `));
 
   return (
-    <section className="panel decision-card" data-decision={decision} aria-labelledby="decision-heading">
-      <h2 id="decision-heading">Decision</h2>
-      {decision ? (
-        <p className="decision-word" role="status" aria-live="polite">
-          <DecisionIcon decision={decision} />
-          {decision === "NO_ACTION" ? "NO ACTION" : decision}
-        </p>
-      ) : (
-        <p className="decision-word" role="status" aria-live="polite">
-          {c.status.replace("_", " ")}…
-        </p>
-      )}
-      {decision && <p className="decision-line">{explain(decision, result, detail)}</p>}
+    <section className="lp-lockpanel wr-verdict" data-verdict={decision} aria-label="Decision">
+      <p key={decision ?? c.status} className="wr-verdict-word" data-decision={decision} role="status" aria-live="polite">
+        {decision ? (decision === "NO_ACTION" ? "NO ACTION" : decision) : `${c.status.replace(/_/g, " ")}…`}
+      </p>
+      {decision && <p className="wr-verdict-line">{explain(decision, result, detail)}</p>}
       {result && result.firedRules.length > 0 && (
-        <div className="rules" aria-label="Rules that fired">
+        <ul className="lp-fired" aria-label="Rules that fired">
           {result.firedRules.map((id) => (
-            <span key={id} className="chip" title={ruleInfo(id)?.description}>
-              {id} · {ruleInfo(id)?.name ?? "rule"}
-            </span>
-          ))}
-        </div>
-      )}
-      {result && result.reasons.length > 0 && (
-        <ul className="reasons">
-          {result.reasons.map((reason) => (
-            <li key={reason}>{reason}</li>
+            <li key={id} data-key={id === keyRule ? "" : undefined} title={reasonFor(id)}>
+              <b>{id}</b> {ruleInfo(id)?.name ?? "rule"}
+            </li>
           ))}
         </ul>
       )}
+      <ol className="lp-rules" aria-label="All 16 rules">
+        {(Object.keys(RULES) as RuleId[]).map((id) => (
+          <li key={id} data-state={fired.has(id) ? "fired" : decision ? "checked" : "idle"} title={`${id} ${RULES[id].name}`}>
+            {id}
+          </li>
+        ))}
+      </ol>
       {coolingOff && (
-        <div className="countdown" role="timer">
-          Owner approved. Cooling-off: payment releases in <strong>{secondsLeft(coolingOff, now)}s</strong> unless the owner
-          cancels.
-        </div>
+        <p className="wr-countdown" role="timer">
+          Owner approved · cooling-off {secondsLeft(coolingOff, now)}s · the owner can still cancel
+        </p>
+      )}
+      {result && result.reasons.length > 0 && (
+        <details className="wr-more">
+          <summary>Why</summary>
+          <ul>
+            {result.reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </details>
       )}
     </section>
   );
@@ -78,46 +86,5 @@ function explain(decision: Decision, result: PolicyResult | undefined, detail: C
       return "Waiting for the owner's authenticator code. A voice or a text message is never enough.";
     case "NO_ACTION":
       return "No payment was requested.";
-  }
-}
-
-function DecisionIcon({ decision }: { decision: Decision }) {
-  const common = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.5, "aria-hidden": true } as const;
-  switch (decision) {
-    case "PAY":
-      return (
-        <svg {...common}>
-          <circle cx="12" cy="12" r="10" />
-          <path d="m7.5 12.5 3 3 6-6.5" />
-        </svg>
-      );
-    case "HOLD":
-      return (
-        <svg {...common}>
-          <circle cx="12" cy="12" r="10" />
-          <path d="M10 8v8M14 8v8" />
-        </svg>
-      );
-    case "ESCALATE":
-      return (
-        <svg {...common}>
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 17V8m-4 4 4-4 4 4" />
-        </svg>
-      );
-    case "BLOCK":
-      return (
-        <svg {...common}>
-          <circle cx="12" cy="12" r="10" />
-          <path d="m5 5 14 14" />
-        </svg>
-      );
-    case "NO_ACTION":
-      return (
-        <svg {...common}>
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 11v6M12 7.5v.5" />
-        </svg>
-      );
   }
 }

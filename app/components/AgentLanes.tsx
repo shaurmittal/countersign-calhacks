@@ -1,7 +1,7 @@
 "use client";
 // Agent lanes (spec §7.2, center). Each lane is the latest real agentRuns row for that agent,
-// plus the rows it produced (callbacks, approvals, payments). Nothing here is animated for show:
-// a lane moves only when its row changes.
+// plus the rows it produced (callbacks, approvals, payments). Agents that have not run yet get no
+// lane (the graph shows them). Nothing here is animated for show: a lane moves only when its row changes.
 import type { FunctionReturnType } from "convex/server";
 import type { ReactNode } from "react";
 import type { api } from "../../convex/_generated/api";
@@ -13,14 +13,14 @@ import { clockTime, last4, ruleInfo, secondsLeft, useNow } from "./format";
 export type CaseDetail = NonNullable<FunctionReturnType<typeof api.warRoom.caseDetail>>;
 type Run = CaseDetail["runs"][number];
 
-const LANES: { agent: AgentName; title: string; tech: string }[] = [
-  { agent: "intake", title: "Intake Parser", tech: "Claude · untrusted text in, fields out" },
-  { agent: "vendorVerifier", title: "Vendor Verifier", tech: "Vendor book · CRS · OFAC" },
-  { agent: "riskAnalyst", title: "Risk Analyst", tech: "Rules + Claude explanation" },
-  { agent: "callback", title: "Callback Verifier", tech: "Cartesia · number on file only" },
-  { agent: "policy", title: "Policy Engine", tech: "Deterministic code · no LLM · only one that can say PAY" },
-  { agent: "ownerConcierge", title: "Owner Concierge", tech: "Authenticator code · ASI:One" },
-  { agent: "payer", title: "Payer", tech: "Increase sandbox · mock ledger" },
+const LANES: { agent: AgentName; title: string }[] = [
+  { agent: "intake", title: "Intake Parser" },
+  { agent: "vendorVerifier", title: "Vendor Verifier" },
+  { agent: "riskAnalyst", title: "Risk Analyst" },
+  { agent: "callback", title: "Callback Verifier" },
+  { agent: "policy", title: "Policy Engine" },
+  { agent: "ownerConcierge", title: "Owner Concierge" },
+  { agent: "payer", title: "Payer" },
 ];
 
 export function AgentLanes({ detail }: { detail: CaseDetail }) {
@@ -28,16 +28,19 @@ export function AgentLanes({ detail }: { detail: CaseDetail }) {
     <div className="lanes">
       {LANES.map((lane) => {
         const run = latestRun(detail.runs, lane.agent);
-        const status = run?.status ?? "idle";
+        if (!run) return null;
         return (
-          <section key={lane.agent} className="lane" data-status={status} aria-label={`${lane.title}: ${status}`}>
-            <div className="lane-head">
-              <strong>{lane.title}</strong>
-              <span className="tech">{lane.tech}</span>
-              <span className="lane-status">{status}</span>
-            </div>
-            {run?.summary && <div className="lane-summary">{run.summary}</div>}
-            {run?.error && <p className="lane-error">Failed: {run.error}</p>}
+          <section
+            key={run._id}
+            className="lp-finding lane wr-rise"
+            data-status={run.status}
+            aria-label={`${lane.title}: ${run.status}`}
+          >
+            <p className="lp-finding-title">
+              {lane.title} <span className="lane-status">{run.status}</span>
+            </p>
+            {run.summary && <div className="lane-summary">{run.summary}</div>}
+            {run.error && <p className="lane-error">Failed: {run.error}</p>}
             <LaneDetail agent={lane.agent} run={run} detail={detail} />
           </section>
         );
@@ -50,18 +53,18 @@ function latestRun(runs: Run[], agent: AgentName): Run | undefined {
   return runs.filter((r) => r.agent === agent).sort((a, b) => b.startedAt - a.startedAt)[0];
 }
 
-function LaneDetail({ agent, run, detail }: { agent: AgentName; run: Run | undefined; detail: CaseDetail }) {
+function LaneDetail({ agent, run, detail }: { agent: AgentName; run: Run; detail: CaseDetail }) {
   switch (agent) {
     case "intake":
-      return run?.output ? <IntakeDetail request={run.output as PaymentRequest} /> : null;
+      return run.output ? <IntakeDetail request={run.output as PaymentRequest} /> : null;
     case "vendorVerifier":
-      return run?.output ? <VendorDetail findings={run.output as VendorFindings} detail={detail} /> : null;
+      return run.output ? <VendorDetail findings={run.output as VendorFindings} detail={detail} /> : null;
     case "riskAnalyst":
-      return run?.output ? <RiskDetail risk={run.output as RiskFindings} /> : null;
+      return run.output ? <RiskDetail risk={run.output as RiskFindings} /> : null;
     case "callback":
       return <CallbackDetail detail={detail} />;
     case "policy":
-      return run?.output ? <PolicyDetail result={run.output as PolicyResult} /> : null;
+      return run.output ? <PolicyDetail result={run.output as PolicyResult} /> : null;
     case "ownerConcierge":
       return <OwnerDetail detail={detail} />;
     case "payer":
@@ -130,7 +133,7 @@ function RiskDetail({ risk }: { risk: RiskFindings }) {
   return (
     <>
       <Chips>
-        <span className="chip">Risk {score}/100 (display only)</span>
+        <span className="chip">Risk {score}/100</span>
         {risk.flags?.map((flag) => (
           <span key={flag} className="chip warn">
             {flag.replace(/_/g, " ")}
@@ -140,7 +143,12 @@ function RiskDetail({ risk }: { risk: RiskFindings }) {
           <span style={{ transform: `scaleX(${score / 100})` }} />
         </div>
       </Chips>
-      {risk.explanation && <p className="lane-note">{risk.explanation}</p>}
+      {risk.explanation && (
+        <details className="wr-more">
+          <summary>Why</summary>
+          <p>{risk.explanation}</p>
+        </details>
+      )}
     </>
   );
 }
@@ -154,7 +162,8 @@ function CallbackDetail({ detail }: { detail: CaseDetail }) {
     <>
       <Chips>
         <span className="chip">
-          Dialed {latest.numberDialed} (number on file) · attempt {latest.attempt}
+          Dialed {latest.numberDialed} · on file
+          {latest.attempt > 1 && ` · attempt ${latest.attempt}`}
         </span>
         {latest.outcome ? (
           <span className={`chip ${OUTCOME_TONE[latest.outcome] ?? ""}`}>Vendor said: {latest.outcome.replace("_", " ")}</span>
@@ -162,7 +171,12 @@ function CallbackDetail({ detail }: { detail: CaseDetail }) {
           <span className="chip info">Calling…</span>
         )}
       </Chips>
-      {latest.transcript && <pre className="transcript">{latest.transcript}</pre>}
+      {latest.transcript && (
+        <details className="wr-more">
+          <summary>Transcript</summary>
+          <pre className="transcript">{latest.transcript}</pre>
+        </details>
+      )}
     </>
   );
 }
