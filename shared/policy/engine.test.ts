@@ -154,6 +154,12 @@ describe("policy engine", () => {
       expect(decide(input({ ...base, callbackOutcome: "no_answer" })).decision).toBe("ESCALATE");
     });
 
+    it("a contractor calling themselves an employee counts too", () => {
+      const r = decide(input({ ...base, request: { claimedSenderRole: "employee" } }));
+      expect(r.firedRules).toContain("R3");
+      expect(r.needs.callback).toBe(true);
+    });
+
     it("sender on file -> no callback", () => {
       const r = decide(input({ ...base, vendorFindings: { senderOnFile: true } }));
       expect(r.firedRules).not.toContain("R3");

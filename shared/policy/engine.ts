@@ -16,6 +16,8 @@ type Hit = { rule: RuleId; effect: Effect; reason: string; needsCallback?: boole
 
 const FORBIDDEN_ACTIONS = new Set(["gift_cards", "crypto"]);
 const BANK_CHANGE_ACTIONS = new Set(["change_bank", "update_payroll"]);
+// Roles that claim to BE the payee ("Pixel & Pine here", "it's Sam, send my pay").
+const PAYEE_ROLES = new Set(["vendor", "employee"]);
 
 export function formatCents(cents: number): string {
   return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -95,7 +97,7 @@ export function decide(input: PolicyInput): PolicyResult {
       else hit("R2", "HOLD", `Could not confirm the new account with ${vendor.name}; bank changes are never paid unconfirmed`);
     }
 
-    if (!vf.senderOnFile && req.claimedSenderRole === "vendor") {
+    if (!vf.senderOnFile && PAYEE_ROLES.has(req.claimedSenderRole)) {
       if (cb === null) hit("R3", "HOLD", `Sender is not on file for ${vendor.name}: calling back on the number on file`, true);
       else if (cb === "confirmed") hit("R3", "NOTE", `Sender not on file, but ${vendor.name} confirmed by callback`);
       else if (cb === "denied") hit("R3", "NOTE", "Sender not on file (denied by the vendor)");

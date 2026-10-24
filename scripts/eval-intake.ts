@@ -56,7 +56,7 @@ async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Prom
 }
 
 async function main() {
-  const rows = await pool(scenarios, 5, evalOne);
+  const rows = await pool(scenarios, Number(process.env.EVAL_CONCURRENCY ?? 5), evalOne);
   let decisionMisses = 0;
   for (const { s, r, diffs, error, ms } of rows) {
     const ok = r.decision === s.expectedDecision && s.expectedRules.every((rule) => r.firedRules.includes(rule));
