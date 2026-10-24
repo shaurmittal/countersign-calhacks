@@ -3,7 +3,6 @@
 import {
   APIConnectionError,
   APIConnectionTimeoutError,
-  APIUserAbortError,
   AuthenticationError,
   InternalServerError,
   RateLimitError,
@@ -12,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RiskFlag } from "../../shared/types";
 import { explainRisk } from "../../shared/verification/explain";
 import { REWRITE_SYSTEM_PROMPT, rewritePrompt } from "../../shared/verification/explainRewrite";
-import { REWRITE_BUDGET_MS, rewriteExplanation } from "./riskExplanation";
+import { REWRITE_BUDGET_MS, SDK_BACKSTOP_TIMEOUT_MS, rewriteExplanation } from "./riskExplanation";
 
 const { create, clientOptions } = vi.hoisted(() => ({ create: vi.fn(), clientOptions: [] as unknown[] }));
 
@@ -65,11 +64,13 @@ describe("rewriteExplanation", () => {
     expect(warnings()).toEqual([]);
   });
 
-  it("sends Claude only the flag names and the template, from a client with a timeout and one retry", async () => {
+  it("sends Claude only the flag names and the template, with no abort signal, from a backstop-timeout client", async () => {
     create.mockResolvedValue(reply(REWRITE));
     await rewriteExplanation(FLAGS, TEMPLATE);
     expect(create).toHaveBeenCalledTimes(1);
-    const [params, options] = create.mock.calls[0];
+    // One argument only: no request options, so no AbortSignal the SDK could abort from a timer.
+    expect(create.mock.calls[0]).toHaveLength(1);
+    const [params] = create.mock.calls[0];
     expect(params).toEqual({
       model: process.env.CLAUDE_MODEL ?? "claude-opus-5-5",
       max_tokens: 1000,
@@ -79,8 +80,9 @@ describe("rewriteExplanation", () => {
       system: REWRITE_SYSTEM_PROMPT,
       messages: [{ role: "user", content: rewritePrompt(FLAGS) }],
     });
-    expect(options.signal).toBeInstanceOf(AbortSignal);
-    expect(clientOptions).toEqual([{ timeout: REWRITE_BUDGET_MS, maxRetries: 1 }]);
+    // The SDK's own timeout is far past any pipeline run, so its abort-on-timeout never fires mid-run.
+    expect(clientOptions).toEqual([{ timeout: SDK_BACKSTOP_TIMEOUT_MS, maxRetries: 1 }]);
+    expect(SDK_BACKSTOP_TIMEOUT_MS).toBeGreaterThanOrEqual(30 * REWRITE_BUDGET_MS);
   });
 
   it.each([
@@ -100,16 +102,10 @@ describe("rewriteExplanation", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it("keeps the template when Claude runs past the budget, and cancels the call", async () => {
+  it("keeps the template when Claude runs past the budget, without aborting the call, and ignores its late answer", async () => {
     vi.useFakeTimers();
-    let signal: AbortSignal | undefined;
-    create.mockImplementation(
-      (_params: unknown, options: { signal: AbortSignal }) =>
-        new Promise((_resolve, reject) => {
-          signal = options.signal;
-          options.signal.addEventListener("abort", () => reject(new APIUserAbortError()));
-        }),
-    );
+    let answerLate: (value: unknown) => void = () => {};
+    create.mockImplementation(() => new Promise((resolve) => (answerLate = resolve)));
     const pending = rewriteExplanation(FLAGS, TEMPLATE);
     let settled = false;
     void pending.then(() => (settled = true));
@@ -118,7 +114,10 @@ describe("rewriteExplanation", () => {
     expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     await expect(pending).resolves.toEqual(FALLBACK);
-    expect(signal?.aborted).toBe(true);
+    expect(create.mock.calls[0]).toHaveLength(1); // nothing it could be aborted through
+
+    answerLate(reply(REWRITE)); // Claude answers after the budget: dropped, with no second warning
+    await vi.advanceTimersByTimeAsync(0);
     expect(warnings()).toEqual(["[riskAnalyst] Claude explanation: timeout; showing the template"]);
   });
 
@@ -129,22 +128,18 @@ describe("rewriteExplanation", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it("returns the template as soon as the caller cancels, stops the call and logs nothing", async () => {
+  it("returns the template as soon as the caller cancels, leaves the call alone and logs nothing", async () => {
     vi.useFakeTimers(); // time stands still, so waiting for the budget would hang the test
-    let signal: AbortSignal | undefined;
-    create.mockImplementation((_params: unknown, options: { signal: AbortSignal }) => {
-      signal = options.signal;
-      return new Promise(() => {}); // never answers, even once aborted
-    });
+    create.mockReturnValue(new Promise(() => {})); // never answers
     const drop = new AbortController();
     const pending = rewriteExplanation(FLAGS, TEMPLATE, drop.signal);
     drop.abort();
     await expect(pending).resolves.toEqual(FALLBACK);
-    expect(signal?.aborted).toBe(true);
+    expect(create.mock.calls[0]).toHaveLength(1); // the caller's cancel never reaches the SDK
     expect(warnings()).toEqual([]);
   });
 
-  it("keeps the template at the budget even when the call ignores the cancel", async () => {
+  it("keeps the template at the budget when the call never answers", async () => {
     vi.useFakeTimers();
     create.mockReturnValue(new Promise(() => {}));
     const pending = rewriteExplanation(FLAGS, TEMPLATE);
