@@ -1,11 +1,11 @@
-// CRS sandbox: AtData Fraud Finder on a sender's email (owner: P3). Spec §6.2, §8.
+// CRS sandbox: AtData Fraud Finder on the email addresses in a case (owner: P3). Spec §6.2, §8.
 // Pure apart from the fetch the caller passes in. runVendorVerifier (convex/agents/vendorVerifier.ts)
-// screens senders the vendor book doesn't know.
+// screens the addresses the vendor book doesn't know: the sender's email and any written in the message.
 // The team's CRS account has no business verification (Business InstantID answers 401 CRS111) and no
 // OFAC product, so KYB is dropped and ofacHit stays false: OFAC never runs. AtData's email risk fits
-// invoice fraud instead: a scam email comes from an address or domain nobody has seen before.
+// invoice fraud instead: a scam comes from, or points to, an address or domain nobody has seen before.
 // The owner's and the vendors' addresses on file aren't screened. The book already vouches for them, and
-// the seed's reserved *.example domains score 100 at AtData whoever sends from them.
+// the seed's reserved *.example domains score 100 at AtData whoever uses them.
 import type { VendorFindings } from "../types";
 import { normalizeEmail } from "./text";
 import type { VerificationBook } from "./types";
@@ -18,7 +18,10 @@ export const FRAUD_FINDER = "atdata_fraud_finder";
 /** AtData's risk.score runs 0..100, higher is riskier. AtData suggests a cut-off around 70-80; the low end is safer. */
 export const FRAUD_RISK_THRESHOLD = 70;
 
-/** The whole check inside the Vendor Verifier: a login (about 0.5 s in the sandbox) and one call (about 0.3 s). */
+/**
+ * The whole check inside the Vendor Verifier: a login (about 0.5 s in the sandbox), then one call per
+ * address (about 0.3 s each), made in parallel.
+ */
 export const CRS_BUDGET_MS = 4_000;
 export const CRS_REQUEST_TIMEOUT_MS = 3_000;
 
@@ -63,12 +66,39 @@ export function crsConfig(env: Record<string, string | undefined>): CrsConfig | 
   return username && password && api ? { api, username, password } : null;
 }
 
-/** The sender's email when CRS should screen it, or null: not an email, the owner, or on a vendor's file. */
-export function emailToScreen(fromAddress: string, book: Pick<VerificationBook, "vendors" | "owner">): string | null {
-  const email = normalizeEmail(fromAddress);
+/** An address's email when CRS should screen it, or null: not an email, the owner's, or on a vendor's file. */
+export function emailToScreen(address: string, book: Pick<VerificationBook, "vendors" | "owner">): string | null {
+  const email = normalizeEmail(address);
   if (email === "") return null;
-  const sender = checkSender(fromAddress, null, book);
-  return sender.isOwner || sender.onAnyVendorFile ? null : email;
+  const known = checkSender(address, null, book);
+  return known.isOwner || known.onAnyVendorFile ? null : email;
+}
+
+/** At most this many addresses are screened per case, so latency and the number of CRS calls stay bounded. */
+export const CRS_MAX_EMAILS = 3;
+
+// An email written in text. The last label must be letters, so "pkg@1.2.3" and "user@localhost" don't count.
+const EMAIL_IN_TEXT = /[\p{L}\p{N}._%+-]+@(?:[\p{L}\p{N}-]+\.)+\p{L}{2,}/gu;
+
+export type EmailToScreen = { email: string; source: "sender" | "message" };
+
+/**
+ * What CRS screens in a case: the sender's email, then the emails written in the message, each only if
+ * the owner and the vendor book don't know it. Deduped, sender first, at most CRS_MAX_EMAILS.
+ */
+export function emailsToScreen(
+  fromAddress: string,
+  rawContent: string,
+  book: Pick<VerificationBook, "vendors" | "owner">,
+): EmailToScreen[] {
+  const out: EmailToScreen[] = [];
+  const add = (address: string, source: EmailToScreen["source"]) => {
+    const email = emailToScreen(address, book);
+    if (email && out.length < CRS_MAX_EMAILS && !out.some((e) => e.email === email)) out.push({ email, source });
+  };
+  add(fromAddress, "sender");
+  for (const [match] of rawContent.matchAll(EMAIL_IN_TEXT)) add(match, "message");
+  return out;
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -115,6 +145,34 @@ export function crsUnavailable(reason: string): CrsResult {
   return { status: "unavailable", raw: { product: FRAUD_FINDER, reason } };
 }
 
+/** One screened address's result, labeled with where the address came from. */
+export type ScreenedCheck = { source: EmailToScreen["source"]; crs: CrsResult };
+
+// Worst first: a high score (R14 escalates), then a check that didn't complete (R14 escalates), then ok.
+function severity({ crs }: ScreenedCheck): [number, number] {
+  const score = finite(record(crs.raw)?.score) ?? 0;
+  if (crs.status === "ok" && crs.businessVerified === false) return [0, -score];
+  return crs.status === "unavailable" ? [1, 0] : [2, -score];
+}
+
+/**
+ * The case's crs from every screened address. The worst result wins, so any high score or any check that
+ * didn't complete escalates through R14. raw is the worst check's, plus where its address came from and one
+ * line per check. No addresses: public queries return vendorFindings as they are.
+ */
+export function combineCrs(checks: readonly ScreenedCheck[]): CrsResult {
+  if (checks.length === 0) return { status: "not_checked" };
+  const [worst] = [...checks].sort((a, b) => {
+    const [x, y] = [severity(a), severity(b)];
+    return x[0] - y[0] || x[1] - y[1];
+  });
+  const lines = checks.map(({ source, crs }) => {
+    const raw = record(crs.raw);
+    return { source, status: crs.status, score: finite(raw?.score), reason: shortText(raw?.reason) };
+  });
+  return { ...worst.crs, raw: { ...record(worst.crs.raw), source: worst.source, checks: lines } };
+}
+
 /** The part of fetch the client uses, so tests can pass a fake. */
 export type CrsFetch = (
   url: string,
@@ -138,6 +196,7 @@ function crsCode(body: unknown): string {
 export function createCrsClient(config: CrsConfig, fetchFn: CrsFetch, now: () => number = Date.now) {
   let token: { value: string; reuseUntil: number } | null = null;
   let loginPausedUntil = 0;
+  let loggingIn: Promise<string | { reason: string }> | null = null;
 
   async function post(path: string, body: unknown, bearer?: string): Promise<Reply> {
     const controller = new AbortController();
@@ -166,9 +225,17 @@ export function createCrsClient(config: CrsConfig, fetchFn: CrsFetch, now: () =>
     }
   }
 
-  async function bearer(): Promise<string | { reason: string }> {
-    if (token && now() < token.reuseUntil) return token.value;
-    if (now() < loginPausedUntil) return { reason: "login paused after a failure" };
+  /** A token, logging in when needed. Checks running at the same time share one login. */
+  function bearer(): Promise<string | { reason: string }> {
+    if (token && now() < token.reuseUntil) return Promise.resolve(token.value);
+    if (now() < loginPausedUntil) return Promise.resolve({ reason: "login paused after a failure" });
+    loggingIn ??= logIn().finally(() => {
+      loggingIn = null;
+    });
+    return loggingIn;
+  }
+
+  async function logIn(): Promise<string | { reason: string }> {
     const reply = await post("/users/login", { username: config.username, password: config.password });
     const value = "status" in reply && ok(reply.status) ? record(reply.body)?.token : undefined;
     if (typeof value === "string" && value !== "") {

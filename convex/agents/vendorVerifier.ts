@@ -3,9 +3,9 @@
 // the record, and finds the open invoice: shared/verification/verifyVendor.ts. Actions can't read
 // ctx.db, so the book comes from loadVerificationBook. The Risk Analyst loads it too, because the
 // two agents run in parallel.
-// CRS: AtData Fraud Finder screens the sender's email when the book doesn't know the sender
-// (shared/verification/crs.ts). The team's CRS account has no KYB or OFAC product, so ofacHit stays
-// false and only means OFAC did not run. Any CRS error or timeout returns crs "unavailable", never "ok".
+// CRS: AtData Fraud Finder screens the emails the book doesn't know, the sender's and any written in
+// the message (shared/verification/crs.ts). The team's CRS account has no KYB or OFAC product, so ofacHit
+// stays false and only means OFAC did not run. Any CRS error or timeout returns crs "unavailable", never "ok".
 import { v } from "convex/values";
 import { internalAction, internalQuery, type ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -13,10 +13,11 @@ import type { Doc } from "../_generated/dataModel";
 import type { PaymentRequest, VendorFindings } from "../../shared/types";
 import {
   CRS_BUDGET_MS,
+  combineCrs,
   createCrsClient,
   crsConfig,
   crsUnavailable,
-  emailToScreen,
+  emailsToScreen,
   type CrsClient,
   type CrsResult,
 } from "../../shared/verification/crs";
@@ -105,14 +106,16 @@ function crsClient(): CrsClient | null {
 }
 
 /**
- * CRS on the sender's email. "not_checked" when the book knows the sender (owner or vendor on file),
- * the sender isn't an email, or CRS isn't set up. Never throws.
+ * CRS on the case's unknown emails: the sender's and any written in the message, checked in parallel,
+ * worst result kept. "not_checked" when the book knows every address (owner or vendor on file), there
+ * is none, or CRS isn't set up. Never throws.
  */
-async function screenSender(fromAddress: string, book: VerificationBook): Promise<CrsResult> {
-  const email = emailToScreen(fromAddress, book);
-  const client = email ? crsClient() : null;
-  if (!email || !client) return { status: "not_checked" };
-  return withTimeout(client.screenEmail(email), CRS_BUDGET_MS, crsUnavailable("timeout"));
+async function screenCase(c: Doc<"cases">, book: VerificationBook): Promise<CrsResult> {
+  const emails = emailsToScreen(c.fromAddress, c.rawContent, book);
+  const client = emails.length > 0 ? crsClient() : null;
+  if (!client) return { status: "not_checked" };
+  const checks = Promise.all(emails.map(async ({ email, source }) => ({ source, crs: await client.screenEmail(email) })));
+  return withTimeout(checks.then(combineCrs), CRS_BUDGET_MS, crsUnavailable("timeout"));
 }
 
 export async function runVendorVerifier(
@@ -122,7 +125,7 @@ export async function runVendorVerifier(
 ): Promise<VendorFindings> {
   const hits = mossHits(ctx, request.claimedVendorName);
   const book: VerificationBook = await ctx.runQuery(internal.agents.vendorVerifier.loadVerificationBook, {});
-  const [searchHits, crsResult]: [SearchHit[], CrsResult] = await Promise.all([hits, screenSender(c.fromAddress, book)]);
+  const [searchHits, crsResult]: [SearchHit[], CrsResult] = await Promise.all([hits, screenCase(c, book)]);
   return { ...verifyVendor({ request, fromAddress: c.fromAddress, book, searchHits }), crs: crsResult };
 }
 

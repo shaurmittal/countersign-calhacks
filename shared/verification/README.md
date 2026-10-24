@@ -77,7 +77,9 @@ The team's CRS sandbox account has the Cal Hacks products only: credit reports, 
 
 The consumer reports (credit, criminal, eviction, liens) are regulated by the FCRA and have no permissible purpose for a vendor. Fraud Finder fits invoice fraud: it scores how risky an email address is (`risk.score`, 0 to 100) from its validity, domain risk, and when the address and its domain were first seen.
 
-**Who gets screened.** Only an email sender the book doesn't know (`emailToScreen`). Phones, agent addresses, the owner's email and any address on a vendor's file or domains are never sent to CRS.
+**Who gets screened.** The email addresses the book doesn't know: the sender's, if it is an email, and any written in the message (`emailsToScreen`). Each case screens at most 3, deduped, the sender's first. Phones, agent addresses, the owner's email and any address on a vendor's file or domains are never sent to CRS. The checks run in parallel, and the worst result wins: a high score first, then a check that didn't complete.
+
+**Privacy.** A message can contain a real person's email address, for example one a judge types into `/try`. That address goes to the CRS sandbox (AtData) for scoring. Nothing else from the message is sent, and `crs.raw` doesn't repeat the address.
 
 This matters for the demo. Every seed and scenario address is on a reserved `*.example` domain, and AtData gives those `risk.score` 100, `domain_risk_score` 10 and `invalid`. The sandbox returned exactly that for both `invoices@northwind-cloud-billing.example` and the seed vendor's `billing@pixelandpine.example`. Screening senders on file would therefore escalate every legitimate email.
 
@@ -88,9 +90,9 @@ This matters for the demo. Every seed and scenario address is on a reserved `*.e
 | `risk.score` ≥ 70 (AtData suggests 70–80) | `{ status: "ok", businessVerified: false, raw }` | R14 escalates: CRS couldn't vouch for the sender |
 | `risk.score` < 70 | `{ status: "ok", raw }` | Nothing. A low score proves nothing about a business, so `businessVerified` stays unset. |
 | Error, timeout (4 s budget, 3 s per request), unreadable body, 401 | `{ status: "unavailable", raw: { reason } }` | R14 escalates |
-| No `CRS_USERNAME`/`CRS_PASSWORD`, `CRS_BASE_URL` not the sandbox host, or a sender the book knows | `{ status: "not_checked" }` | Nothing |
+| No `CRS_USERNAME`/`CRS_PASSWORD`, `CRS_BASE_URL` not the sandbox host, or no address the book doesn't know | `{ status: "not_checked" }` | Nothing |
 
-`raw` holds the scores, the email status and the first-seen dates, never the address: public queries return `vendorFindings` as they are. A `reason` is an HTTP status or a CRS code such as `CRS111`, never a credential.
+`raw` holds the scores, the email status and the first-seen dates, never the address: public queries return `vendorFindings` as they are. A `reason` is an HTTP status or a CRS code such as `CRS111`, never a credential. `raw` describes the worst check, adds its `source` (`sender` or `message`), and lists every check's status and score in `checks`.
 
 On the answer key, three scenarios get screened: `google-workspace-lookalike`, `northwind-lookalike-invoice` and `ofac-hit`. All three already BLOCK. `seedScenarios.test.ts` checks that no decision changes whether AtData scores them 100, scores them low, or is down.
 

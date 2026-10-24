@@ -9,7 +9,7 @@ import { decide } from "../policy/engine";
 import { buildSeedBook } from "../seedWorld";
 import type { PaymentRequest, PolicyResult, RiskFindings, RiskFlag, VendorFindings } from "../types";
 import { assessRisk } from "./assessRisk";
-import { crsFromFraudFinder, crsUnavailable, emailToScreen, parseFraudFinder } from "./crs";
+import { crsFromFraudFinder, crsUnavailable, emailsToScreen, parseFraudFinder } from "./crs";
 import type { CaseInfo, VerificationBook } from "./types";
 import { verifyVendor } from "./verifyVendor";
 
@@ -185,11 +185,25 @@ describe("CRS screening on the answer key", () => {
     email_validation: { status: "invalid", role_account: true },
   })!;
   const screened = SCENARIOS.filter(
-    (s) => s.request.requestedAction !== "none" && emailToScreen(s.from, bookFor(s)) !== null,
+    (s) => s.request.requestedAction !== "none" && emailsToScreen(s.from, s.text, bookFor(s)).length > 0,
   );
 
-  it("screens only strangers' emails, never the owner or a vendor's address on file", () => {
+  it("screens only strangers' emails (sender or message), never the owner or a vendor's address on file", () => {
     expect(screened.map((s) => s.id).sort()).toEqual(["google-workspace-lookalike", "northwind-lookalike-invoice", "ofac-hit"]);
+  });
+
+  it("an unknown email written into a legitimate request escalates it instead of paying", () => {
+    const happy = scenario("northwind-happy");
+    const s = { ...happy, text: `${happy.text} Remit to billing@northwind-cloud-billing.example.` };
+    expect(emailsToScreen(s.from, s.text, bookFor(s))).toEqual([
+      { email: "billing@northwind-cloud-billing.example", source: "message" },
+    ]);
+    expect(runThroughP3(happy).result.decision).toBe("PAY");
+    for (const crs of [crsFromFraudFinder(sandbox), crsUnavailable("timeout")]) {
+      const { result } = runThroughP3(s, crs);
+      expect(result.decision, JSON.stringify(crs)).toBe("ESCALATE");
+      expect(result.firedRules).toContain("R14");
+    }
   });
 
   it.each<[string, VendorFindings["crs"]]>([

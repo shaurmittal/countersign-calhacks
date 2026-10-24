@@ -1,17 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildSeedBook } from "../seedWorld";
 import {
+  CRS_MAX_EMAILS,
   CRS_REQUEST_TIMEOUT_MS,
   CRS_SANDBOX_API,
   FRAUD_RISK_THRESHOLD,
   LOGIN_PAUSE_AFTER_REJECT_MS,
   TOKEN_REUSE_MS,
+  combineCrs,
   createCrsClient,
   crsApiBase,
   crsConfig,
   crsFromFraudFinder,
   crsUnavailable,
   emailToScreen,
+  emailsToScreen,
   parseFraudFinder,
   type CrsFetch,
   type CrsResult,
@@ -68,6 +71,89 @@ describe("emailToScreen", () => {
     ["agent1qexampleagentaddress", null],
   ])("%s -> %s", (from, expected) => {
     expect(emailToScreen(from, book)).toBe(expected);
+  });
+});
+
+describe("emailsToScreen", () => {
+  const book = buildSeedBook();
+
+  it("takes the sender first, then unknown emails written in the message, deduped", () => {
+    const text =
+      "Pay to Invoices@Northwind-Cloud-Billing.example, or ask finance@nw-payments.example. " +
+      "Again: invoices@northwind-cloud-billing.example.";
+    expect(emailsToScreen("invoices@northwind-cloud-billing.example", text, book)).toEqual([
+      { email: "invoices@northwind-cloud-billing.example", source: "sender" },
+      { email: "finance@nw-payments.example", source: "message" },
+    ]);
+  });
+
+  it("screens emails in an SMS, web or agent message, whose sender is no email", () => {
+    for (const from of ["+15555559001", "web:k17abc", "agent1qexampleagentaddress"]) {
+      expect(emailsToScreen(from, "New account: send it to billing@pixel-and-pine.example.", book)).toEqual([
+        { email: "billing@pixel-and-pine.example", source: "message" },
+      ]);
+    }
+  });
+
+  it("skips the owner's address and every vendor's addresses and domains in the text", () => {
+    const text =
+      "cc billing@pixelandpine.example, accounts@harborlegal.example, ap@northwindcloud.example, " +
+      "sam.ortiz@mail.example and priya@lumenlabs.example";
+    expect(emailsToScreen("+15555550100", text, book)).toEqual([]);
+  });
+
+  it("ignores things that only look like emails", () => {
+    expect(emailsToScreen("+15555559001", "npm i pkg@1.2.3, ping @handle or root@localhost", book)).toEqual([]);
+  });
+
+  it(`screens at most ${CRS_MAX_EMAILS} addresses per case`, () => {
+    const text = ["a", "b", "c", "d", "e"].map((x) => `${x}@stranger.example`).join(" ");
+    expect(emailsToScreen("x@stranger.example", text, book).map((e) => e.email)).toEqual([
+      "x@stranger.example",
+      "a@stranger.example",
+      "b@stranger.example",
+    ]);
+  });
+});
+
+describe("combineCrs", () => {
+  const high = crsFromFraudFinder({ ...parseFraudFinder(SANDBOX_BODY)!, score: 100 });
+  const low = crsFromFraudFinder({ ...parseFraudFinder(SANDBOX_BODY)!, score: 5 });
+  const down = crsUnavailable("timeout");
+
+  it("is not_checked when nothing was screened", () => {
+    expect(combineCrs([])).toEqual({ status: "not_checked" });
+  });
+
+  it("the worst result wins: a high score first, then a check that didn't complete", () => {
+    expect(combineCrs([{ source: "sender", crs: low }, { source: "message", crs: high }])).toMatchObject({
+      status: "ok",
+      businessVerified: false,
+      raw: { score: 100, source: "message" },
+    });
+    expect(combineCrs([{ source: "sender", crs: down }, { source: "message", crs: high }])).toMatchObject({
+      status: "ok",
+      businessVerified: false,
+    });
+    expect(combineCrs([{ source: "sender", crs: low }, { source: "message", crs: down }])).toMatchObject({
+      status: "unavailable",
+      raw: { reason: "timeout", source: "message" },
+    });
+  });
+
+  it("all low scores stay ok without claiming the business is verified", () => {
+    const crs = combineCrs([{ source: "sender", crs: low }, { source: "message", crs: low }]);
+    expect(crs.status).toBe("ok");
+    expect("businessVerified" in crs).toBe(false);
+  });
+
+  it("lists every check without an address", () => {
+    const crs = combineCrs([{ source: "sender", crs: low }, { source: "message", crs: down }]);
+    expect((crs.raw as { checks: unknown }).checks).toEqual([
+      { source: "sender", status: "ok", score: 5, reason: null },
+      { source: "message", status: "unavailable", score: null, reason: "timeout" },
+    ]);
+    expect(JSON.stringify(crs)).not.toContain("@");
   });
 });
 
@@ -149,6 +235,14 @@ describe("createCrsClient", () => {
       { path: "/fraud-finder/fraud-finder", body: { email: "invoices@northwind-cloud-billing.example" }, auth: `Bearer ${TOKEN}` },
       { path: "/fraud-finder/fraud-finder", body: { email: "accounts@volga-trading.example" }, auth: `Bearer ${TOKEN}` },
     ]);
+  });
+
+  it("checks that run at the same time share one login", async () => {
+    const crs = fakeCrs();
+    const client = createCrsClient(CONFIG, crs.fetchFn);
+    await Promise.all(["a@stranger.example", "b@stranger.example", "c@stranger.example"].map((e) => client.screenEmail(e)));
+    expect(crs.calls.filter((c) => c.path === "/users/login")).toHaveLength(1);
+    expect(crs.calls.filter((c) => c.path === "/fraud-finder/fraud-finder")).toHaveLength(3);
   });
 
   it("logs in again once the token is 45 minutes old", async () => {
