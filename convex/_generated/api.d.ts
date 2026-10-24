@@ -39,6 +39,7 @@ import type * as pipeline from "../pipeline.js";
 import type * as privacy from "../privacy.js";
 import type * as scoreboard from "../scoreboard.js";
 import type * as seed from "../seed.js";
+import type * as senderLists from "../senderLists.js";
 import type * as warRoom from "../warRoom.js";
 
 import type {
@@ -79,6 +80,7 @@ declare const fullApi: ApiFromModules<{
   privacy: typeof privacy;
   scoreboard: typeof scoreboard;
   seed: typeof seed;
+  senderLists: typeof senderLists;
   warRoom: typeof warRoom;
 }>;
 

@@ -30,6 +30,7 @@ Only `decide()` can return PAY. These findings are its inputs. They never claim 
 | `moss.ts` | What goes into the Moss index, how its hits become `searchHits`, and the score floor |
 | `policyLookup.ts` | Policy sentences for the voice agents' mid-call lookup, and their keyword fallback |
 | `crs.ts` | Which senders CRS screens, the CRS client (login, token reuse, timeouts), and how an AtData Fraud Finder result becomes `crs` |
+| `lists.ts` | The owner's block and trust lists: value normalization, deny hits (sender, message domain, bank account) and trusted senders |
 | `seedScenarios.test.ts` | Pins what P3 returns for each `scenarios.json` entry on the seed world |
 
 `shared/seedWorld.ts` holds the seed data. `convex/seed.ts` inserts it, and the tests read it through `buildSeedBook()`.
@@ -45,6 +46,8 @@ Only `decide()` can return PAY. These findings are its inputs. They never claim 
 | `alreadyPaidAt` | Set when the invoice is paid or has a sent or pending payment. Pending counts, so a second request can't pay the same invoice twice. |
 | `crs` | AtData Fraud Finder on the sender's email, for senders the book doesn't know (see the CRS section below). `verifyVendor` itself always returns `"not_checked"`; `runVendorVerifier` fills in the CRS result. |
 | `ofacHit` | Always `false`: the team's CRS account has no OFAC product, so `false` means OFAC **did not run**, never that the payee is clear. |
+| `denyListHits` | Present only when the request hits the owner's block list: the sender's phone, email or email domain; a domain written in the message; or the requested bank account (last 4, plus the routing number when the request gives one). Ids and kinds only, never the values. `decide()` blocks on any (R16). A deny-listed sender is never on file and identifies no vendor by itself. |
+| `trustedByOwner` | Present (and `true`) only when `senderOnFile` is true because of a trust entry rather than the vendor's own record. Trust satisfies R3 and nothing else; a deny entry for the same sender wins. |
 
 ## Risk flags
 

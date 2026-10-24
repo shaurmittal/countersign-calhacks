@@ -1,8 +1,9 @@
 // Privacy (owner: P2). Spec §8.5: judges' phone numbers are shown as their last 4 digits and the
 // full numbers are deleted after the event. Run once judging is over:
 //   npx convex run privacy:purgeCallerNumbers
-// Replaces every stored caller phone number with "…1234". Web senders are random IDs, not people,
-// and audit payloads only ever hold last-4s, so neither needs touching.
+// Replaces every stored caller phone number with "…1234", in cases, known-bad senders and the owner's
+// lists. Web senders are random IDs, not people, and audit payloads only ever hold last-4s, so neither
+// needs touching.
 import { internalMutation } from "./_generated/server";
 import { appendAudit } from "./audit";
 
@@ -29,7 +30,16 @@ export const purgeCallerNumbers = internalMutation({
         vendors++;
       }
     }
-    await appendAudit(ctx, { actor: "system", action: "privacy.caller_numbers_purged", payload: { cases, vendors } });
-    return { cases, vendors };
+    // The owner's lists can hold a judge's number too (a blocked scammer, say). A masked entry no longer matches.
+    let listEntries = 0;
+    for (const entry of await ctx.db.query("senderLists").collect()) {
+      const masked = entry.match === "phone" ? mask(entry.value) : entry.value;
+      if (masked !== entry.value) {
+        await ctx.db.patch(entry._id, { value: masked });
+        listEntries++;
+      }
+    }
+    await appendAudit(ctx, { actor: "system", action: "privacy.caller_numbers_purged", payload: { cases, vendors, listEntries } });
+    return { cases, vendors, listEntries };
   },
 });

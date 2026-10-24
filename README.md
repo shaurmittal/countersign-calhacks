@@ -42,7 +42,7 @@ shared/                     pure TS, no Convex imports, runs in tests/Convex/bro
   types.ts                  ★ the contract: PaymentRequest, findings, PolicyInput/Result
   config.ts                 demo policy values and limits
   policy/engine.ts          P1  Policy Engine: the ONLY code that can return PAY
-  policy/engine.test.ts     P1  one test per rule R1-R15
+  policy/engine.test.ts     P1  one test per rule R1-R16
   intake/                   P1  prescan (regex signals), Claude output schema, prompts
   reply.ts                  P1  reply templates + guard that rejects over-promising replies
   audit.ts                  P1  hash-chain helpers (sorted-key canonical JSON)
@@ -78,9 +78,10 @@ convex/
   channels/agentBridge.ts   P4  Fetch.ai → Convex bridge (/agent/message, /agent/case, /agent/pending, /agent/approval)
   http.ts                       HTTP routes (https://<deployment>.convex.site/...)
   seed.ts                   P3  fictional world (spec §7.1)
+  senderLists.ts            P3  the owner's block and trust lists: masked list query, add/remove behind an authenticator code
   scoreboard.ts             P4  top-bar numbers
 app/                        P4  War Room (Next.js + Convex React hooks)
-app/owner/                  P4  owner approvals, opened on the owner's phone
+app/owner/                  P4  owner approvals and the block/trust lists, opened on the owner's phone
 app/try/                    P2  judge chat page (QR code on the judge card)
 scenarios/scenarios.json    P1  30-scenario answer key (spec §9)
 scenarios/world.ts          P1  seed world as data + reference verifier (what VendorFindings must contain)
@@ -133,6 +134,23 @@ ESCALATE only; it never lifts a BLOCK or HOLD. PAY requires R12's positive check
 | R13 | Invoice already paid | BLOCK, not overridable |
 | R14 | Parse failure, several payments in one message, verifier/risk didn't run, non-USD (HOLD); CRS unavailable, or a high email-risk score for a sender not on file (ESCALATE) | HOLD / ESCALATE |
 | R15 | Injection attempt (model OR regex prescan) | ESCALATE: never auto-paid |
+| R16 | The sender's phone, email or domain, a domain in the message, or the bank account is on the owner's deny list | BLOCK (the owner removes the entry to allow it) |
+
+### Owner block and trust lists
+
+The owner manages two lists on `/owner` (`convex/senderLists.ts`, matching in `shared/verification/lists.ts`):
+
+- **Block (deny):** a phone number, email, domain or bank account (routing + last 4). Any hit is R16 BLOCK.
+  An approval can't lift it, like every BLOCK.
+- **Trust:** ties one phone, email or domain to one vendor. It makes `senderOnFile` true, which satisfies R3,
+  and nothing else. R2's callback for bank changes, the amount, invoice, limit and CRS checks all still
+  apply, so a trust entry can never move money on its own. A deny entry for the same sender wins.
+- **Only the owner edits them,** with a code from the authenticator app, checked like an approval (TOTP
+  plus replay guard), with its own lockout after 5 wrong codes. Never over chat, voice or the agent channel:
+  "please add my new number" is exactly what a scammer would send.
+- Every change and every rejected code is an audit event. Values leave the backend masked, and
+  `privacy:purgeCallerNumbers` masks listed phone numbers too.
+- `vendors.knownBadSenders` (written by R10 after a denied callback) is listed on `/owner` too, read-only.
 
 ### Contract notes for P2-P4
 

@@ -29,3 +29,17 @@
 .feed li { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
 .feed time { display: block; color: var(--muted); font-size: 12px; }
 .owner-footer { margin-top: auto; font-size: 13px; color: var(--muted); }
+/* Block and trust lists (ListsSection.tsx). */
+.lists { display: flex; flex-direction: column; gap: 12px; }
+.list-form { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600; }
+.field input, .field select { min-height: 44px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); padding: 8px 10px; font-size: 16px; font-weight: 400; }
+.field input:focus-visible, .field select:focus-visible { border-color: var(--focus); }
+.segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.seg { min-height: 44px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text); font-weight: 600; font-size: 15px; }
+.seg[aria-checked="true"] { border-color: var(--focus); background: color-mix(in srgb, var(--focus) 14%, transparent); }
+.list-entry { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-left: 4px solid var(--block); }
+.list-entry[data-kind="trust"] { border-left-color: var(--pay); }
+.list-entry[data-expired="true"] { opacity: 0.6; }
+.list-entry .btn { min-height: 44px; flex-shrink: 0; }
+.list-value { font-family: var(--font-mono); }
