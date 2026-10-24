@@ -30,6 +30,9 @@ export const decision = v.union(
   v.literal("NO_ACTION"),
 );
 
+export const listKind = v.union(v.literal("deny"), v.literal("trust"));
+export const listMatch = v.union(v.literal("phone"), v.literal("email"), v.literal("domain"), v.literal("bank"));
+
 export const agentName = v.union(
   v.literal("intake"),
   v.literal("vendorVerifier"),
@@ -48,6 +51,8 @@ export default defineSchema({
     email: v.string(),
     otpPhone: v.string(),
     lastTotpCounter: v.optional(v.number()), // P4: last accepted TOTP step; older or equal codes are replays
+    listCodeAttempts: v.optional(v.number()), // wrong codes on list edits since the last lockout
+    listCodeLockedUntil: v.optional(v.number()), // list edits are locked until then after too many wrong codes
     policy: v.object({
       autoPayLimitCents: v.number(),
       coolingOffThresholdCents: v.number(),
@@ -70,6 +75,19 @@ export default defineSchema({
     alwaysEscalate: v.optional(v.boolean()),
     knownBadSenders: v.optional(v.array(v.string())),
   }).index("by_name", ["name"]),
+
+  // The owner's allow and block lists (convex/senderLists.ts), edited only on /owner with an authenticator code.
+  // value is normalized: phone digits, lowercase email, lowercase domain, or "<routing>:<last4>" for a bank account.
+  senderLists: defineTable({
+    kind: listKind,
+    match: listMatch,
+    value: v.string(),
+    vendorId: v.optional(v.id("vendors")), // required for trust: the vendor this sender belongs to
+    note: v.optional(v.string()),
+    createdAt: v.number(),
+    expiresAt: v.optional(v.number()),
+    removedAt: v.optional(v.number()),
+  }).index("by_kind", ["kind"]),
 
   invoices: defineTable({
     vendorId: v.id("vendors"),

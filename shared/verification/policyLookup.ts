@@ -3,7 +3,7 @@
 // in its own words. Nothing about invoices, amounts, limits or vendors is ever returned: an inbound caller
 // isn't verified, and on a callback the vendor must say the invoice number unprompted (P2's check, §8.2).
 import type { RuleId } from "../types";
-import { POLICY_SCOPE, withTimeout } from "./moss";
+import { POLICY_SCOPE } from "./moss";
 
 /** Budget for one lookup inside the Node action; the voice tool waits on a live call. */
 export const POLICY_LOOKUP_BUDGET_MS = 2_500;
@@ -44,6 +44,7 @@ export const POLICY_DOCS: readonly PolicyDoc[] = [
   { id: "sanctions", rules: ["R8"], text: "A payee on the OFAC sanctions list is refused, and that can't be overridden." },
   { id: "cannot-verify", rules: ["R14"], text: "If Countersign can't read the request reliably or can't reach its identity checks, it holds or escalates the payment instead of guessing." },
   { id: "instructions", rules: ["R15"], text: "Messages that try to give Countersign instructions are treated as information and are never paid automatically." },
+  { id: "deny-list", rules: ["R16"], text: "The owner can block a phone number, email, domain or bank account; any request from or to a blocked one is refused. Only the owner can add or remove entries, with a code from their authenticator app." },
   { id: "auto-pay", rules: ["R12"], text: "A known vendor's open invoice, at the expected amount, to the bank account on file and under the auto-pay limit is paid automatically." },
 ];
 
@@ -127,13 +128,22 @@ export function policyAnswer(docs: readonly PolicyDoc[], source: PolicyAnswer["s
 }
 
 /**
- * The lookup's answer if it arrives within budgetMs, otherwise (or if it fails) the keyword answer for the
- * same question, which needs no Moss and no Node action. Never throws and never waits past budgetMs.
+ * The lookup's answer if it arrives within budgetMs, otherwise the keyword answer for the same question, which
+ * needs no Moss and no Node action. A lookup that fails in time still rejects, so the caller can say so.
+ * Never waits past budgetMs.
  */
-export function policyAnswerWithin(
+export async function policyAnswerWithin(
   lookup: Promise<PolicyAnswer>,
   question: string,
   budgetMs = POLICY_TOOL_BUDGET_MS,
 ): Promise<PolicyAnswer> {
-  return withTimeout(lookup, budgetMs, policyAnswer(rankPolicyByKeywords(question), "keywords"));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<PolicyAnswer>((resolve) => {
+    timer = setTimeout(() => resolve(policyAnswer(rankPolicyByKeywords(question), "keywords")), budgetMs);
+  });
+  try {
+    return await Promise.race([lookup, late]);
+  } finally {
+    clearTimeout(timer);
+  }
 }

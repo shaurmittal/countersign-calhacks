@@ -8,7 +8,7 @@
 //   NOTE     the rule fired but is already satisfied (e.g. callback confirmed). Shown, not blocking.
 // PAY (R12) is returned only when there are no BLOCK/HOLD/unsatisfied ESCALATE hits AND the
 // positive checks pass: known vendor, matching open invoice, known USD amount.
-import type { PolicyInput, PolicyResult, RuleId } from "../types";
+import type { DenyListHit, PolicyInput, PolicyResult, RuleId } from "../types";
 import { RULES } from "./rules";
 
 type Effect = "BLOCK" | "HOLD" | "ESCALATE" | "NOTE";
@@ -21,6 +21,18 @@ const PAYEE_ROLES = new Set(["vendor", "employee"]);
 
 export function formatCents(cents: number): string {
   return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+const DENY_SOURCES: Record<DenyListHit["source"], string> = {
+  sender: "the sender",
+  message: "a domain in the message",
+  bank: "the bank account",
+};
+
+/** "On the owner's deny list: the sender and the bank account". Names the place, never the value. */
+function denyListReason(hits: readonly DenyListHit[]): string {
+  const places = [...new Set(hits.map((h) => DENY_SOURCES[h.source]))];
+  return `On the owner's deny list: ${places.join(" and ")}`;
 }
 
 export function decide(input: PolicyInput): PolicyResult {
@@ -58,6 +70,8 @@ export function decide(input: PolicyInput): PolicyResult {
     const when = paidAt != null ? ` on ${new Date(paidAt).toISOString().slice(0, 10)}` : "";
     hit("R13", "BLOCK", `This invoice was already paid${when}`);
   }
+  // The owner's own block list. Like every BLOCK, an approval can't lift it; the owner removes the entry instead.
+  if (vf?.denyListHits?.length) hit("R16", "BLOCK", denyListReason(vf.denyListHits));
 
   // ---- Missing or unavailable data: never pay on what we could not check ----
   if (req.parseFailed) hit("R14", "HOLD", "The request could not be read reliably");
@@ -97,6 +111,8 @@ export function decide(input: PolicyInput): PolicyResult {
       else hit("R2", "HOLD", `Could not confirm the new account with ${vendor.name}; bank changes are never paid unconfirmed`);
     }
 
+    // A trust entry makes senderOnFile true and nothing else: R2, R4-R7 and the invoice check still run below.
+    if (vf.trustedByOwner && vf.senderOnFile) hit("R3", "NOTE", `The owner's trust list ties this sender to ${vendor.name}`);
     if (!vf.senderOnFile && PAYEE_ROLES.has(req.claimedSenderRole)) {
       if (cb === null) hit("R3", "HOLD", `Sender is not on file for ${vendor.name}: calling back on the number on file`, true);
       else if (cb === "confirmed") hit("R3", "NOTE", `Sender not on file, but ${vendor.name} confirmed by callback`);

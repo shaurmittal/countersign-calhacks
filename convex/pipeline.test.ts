@@ -92,9 +92,9 @@ async function step(t: T, ms = 0) {
   await t.finishInProgressScheduledFunctions();
 }
 
-/** Run scheduled functions until nothing is left. */
+/** Run scheduled functions until nothing is left, moving the clock in 5 s steps like real time would. */
 async function drain(t: T) {
-  await t.finishAllScheduledFunctions(vi.runAllTimers);
+  await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(5_000), 1_000);
 }
 
 async function open(t: T, rawContent = "test", fromAddress = SCAMMER) {
@@ -362,5 +362,95 @@ describe("leader pipeline", () => {
     await drain(t);
     const chain = await t.query(api.audit.verifyChain, {});
     expect(chain).toMatchObject({ ok: true, brokenAtSeq: null });
+  });
+});
+
+describe("pipeline watchdog", () => {
+  /** A case as a pipeline run leaves it when it dies after intake, before the verifier returns. */
+  async function deadRun(t: T, status: "VERIFYING" | "AWAITING_OWNER" = "VERIFYING") {
+    const now = Date.now();
+    return t.run((ctx) =>
+      ctx.db.insert("cases", {
+        channel: "web",
+        fromAddress: SCAMMER,
+        rawContent: "Pay Northwind #NW-889",
+        status,
+        request: { ...REQUEST, claimedVendorName: "Northwind", invoiceNumber: "NW-889" },
+        flags: [],
+        createdAt: now,
+        updatedAt: now,
+      }),
+    );
+  }
+  const actions = (t: T, caseId: Id<"cases">) =>
+    t.run(async (ctx) => (await ctx.db.query("auditEvents").collect()).filter((e) => e.caseId === caseId).map((e) => e.action));
+
+  it("restarts a run that died mid-pipeline, and the restart finishes the case", async () => {
+    const { t, w } = await setup();
+    given({ claimedVendorName: "Northwind", invoiceNumber: "NW-889" }, findings(w.northwind._id, w.nw889._id));
+    const caseId = await deadRun(t);
+    vi.advanceTimersByTime(95_000);
+    await t.mutation(internal.pipeline.watchdog, { caseId, restarts: 0 });
+    await drain(t);
+
+    const c = await getCase(t, caseId);
+    expect(c?.decision).toBe("PAY");
+    expect(runPayer).toHaveBeenCalledTimes(1);
+    expect(await actions(t, caseId)).toContain("pipeline.restarted");
+  });
+
+  it("out of restarts -> closes as HOLD (R14) and never pays", async () => {
+    const { t } = await setup();
+    const caseId = await deadRun(t);
+    vi.advanceTimersByTime(95_000);
+    await t.mutation(internal.pipeline.watchdog, { caseId, restarts: 2 });
+    await drain(t);
+
+    const c = await getCase(t, caseId);
+    expect(c?.status).toBe("CLOSED");
+    expect(c?.decision).toBe("HOLD");
+    expect(c?.policyResult.firedRules).toEqual(["R14"]);
+    expect(c?.replyText).toBeTruthy();
+    expect(runPayer).not.toHaveBeenCalled();
+    expect(await actions(t, caseId)).toContain("pipeline.gave_up");
+  });
+
+  it("leaves a run that is still making progress alone", async () => {
+    const { t } = await setup();
+    const caseId = await deadRun(t);
+    vi.advanceTimersByTime(10_000);
+    await t.mutation(internal.pipeline.watchdog, { caseId, restarts: 0 });
+    expect(await actions(t, caseId)).not.toContain("pipeline.restarted");
+    expect((await getCase(t, caseId))?.status).toBe("VERIFYING");
+  });
+
+  it("never touches a case that is waiting on the owner or a callback", async () => {
+    const { t } = await setup();
+    const caseId = await deadRun(t, "AWAITING_OWNER");
+    vi.advanceTimersByTime(10 * 60_000);
+    await t.mutation(internal.pipeline.watchdog, { caseId, restarts: 2 });
+    expect((await getCase(t, caseId))?.status).toBe("AWAITING_OWNER");
+    expect(await actions(t, caseId)).toEqual([]);
+  });
+
+  it("a healthy run closes with its final reply in the same update", async () => {
+    const { t, w } = await setup();
+    given(
+      { claimedVendorName: "Pixel & Pine", claimedSenderRole: "vendor", invoiceNumber: "1042", newBankDetails: NEW_BANK },
+      findings(w.pixel._id, w.inv1042._id, { bankMatches: false }),
+    );
+    const caseId = await open(t);
+    await step(t);
+    await step(t);
+    const [cb] = await callbacksFor(t, caseId);
+    await t.mutation(internal.agents.callbackVerifier.recordOutcome, { callbackId: cb._id, outcome: "denied" });
+    await drain(t);
+    const closing = await t.run(async (ctx) =>
+      (await ctx.db.query("auditEvents").collect()).filter(
+        (e) => e.caseId === caseId && e.action === "case.updated" && (e.payload as { status?: string })?.status === "CLOSED",
+      ),
+    );
+    expect(closing).toHaveLength(1);
+    expect((closing[0].payload as { replyText?: string }).replyText).toMatch(/did not send/);
   });
 });

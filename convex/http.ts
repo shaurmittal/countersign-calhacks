@@ -10,7 +10,7 @@ const http = httpRouter();
 http.route({ path: "/cartesia/tools/submit-payment-request", method: "POST", handler: submitPaymentRequest });
 http.route({ path: "/cartesia/tools/case-status", method: "POST", handler: getCaseStatus });
 http.route({ path: "/cartesia/tools/callback-outcome", method: "POST", handler: recordCallbackOutcome });
-http.route({ path: "/cartesia/tools/policy", method: "POST", handler: lookupPolicy }); // both agents; Moss, capped at 2 s
+http.route({ path: "/cartesia/tools/policy", method: "POST", handler: lookupPolicy });
 
 // P2: WhatsApp Cloud API webhook (see docs/whatsapp-setup.md)
 http.route({ path: "/whatsapp/webhook", method: "GET", handler: verifyWebhook });

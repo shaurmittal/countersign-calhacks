@@ -22,7 +22,7 @@ import {
   type CrsResult,
 } from "../../shared/verification/crs";
 import { MOSS_CALLER_TIMEOUT_MS, withTimeout } from "../../shared/verification/moss";
-import type { BookVendor, SearchHit, VerificationBook } from "../../shared/verification/types";
+import type { BookListEntry, BookVendor, SearchHit, VerificationBook } from "../../shared/verification/types";
 import { verifyVendor } from "../../shared/verification/verifyVendor";
 
 function toBookVendor(v: Doc<"vendors">): BookVendor {
@@ -45,17 +45,28 @@ function toBookVendor(v: Doc<"vendors">): BookVendor {
   };
 }
 
-/** The vendor book both P3 agents read: vendors, invoices, live payments and the owner. */
+/** Live entries of the owner's lists: not removed and not expired. A trust entry needs its vendor. */
+function toBookListEntries(rows: Doc<"senderLists">[], now: number): BookListEntry[] {
+  return rows.flatMap((e) =>
+    e.removedAt !== undefined || (e.expiresAt !== undefined && e.expiresAt <= now) || (e.kind === "trust" && !e.vendorId)
+      ? []
+      : [{ id: e._id, kind: e.kind, match: e.match, value: e.value, vendorId: e.vendorId }],
+  );
+}
+
+/** The vendor book both P3 agents read: vendors, invoices, live payments, the owner and the owner's lists. */
 export const loadVerificationBook = internalQuery({
   args: {},
   handler: async (ctx): Promise<VerificationBook> => {
-    const [vendors, invoices, payments, owner] = await Promise.all([
+    const [vendors, invoices, payments, owner, lists] = await Promise.all([
       ctx.db.query("vendors").collect(),
       ctx.db.query("invoices").collect(),
       ctx.db.query("payments").collect(),
       ctx.db.query("owner").first(),
+      ctx.db.query("senderLists").collect(),
     ]);
     return {
+      lists: toBookListEntries(lists, Date.now()),
       vendors: vendors.map(toBookVendor),
       invoices: invoices.map((i) => ({
         id: i._id,
@@ -126,7 +137,7 @@ export async function runVendorVerifier(
   const hits = mossHits(ctx, request.claimedVendorName);
   const book: VerificationBook = await ctx.runQuery(internal.agents.vendorVerifier.loadVerificationBook, {});
   const [searchHits, crsResult]: [SearchHit[], CrsResult] = await Promise.all([hits, screenCase(c, book)]);
-  return { ...verifyVendor({ request, fromAddress: c.fromAddress, book, searchHits }), crs: crsResult };
+  return { ...verifyVendor({ request, fromAddress: c.fromAddress, rawContent: c.rawContent, book, searchHits }), crs: crsResult };
 }
 
 /**

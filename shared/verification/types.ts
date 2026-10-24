@@ -1,7 +1,7 @@
 // Vendor-book shapes for the P3 verification logic (owner: P3). Spec §4, §6.2, §6.3.
 // Plain data with string ids, so everything in shared/verification/ stays free of Convex imports.
 // convex/agents/vendorVerifier.ts (loadVerificationBook) maps Convex docs into these.
-import type { Channel, PolicyConfig } from "../types";
+import type { Channel, ListKind, ListMatch, PolicyConfig } from "../types";
 
 export type BookVendor = {
   id: string;
@@ -45,12 +45,25 @@ export type BookOwner = {
   policy: PolicyConfig;
 };
 
+/** One live entry of the owner's allow or block lists (convex/senderLists.ts). Removed and expired ones never get here. */
+export type BookListEntry = {
+  id: string;
+  kind: ListKind;
+  match: ListMatch;
+  /** normalizeListValue's form (shared/verification/lists.ts). */
+  value: string;
+  /** Trust entries only: the vendor this sender belongs to. */
+  vendorId?: string;
+};
+
 /** Everything both P3 agents read. They run in parallel, so each loads it on its own. */
 export type VerificationBook = {
   vendors: BookVendor[];
   invoices: BookInvoice[];
   payments: BookPayment[];
   owner: BookOwner | null;
+  /** The owner's allow and block lists. Absent in books built before the lists existed; read as []. */
+  lists?: BookListEntry[];
 };
 
 /** The parts of a case the Risk Analyst reads besides the parsed request. */
@@ -87,6 +100,10 @@ export type SenderCheck = {
   onMatchedVendorFile: boolean;
   /** On any vendor's record. */
   onAnyVendorFile: boolean;
+  /** The sender's phone, email or email domain is on the owner's deny list. */
+  ownerDenied?: boolean;
+  /** The owner's trust list ties the sender to the matched vendor. False when no vendor matched. */
+  trustedByOwner?: boolean;
 };
 
 export type InvoiceMatch = {

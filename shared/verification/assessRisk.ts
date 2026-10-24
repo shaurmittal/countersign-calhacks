@@ -18,7 +18,7 @@ export function assessRisk(args: {
   searchHits?: readonly SearchHit[];
 }): RiskFindings {
   const { request, caseInfo, book } = args;
-  const match = matchVendor(request.claimedVendorName, caseInfo.fromAddress, book.vendors, args.searchHits);
+  const match = matchVendor(request.claimedVendorName, caseInfo.fromAddress, book.vendors, args.searchHits, book.lists ?? []);
   const vendor = book.vendors.find((v) => v.id === match.vendorId) ?? null;
   const lookalikeDomains = findLookalikeDomains({
     fromAddress: caseInfo.fromAddress,

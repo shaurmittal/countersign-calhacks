@@ -385,6 +385,8 @@ describe("checkSender", () => {
       knownBad: false,
       onMatchedVendorFile: true,
       onAnyVendorFile: true,
+      ownerDenied: false,
+      trustedByOwner: false,
     });
   });
 
@@ -395,6 +397,8 @@ describe("checkSender", () => {
       knownBad: false,
       onMatchedVendorFile: false,
       onAnyVendorFile: true,
+      ownerDenied: false,
+      trustedByOwner: false,
     });
   });
 
@@ -405,6 +409,8 @@ describe("checkSender", () => {
       knownBad: false,
       onMatchedVendorFile: false,
       onAnyVendorFile: true,
+      ownerDenied: false,
+      trustedByOwner: false,
     });
   });
 
@@ -415,6 +421,8 @@ describe("checkSender", () => {
       knownBad: false,
       onMatchedVendorFile: false,
       onAnyVendorFile: false,
+      ownerDenied: false,
+      trustedByOwner: false,
     });
   });
 
@@ -427,6 +435,8 @@ describe("checkSender", () => {
       knownBad: true,
       onMatchedVendorFile: true,
       onAnyVendorFile: true,
+      ownerDenied: false,
+      trustedByOwner: false,
     });
   });
 
@@ -437,6 +447,8 @@ describe("checkSender", () => {
       knownBad: false,
       onMatchedVendorFile: false,
       onAnyVendorFile: false,
+      ownerDenied: false,
+      trustedByOwner: false,
     });
   });
 });

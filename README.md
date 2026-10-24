@@ -21,6 +21,7 @@ npm run dev             # War Room at http://localhost:3000 (second terminal)
 npm test                # Policy Engine, intake, audit chain + 30-scenario answer key
 npm run scenarios       # prints the answer-key table and the pitch line (no API calls)
 npm run eval:intake     # same 30 scenarios through real Claude intake (needs ANTHROPIC_API_KEY locally)
+npm run rehearse        # same 30 scenarios through a DEPLOYED dev pipeline (wipes it; setup in scripts/live-scenarios.ts)
 npm run typecheck
 ```
 
@@ -42,7 +43,7 @@ shared/                     pure TS, no Convex imports, runs in tests/Convex/bro
   types.ts                  ★ the contract: PaymentRequest, findings, PolicyInput/Result
   config.ts                 demo policy values and limits
   policy/engine.ts          P1  Policy Engine: the ONLY code that can return PAY
-  policy/engine.test.ts     P1  one test per rule R1-R15
+  policy/engine.test.ts     P1  one test per rule R1-R16
   intake/                   P1  prescan (regex signals), Claude output schema, prompts
   reply.ts                  P1  reply templates + guard that rejects over-promising replies
   audit.ts                  P1  hash-chain helpers (sorted-key canonical JSON)
@@ -78,9 +79,10 @@ convex/
   channels/agentBridge.ts   P4  Fetch.ai → Convex bridge (/agent/message, /agent/case, /agent/pending, /agent/approval)
   http.ts                       HTTP routes (https://<deployment>.convex.site/...)
   seed.ts                   P3  fictional world (spec §7.1)
+  senderLists.ts            P3  the owner's block and trust lists: masked list query, add/remove behind an authenticator code
   scoreboard.ts             P4  top-bar numbers
 app/                        P4  War Room (Next.js + Convex React hooks)
-app/owner/                  P4  owner approvals, opened on the owner's phone
+app/owner/                  P4  owner approvals and the block/trust lists, opened on the owner's phone
 app/try/                    P2  judge chat page (QR code on the judge card)
 scenarios/scenarios.json    P1  30-scenario answer key (spec §9)
 scenarios/world.ts          P1  seed world as data + reference verifier (what VendorFindings must contain)
@@ -133,6 +135,23 @@ ESCALATE only; it never lifts a BLOCK or HOLD. PAY requires R12's positive check
 | R13 | Invoice already paid | BLOCK, not overridable |
 | R14 | Parse failure, several payments in one message, verifier/risk didn't run, non-USD (HOLD); CRS unavailable, or a high email-risk score for a sender not on file (ESCALATE) | HOLD / ESCALATE |
 | R15 | Injection attempt (model OR regex prescan) | ESCALATE: never auto-paid |
+| R16 | The sender's phone, email or domain, a domain in the message, or the bank account is on the owner's deny list | BLOCK (the owner removes the entry to allow it) |
+
+### Owner block and trust lists
+
+The owner manages two lists on `/owner` (`convex/senderLists.ts`, matching in `shared/verification/lists.ts`):
+
+- **Block (deny):** a phone number, email, domain or bank account (routing + last 4). Any hit is R16 BLOCK.
+  An approval can't lift it, like every BLOCK.
+- **Trust:** ties one phone, email or domain to one vendor. It makes `senderOnFile` true, which satisfies R3,
+  and nothing else. R2's callback for bank changes, the amount, invoice, limit and CRS checks all still
+  apply, so a trust entry can never move money on its own. A deny entry for the same sender wins.
+- **Only the owner edits them,** with a code from the authenticator app, checked like an approval (TOTP
+  plus replay guard), with its own lockout after 5 wrong codes. Never over chat, voice or the agent channel:
+  "please add my new number" is exactly what a scammer would send.
+- Every change and every rejected code is an audit event. Values leave the backend masked, and
+  `privacy:purgeCallerNumbers` masks listed phone numbers too.
+- `vendors.knownBadSenders` (written by R10 after a denied callback) is listed on `/owner` too, read-only.
 
 ### Contract notes for P2-P4
 
@@ -159,9 +178,9 @@ are in [docs/cartesia-setup.md](docs/cartesia-setup.md).
   - `submit_payment_request` and `get_case_status` on the inbound agent. `get_case_status` long-polls,
     so the agent announces the callback once and then waits quietly.
   - `record_callback_outcome` on the callback agent.
-  - `lookup_policy` on both agents: a mid-call Moss lookup of Countersign's policy ("why do you need to
-    call them?"). It answers within 2 s, with keyword matching when Moss isn't back in time, and never
-    touches the case.
+  - `lookup_policy` on both agents: a mid-call Moss lookup of Countersign's rules for "why do you need
+    to check?". It answers within 2 s, with keyword matching when Moss isn't back in time, and each
+    lookup lands on the case's audit trail (`moss · policy.lookup`).
 - **System dynamic variables** `system__caller_id` and `system__conversation_id` (tool parameters the
   model can't change), plus an **assignment** that saves `case_id` from a tool response.
 - **System tools:** End call on both agents; Voicemail detection on the callback agent, with no
@@ -180,6 +199,37 @@ are in [docs/cartesia-setup.md](docs/cartesia-setup.md).
 - **No voice tool can move money.** The worst a jailbroken agent can do is say the wrong thing.
 - **Waits:** a callback takes about 30–60 s end to end. Tools time out after 25 s, so long waits
   arrive as several 20 s checks.
+
+## Backend: how we use Convex
+
+Convex is the whole backend: the database, every agent step, the timers and the live War Room.
+
+**Features used**
+- **Reactive queries:** the War Room, `/owner` and `/try` subscribe with `useQuery`. When an agent
+  writes its `agentRuns` row, every open screen updates. We wrote no websocket or polling code.
+- **Mutations are transactions:** the payment lock (`cases.claimPayment`) and the audit chain
+  (`appendAudit` reads the last hash and writes the next) each run in one transaction, so two
+  triggers can't both pay a case or fork the chain.
+- **Actions** make every outside call (Claude, Cartesia, Moss, CRS, Increase) and write results back
+  through mutations, each with an audit event.
+- **Scheduler:** the pipeline runs as scheduled steps; the vendor callback retries and times out on
+  timers; after the owner approves a large payment, the pipeline schedules its own wake-up at
+  `coolingOffUntil` and pays only if the approval still stands.
+- **HTTP actions:** Cartesia's webhook tools, the WhatsApp webhook and the Fetch.ai agent bridge, each
+  authenticated (a secret header, or Meta's signature for WhatsApp).
+- **Indexes** for every lookup, e.g. cases by `externalId` (dedupes webhook retries), payments by
+  idempotency key, audit events by sequence.
+- **Node runtime** (`"use node"`) only for the Moss SDK. **Environment variables** hold every key.
+- **convex-test:** the pipeline tests run the real pipeline, Policy Engine and audit chain against an
+  in-memory Convex backend.
+
+**Known limits**
+- Actions aren't transactional. A payment call that times out is retried with the same Increase
+  `Idempotency-Key`, so it can't be sent twice.
+- `audit.verifyChain` re-reads the whole log whenever it changes: fine for a demo, a production
+  version would checkpoint.
+- No sign-in: the War Room and `/owner` are public read-only views of fictional data. Approving a
+  payment still needs the owner's authenticator code.
 
 ## Team rules
 

@@ -79,6 +79,22 @@ export type VendorFindings = {
   matchingInvoiceId: string | null;
   /** Set when the matching invoice is already paid (duplicate request). */
   alreadyPaidAt: number | null;
+  /** Owner deny-list entries this request hit. R16 blocks on any. Absent on findings from before the lists existed. */
+  denyListHits?: DenyListHit[];
+  /** senderOnFile is true only because the owner's trust list ties this sender to the vendor. It satisfies R3, nothing else. */
+  trustedByOwner?: boolean;
+};
+
+/** The owner's allow and block lists (convex/senderLists.ts). Deny only tightens; trust only satisfies R3. */
+export type ListKind = "deny" | "trust";
+export type ListMatch = "phone" | "email" | "domain" | "bank";
+
+/** One owner deny-list entry a request hit. Never the value itself: public queries return findings unmasked. */
+export type DenyListHit = {
+  entryId: string;
+  match: ListMatch;
+  /** Where it matched: the sender's address, a domain written in the message, or the requested bank account. */
+  source: "sender" | "message" | "bank";
 };
 
 export type RiskFlag =
@@ -148,7 +164,8 @@ export type RuleId =
   | "R12"
   | "R13"
   | "R14"
-  | "R15";
+  | "R15"
+  | "R16";
 
 export type PolicyInput = {
   request: PaymentRequest;

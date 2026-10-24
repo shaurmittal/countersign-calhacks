@@ -34,6 +34,9 @@ export const start = internalAction({
   handler: async (ctx, { caseId }) => {
     const prep = await ctx.runMutation(internal.agents.callbackVerifier.prepare, { caseId });
     if (!prep) return;
+    // Rehearsal only (scripts/live-scenarios.ts): leave the call "ringing" without dialing anyone, so
+    // the script can record the vendor's answer with recordOutcome. Never set this on the demo deployment.
+    if (process.env.CALLBACK_DIAL === "off") return;
     try {
       const callSid = await placeOutboundCall({
         toNumber: prep.toNumber,

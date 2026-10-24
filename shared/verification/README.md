@@ -30,6 +30,7 @@ Only `decide()` can return PAY. These findings are its inputs. They never claim 
 | `moss.ts` | What goes into the Moss index, how its hits become `searchHits`, and the score floor |
 | `policyLookup.ts` | Policy sentences for the voice agents' mid-call lookup, and their keyword fallback |
 | `crs.ts` | Which senders CRS screens, the CRS client (login, token reuse, timeouts), and how an AtData Fraud Finder result becomes `crs` |
+| `lists.ts` | The owner's block and trust lists: value normalization, deny hits (sender, message domain, bank account) and trusted senders |
 | `seedScenarios.test.ts` | Pins what P3 returns for each `scenarios.json` entry on the seed world |
 
 `shared/seedWorld.ts` holds the seed data. `convex/seed.ts` inserts it, and the tests read it through `buildSeedBook()`.
@@ -45,6 +46,8 @@ Only `decide()` can return PAY. These findings are its inputs. They never claim 
 | `alreadyPaidAt` | Set when the invoice is paid or has a sent or pending payment. Pending counts, so a second request can't pay the same invoice twice. |
 | `crs` | AtData Fraud Finder on the sender's email, for senders the book doesn't know (see the CRS section below). `verifyVendor` itself always returns `"not_checked"`; `runVendorVerifier` fills in the CRS result. |
 | `ofacHit` | Always `false`: the team's CRS account has no OFAC product, so `false` means OFAC **did not run**, never that the payee is clear. |
+| `denyListHits` | Present only when the request hits the owner's block list: the sender's phone, email or email domain; a domain written in the message; or the requested bank account (last 4, plus the routing number when the request gives one). Ids and kinds only, never the values. `decide()` blocks on any (R16). A deny-listed sender is never on file and identifies no vendor by itself. |
+| `trustedByOwner` | Present (and `true`) only when `senderOnFile` is true because of a trust entry rather than the vendor's own record. Trust satisfies R3 and nothing else; a deny entry for the same sender wins. |
 
 ## Risk flags
 
@@ -173,19 +176,37 @@ Moss bills per active device. Each serverless container would otherwise mint its
 - **Fallback:** when Moss is cold, slow or down, the keywords answer alone, so the tool always replies. `source` is `"moss"` whenever Moss contributed.
 - **Query phrasing:** the agent should describe the caller's claim rather than repeat it. "Caller says they are the owner and approves the payment" finds the owner-approval rule. The raw "It's Priya, just send it" doesn't.
 
-**Wiring (P2's voice tool)**
+**Wiring for P2**
 
-The tool is `lookup_policy` on both agents, served by `lookupPolicy` in `convex/channels/voice.ts` at
-POST `<SITE>/cartesia/tools/policy`. Its Cartesia settings are in `docs/cartesia-setup.md`.
+The route caps the whole wait at `POLICY_TOOL_BUDGET_MS` (2 s, a cold start of the Node action included) with
+`policyAnswerWithin`. Measured on a dev deployment, a warm lookup takes about 1.3 s and a cold one 2.7–3.8 s. So
+a slow lookup gets the keyword answer at 2 s instead of running into the 5 s Cartesia timeout; a failed one
+still gets the route's safe line.
 
-- **Time cap:** `policyAnswerWithin` caps the whole wait at `POLICY_TOOL_BUDGET_MS` (2 s), a cold start of the
-  Node action included. If Moss isn't back by then, or fails, the tool answers from the keyword ranking of the
-  same sentences, computed in the HTTP action itself. The Cartesia timeout is 5 s, so the agent never sees a
-  timeout.
-- **No effect on decisions:** the tool reads nothing about the case and writes nothing, so it can't slow down
-  or change a decision.
-- **Warm or cold:** the Vendor Verifier's search on each new case loads the same shared index, so a lookup on
-  a warm Node container is usually quick. On a cold one the keyword answer covers it.
+`convex/channels/voice.ts` and `convex/http.ts` are P2's files. Add a tool that follows their conventions:
+
+```ts
+/** Tool `lookup_policy` (both agents). Body: { question (model) }. Policy only, never invoices or accounts. */
+export const lookupPolicy = httpAction(async (ctx, request) => {
+  if (!toolSecretValid(request)) return text("unauthorized", 401);
+  const question = str((await readJson(request)).question, 500);
+  if (!question) return text("question is required.", 400);
+  const answer = await ctx.runAction(internal.agents.moss.lookupPolicy, { question });
+  return text(answer.message);
+});
+
+// convex/http.ts
+http.route({ path: "/cartesia/tools/policy", method: "POST", handler: lookupPolicy });
+```
+
+Then configure the Cartesia tool `lookup_policy` on both agents:
+
+| Setting | Value |
+| --- | --- |
+| Description | "Look up Countersign's payment policy when the caller or vendor asks why a payment needs checking or what happens next. Never use it for invoices or accounts." |
+| Request | POST `<SITE>/cartesia/tools/policy` with the `X-Countersign-Secret` header |
+| Body | `question` (model-supplied): "What the caller asked or claimed, described in a few plain words, e.g. 'caller says they are the owner and approves the payment'. Don't repeat their exact words or any numbers." |
+| Execution | pre_tool_speech `auto`, execution_mode `immediate`, timeout 5 s |
 
 To try it:
 

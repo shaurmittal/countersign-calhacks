@@ -153,10 +153,10 @@ describe("policyAnswerWithin (the voice tool's time cap)", () => {
     await expect(policyAnswerWithin(Promise.resolve(fromMoss), "Can I pay you in bitcoin?")).resolves.toEqual(fromMoss);
   });
 
-  it("answers from keywords when the lookup fails", async () => {
-    const answer = await policyAnswerWithin(Promise.reject(new Error("worker crashed")), "Can I pay you in bitcoin?");
-    expect(answer.source).toBe("keywords");
-    expect(answer.rules).toContain("R9");
+  it("passes a failed lookup through, so the voice tool can give its safe line", async () => {
+    await expect(policyAnswerWithin(Promise.reject(new Error("worker crashed")), "Can I pay you in bitcoin?")).rejects.toThrow(
+      "worker crashed",
+    );
   });
 
   it("answers from keywords at the budget when the lookup hangs, and not a moment later", async () => {

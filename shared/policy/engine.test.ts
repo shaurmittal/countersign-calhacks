@@ -357,3 +357,45 @@ describe("policy engine", () => {
     }
   });
 });
+
+describe("R16 owner deny list and the trust list", () => {
+  const SENDER_HIT = { entryId: "e_phone", match: "phone", source: "sender" } as const;
+  const BANK_HIT = { entryId: "e_bank", match: "bank", source: "bank" } as const;
+
+  it("a deny-list hit blocks the happy path", () => {
+    const r = decide(input({ vendorFindings: { denyListHits: [SENDER_HIT] } }));
+    expect(r.decision).toBe("BLOCK");
+    expect(r.firedRules).toEqual(["R16"]);
+  });
+
+  it("an owner approval can't lift it", () => {
+    const r = decide(input({ vendorFindings: { denyListHits: [SENDER_HIT] }, approval: APPROVED, request: { amountCents: 12_000_00 } }));
+    expect(r.decision).toBe("BLOCK");
+    expect(r.firedRules).toContain("R16");
+  });
+
+  it("the reason names where it matched, never the value", () => {
+    const r = decide(input({ vendorFindings: { denyListHits: [SENDER_HIT, BANK_HIT, SENDER_HIT] } }));
+    expect(r.reasons).toContain("R16 Owner deny list: On the owner's deny list: the sender and the bank account");
+  });
+
+  it("trust satisfies R3 with a note, and the bill is paid", () => {
+    const r = decide(input({ vendorFindings: { senderOnFile: true, trustedByOwner: true }, request: { claimedSenderRole: "vendor" } }));
+    expect(r.decision).toBe("PAY");
+    expect(r.firedRules).toEqual(["R3", "R12"]);
+    expect(r.reasons[0]).toBe("R3 Sender not on file: The owner's trust list ties this sender to Northwind Cloud");
+  });
+
+  it("trust never skips the bank-change callback", () => {
+    const r = decide(
+      input({
+        ...PIXEL,
+        vendorFindings: { ...PIXEL.vendorFindings, senderOnFile: true, trustedByOwner: true, bankMatches: false },
+        request: { ...BANK_CHANGE, claimedVendorName: "Pixel & Pine", invoiceNumber: "1042", claimedSenderRole: "vendor" },
+      }),
+    );
+    expect(r.decision).toBe("HOLD");
+    expect(r.needs.callback).toBe(true);
+    expect(r.firedRules).toContain("R2");
+  });
+});

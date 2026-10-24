@@ -8,7 +8,7 @@
 // Models read, reason and propose. Only decide() (shared/policy/engine.ts) can return PAY,
 // and only the PAY branch below calls the Payer, behind the cases.claimPayment lock.
 import { v } from "convex/values";
-import { internalAction, internalQuery } from "./_generated/server";
+import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { decide } from "../shared/policy/engine";
@@ -16,6 +16,8 @@ import { DEMO_POLICY, LIMITS } from "../shared/config";
 import type {
   ApprovalState,
   CallbackOutcome,
+  CaseStatus,
+  Decision,
   InvoiceRecord,
   PaymentRequest,
   PolicyResult,
@@ -24,6 +26,8 @@ import type {
   VendorRecord,
 } from "../shared/types";
 import { withAgentRun } from "./lib/withAgentRun";
+import { appendAudit } from "./audit";
+import { templateReply } from "../shared/reply";
 import { composeReply } from "./lib/claude";
 import { EMPTY_REQUEST, runIntake, summarizeIntake } from "./agents/intake";
 import { runVendorVerifier } from "./agents/vendorVerifier";
@@ -102,11 +106,13 @@ async function safely<T>(run: () => Promise<T>): Promise<T | null> {
 }
 
 export const advance = internalAction({
-  args: { caseId: v.id("cases") },
-  handler: async (ctx, { caseId }) => {
+  args: { caseId: v.id("cases"), restarts: v.optional(v.number()) },
+  handler: async (ctx, { caseId, restarts }) => {
     const loaded = await ctx.runQuery(internal.pipeline.loadContext, { caseId });
     if (!loaded || loaded.c.status === "CLOSED") return;
     const { c, owner } = loaded;
+    // If this run dies (an uncaught error inside an SDK, an action timeout), the watchdog restarts it.
+    await ctx.scheduler.runAfter(WATCHDOG_MS, internal.pipeline.watchdog, { caseId, restarts: restarts ?? 0 });
     const biz = { ownerName: owner?.name ?? "the owner", company: owner?.company ?? "this business" };
 
     // 1. Intake
@@ -167,7 +173,12 @@ export const advance = internalAction({
     );
     await ctx.runMutation(internal.cases.update, { caseId, policyResult: result, decision: result.decision, actor: "policy" });
 
-    const reply = async (paymentSent = false, callbackInProgress = false, decided: PolicyResult = result) => {
+    // Writes the reply in the same update as the new status/decision, so no one ever sees a closed
+    // case with the previous reply, then sends it on the request's channel.
+    const settle = async (
+      patch: { status?: CaseStatus; decision?: Decision },
+      { paymentSent = false, callbackInProgress = false, decided = result }: { paymentSent?: boolean; callbackInProgress?: boolean; decided?: PolicyResult } = {},
+    ) => {
       const { text, source } = await composeReply({
         channel: c.channel,
         rawContent: c.rawContent,
@@ -181,13 +192,12 @@ export const advance = internalAction({
           callbackInProgress,
         },
       });
-      await ctx.runMutation(internal.cases.update, { caseId, replyText: text, actor: `leader:${source}` });
+      await ctx.runMutation(internal.cases.update, { caseId, ...patch, replyText: text, actor: `leader:${source}` });
       await ctx.scheduler.runAfter(0, internal.channels.reply.dispatch, { caseId });
     };
 
     const finish = async (decided: PolicyResult, paymentSent = false) => {
-      await ctx.runMutation(internal.cases.update, { caseId, decision: decided.decision, status: "CLOSED" });
-      await reply(paymentSent, false, decided);
+      await settle({ decision: decided.decision, status: "CLOSED" }, { paymentSent, decided });
       if (decided.decision !== "NO_ACTION") {
         await ctx.scheduler.runAfter(0, internal.agents.ownerConcierge.notifyOwner, {
           caseId,
@@ -202,8 +212,7 @@ export const advance = internalAction({
     if (result.needs.callback) {
       if (!latestCallback) {
         await ctx.scheduler.runAfter(0, internal.agents.callbackVerifier.start, { caseId });
-        await ctx.runMutation(internal.cases.update, { caseId, status: "CALLBACK_PENDING" });
-        await reply(false, true);
+        await settle({ status: "CALLBACK_PENDING" }, { callbackInProgress: true });
       } else if (latestCallback.outcome == null) {
         await ctx.runMutation(internal.cases.update, { caseId, status: "CALLBACK_PENDING" });
       }
@@ -243,10 +252,11 @@ export const advance = internalAction({
 
     // 4d. Owner step-up.
     if (result.decision === "ESCALATE") {
-      await ctx.runMutation(internal.cases.update, { caseId, status: "AWAITING_OWNER" });
       if (!approval) {
         await ctx.scheduler.runAfter(0, internal.agents.ownerConcierge.requestApproval, { caseId });
-        await reply();
+        await settle({ status: "AWAITING_OWNER" });
+      } else {
+        await ctx.runMutation(internal.cases.update, { caseId, status: "AWAITING_OWNER" });
       }
       return; // ownerConcierge re-runs advance on approval
     }
@@ -254,10 +264,11 @@ export const advance = internalAction({
     // 4e. Approved, cooling-off running: wake up when it ends (the owner can still cancel).
     const coolingOff = result.decision === "HOLD" && result.reasons.some((r) => /^R7 .*cooling-off/i.test(r));
     if (coolingOff && approval?.approvedAt && !approval.cancelledAt) {
-      await ctx.runMutation(internal.cases.update, { caseId, status: "AWAITING_OWNER" });
       if (approval.coolingOffUntil) {
         await ctx.scheduler.runAt(approval.coolingOffUntil + 250, internal.pipeline.advance, { caseId });
-        await reply();
+        await settle({ status: "AWAITING_OWNER" });
+      } else {
+        await ctx.runMutation(internal.cases.update, { caseId, status: "AWAITING_OWNER" });
       }
       return;
     }
@@ -267,5 +278,54 @@ export const advance = internalAction({
       await ctx.runMutation(internal.cases.markSenderKnownBad, { caseId });
     }
     await finish(result);
+  },
+});
+
+// ---- Watchdog ----
+// A pipeline run can die without reaching any catch block: an SDK throwing from inside a timer, an
+// action timeout, a deploy mid-run. advance is idempotent, so the watchdog simply runs it again.
+// Waiting states (CALLBACK_PENDING, AWAITING_OWNER) and CLOSED are left alone.
+export const WATCHDOG_MS = 100_000;
+// Longer than the slowest healthy run (two intake attempts, the reply, two Payer tries: ~60 s), so a
+// restart only ever follows a dead run and never races a slow one.
+const STALL_MS = 90_000;
+const MAX_RESTARTS = 2;
+const IN_FLIGHT = new Set<CaseStatus>(["RECEIVED", "PARSED", "VERIFYING", "DECIDED"]);
+
+export const watchdog = internalMutation({
+  args: { caseId: v.id("cases"), restarts: v.number() },
+  handler: async (ctx, { caseId, restarts }) => {
+    const c = await ctx.db.get(caseId);
+    if (!c || !IN_FLIGHT.has(c.status)) return;
+    if (Date.now() - c.updatedAt < STALL_MS) {
+      // Still making progress (or a newer run is): look again later.
+      await ctx.scheduler.runAfter(WATCHDOG_MS, internal.pipeline.watchdog, { caseId, restarts });
+      return;
+    }
+    if (restarts < MAX_RESTARTS) {
+      await appendAudit(ctx, { caseId, actor: "system", action: "pipeline.restarted", payload: { status: c.status, restarts: restarts + 1 } });
+      await ctx.db.patch(caseId, { updatedAt: Date.now() });
+      await ctx.scheduler.runAfter(0, internal.pipeline.advance, { caseId, restarts: restarts + 1 });
+      return;
+    }
+    // Out of restarts: close as HOLD. Nothing was paid (PAY only happens inside a successful run).
+    const held: PolicyResult = {
+      decision: "HOLD",
+      firedRules: ["R14"],
+      reasons: [`R14 Cannot verify: the pipeline stopped ${restarts + 1} times in ${c.status}`],
+      needs: { callback: false, ownerOtp: false, coolingOffSeconds: 0 },
+      overridable: true,
+    };
+    const replyText = templateReply(held, {
+      company: "this business",
+      vendorName: null,
+      invoiceNumber: null,
+      paymentSent: false,
+      callbackInProgress: false,
+    });
+    await ctx.db.patch(caseId, { status: "CLOSED", decision: "HOLD", policyResult: held, replyText, updatedAt: Date.now() });
+    await appendAudit(ctx, { caseId, actor: "system", action: "pipeline.gave_up", payload: { status: c.status, restarts } });
+    await ctx.scheduler.runAfter(0, internal.channels.reply.dispatch, { caseId });
+    await ctx.scheduler.runAfter(0, internal.agents.ownerConcierge.notifyOwner, { caseId, text: `HOLD (R14): ${held.reasons[0]}` });
   },
 });
