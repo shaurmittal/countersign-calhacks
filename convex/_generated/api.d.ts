@@ -27,6 +27,7 @@ import type * as http from "../http.js";
 import type * as lib_cartesia from "../lib/cartesia.js";
 import type * as lib_claude from "../lib/claude.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
+import type * as lib_riskExplanation from "../lib/riskExplanation.js";
 import type * as lib_withAgentRun from "../lib/withAgentRun.js";
 import type * as pipeline from "../pipeline.js";
 import type * as privacy from "../privacy.js";
@@ -59,6 +60,7 @@ declare const fullApi: ApiFromModules<{
   "lib/cartesia": typeof lib_cartesia;
   "lib/claude": typeof lib_claude;
   "lib/rateLimit": typeof lib_rateLimit;
+  "lib/riskExplanation": typeof lib_riskExplanation;
   "lib/withAgentRun": typeof lib_withAgentRun;
   pipeline: typeof pipeline;
   privacy: typeof privacy;
