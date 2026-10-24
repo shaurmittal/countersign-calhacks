@@ -1,37 +1,41 @@
 // Case lifecycle (owner: P1). Channels call `open`; the pipeline moves the status forward.
 import { v } from "convex/values";
-import { internalMutation, internalQuery, query } from "./_generated/server";
+import { internalMutation, internalQuery, query, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { caseStatus, channel, decision } from "./schema";
 import { appendAudit } from "./audit";
 import { LIMITS } from "../shared/config";
-import type { PaymentRequest, PolicyResult } from "../shared/types";
+import type { Channel, PaymentRequest, PolicyResult } from "../shared/types";
 
-/** Entry point for every channel. Dedupes on externalId (Twilio retries) and starts the pipeline. */
+type OpenArgs = { channel: Channel; fromAddress: string; rawContent: string; externalId?: string };
+
+/** Entry point for every channel. Dedupes on externalId (webhook retries) and starts the pipeline. */
+export async function openCase(ctx: MutationCtx, args: OpenArgs) {
+  if (args.externalId) {
+    const dupe = await ctx.db
+      .query("cases")
+      .withIndex("by_externalId", (q) => q.eq("externalId", args.externalId))
+      .first();
+    if (dupe) return { caseId: dupe._id, duplicate: true };
+  }
+  const now = Date.now();
+  const caseId = await ctx.db.insert("cases", {
+    ...args,
+    rawContent: args.rawContent.slice(0, LIMITS.maxMessageChars),
+    status: "RECEIVED",
+    flags: [],
+    createdAt: now,
+    updatedAt: now,
+  });
+  await appendAudit(ctx, { caseId, actor: "system", action: "case.opened", payload: { channel: args.channel } });
+  await ctx.scheduler.runAfter(0, internal.pipeline.advance, { caseId });
+  return { caseId, duplicate: false };
+}
+
 export const open = internalMutation({
   args: { channel, fromAddress: v.string(), rawContent: v.string(), externalId: v.optional(v.string()) },
-  handler: async (ctx, args) => {
-    if (args.externalId) {
-      const dupe = await ctx.db
-        .query("cases")
-        .withIndex("by_externalId", (q) => q.eq("externalId", args.externalId))
-        .first();
-      if (dupe) return { caseId: dupe._id, duplicate: true };
-    }
-    const now = Date.now();
-    const caseId = await ctx.db.insert("cases", {
-      ...args,
-      rawContent: args.rawContent.slice(0, LIMITS.maxMessageChars),
-      status: "RECEIVED",
-      flags: [],
-      createdAt: now,
-      updatedAt: now,
-    });
-    await appendAudit(ctx, { caseId, actor: "system", action: "case.opened", payload: { channel: args.channel } });
-    await ctx.scheduler.runAfter(0, internal.pipeline.advance, { caseId });
-    return { caseId, duplicate: false };
-  },
+  handler: (ctx, args) => openCase(ctx, args),
 });
 
 export const get = internalQuery({

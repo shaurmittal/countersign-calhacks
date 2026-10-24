@@ -4,6 +4,9 @@
 
 Full spec: [docs/spec.md](docs/spec.md).
 
+**Telephony is Cartesia only (no Twilio, no SMS).** Judges call the Countersign line or type at
+`/try`. Agent prompts, tool configs and numbers: [docs/cartesia-setup.md](docs/cartesia-setup.md).
+
 ## Setup (everyone)
 
 ```bash
@@ -23,10 +26,10 @@ don't overwrite each other's data. Use one shared **prod** deployment for the de
 
 Secrets go in Convex env vars (`npx convex env set NAME value`), never in the repo. See [.env.example](.env.example).
 
-**Push a fake message through the pipeline without Twilio:**
+**Push a fake message through the pipeline** (or open http://localhost:3000/try):
 
 ```bash
-npx convex run cases:open '{"channel":"sms","fromAddress":"+15555550199","rawContent":"Pay Northwind #NW-889"}'
+npx convex run cases:open '{"channel":"web","fromAddress":"+15555550199","rawContent":"Pay Northwind #NW-889"}'
 ```
 
 ## Layout and owners
@@ -51,17 +54,19 @@ convex/
   lib/claude.ts             P1  Claude calls (intake + reply); no Convex imports, shared with scripts/
   agents/vendorVerifier.ts  P3  vendor book (Moss), CRS KYB + OFAC
   agents/riskAnalyst.ts     P3  red flags + Claude explanation
-  agents/callbackVerifier.ts P2 outbound call to phoneOnFile; recordOutcome
+  agents/callbackVerifier.ts P2 Cartesia outbound call to phoneOnFile; outcome, retry, timeout
   agents/ownerConcierge.ts  P4  OTP / ASI:One approval, cooling-off, owner alerts
   agents/payer.ts           P4  Increase sandbox / mock ledger
-  channels/sms.ts           P2  Twilio SMS in/out
-  channels/voice.ts         P2  inbound call → Cartesia, tool webhooks, callback status
+  channels/voice.ts         P2  Cartesia webhook tools (submit request, case status, callback outcome)
+  channels/web.ts           P2  web chat channel (replaces SMS), used by app/try
   channels/reply.ts         P2/P4 send replyText back on the original channel
+  lib/cartesia.ts           P2  Cartesia API client + tool secret check
   channels/agentBridge.ts   P4  Fetch.ai → Convex bridge
   http.ts                       HTTP routes (https://<deployment>.convex.site/...)
   seed.ts                   P3  fictional world (spec §7.1)
   scoreboard.ts             P4  top-bar numbers
 app/                        P4  War Room (Next.js + Convex React hooks)
+app/try/                    P2  judge chat page (QR code on the judge card)
 scenarios/scenarios.json    P1  30-scenario answer key (spec §9)
 scenarios/world.ts          P1  seed world as data + reference verifier (what VendorFindings must contain)
 scripts/eval-intake.ts      P1  live intake eval
@@ -113,7 +118,7 @@ ESCALATE only; it never lifts a BLOCK or HOLD. PAY requires R12's positive check
 ### Contract notes for P2-P4
 
 - **P3 `runVendorVerifier`:** `vendorId` and `matchingInvoiceId` must be real Convex `_id`s (the pipeline loads the invoice by id). Match an invoice by number, or when no number is given, the single open invoice for that vendor with the same amount. `bankMatches`: `null` when the request has no bank details. See `scenarios/world.ts` for a reference implementation. If a verifier throws, the case HOLDs (R14).
-- **P2 `callbackVerifier.start`:** may be called twice for one case (one retry after `no_answer`, 20 s later); insert a new `callbacks` row each time with `attempt = existing + 1`. The pipeline sends the "I'm calling them now on the number on file" SMS itself.
+- **P2 `callbackVerifier.start`:** may be called twice for one case (one retry after `no_answer`, 20 s later); insert a new `callbacks` row each time with `attempt = existing + 1`. The pipeline writes the "I'm calling them now on the number on file" reply itself (shown on /try; read out by the voice agent via `get_case_status`).
 - **P4 `ownerConcierge`:** on OTP success set `approvedAt` and, when `policyResult.needs.coolingOffSeconds > 0`, `coolingOffUntil = approvedAt + seconds*1000`; on decline/cancel set `cancelledAt`. Then schedule `internal.pipeline.advance`. The pipeline schedules its own wake-up at `coolingOffUntil`.
 - **P4 `runPayer`:** runs only after `cases.claimPayment` took the lock. For an approved bank change the vendor record has already been updated when the Payer is called; read destination details from the vendor record.
 

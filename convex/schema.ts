@@ -3,7 +3,13 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-export const channel = v.union(v.literal("sms"), v.literal("call"), v.literal("email"), v.literal("agent"));
+export const channel = v.union(
+  v.literal("web"),
+  v.literal("call"),
+  v.literal("sms"),
+  v.literal("email"),
+  v.literal("agent"),
+);
 
 export const caseStatus = v.union(
   v.literal("RECEIVED"),
@@ -77,7 +83,7 @@ export default defineSchema({
   cases: defineTable({
     channel,
     fromAddress: v.string(), // phone, email or agent address; display last 4 only
-    externalId: v.optional(v.string()), // Twilio MessageSid / CallSid, for webhook dedupe
+    externalId: v.optional(v.string()), // dedupe key for webhook retries
     rawContent: v.string(),
     status: caseStatus,
     request: v.optional(v.any()), // PaymentRequest
@@ -113,7 +119,8 @@ export default defineSchema({
     caseId: v.id("cases"),
     vendorId: v.id("vendors"),
     numberDialed: v.string(), // always vendors.phoneOnFile, never from the request
-    callSid: v.optional(v.string()),
+    callSid: v.optional(v.string()), // Cartesia agent_call_id
+    agentRunId: v.optional(v.id("agentRuns")), // finished when the outcome lands
     attempt: v.number(),
     transcript: v.optional(v.string()),
     outcome: v.optional(

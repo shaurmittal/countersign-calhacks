@@ -2,7 +2,7 @@
 // Pure TypeScript only: no Convex or Node imports, so it runs in tests, Convex and the browser.
 // Change these types in a small PR of its own and tell the team; everyone depends on them.
 
-export type Channel = "sms" | "call" | "email" | "agent";
+export type Channel = "web" | "call" | "sms" | "email" | "agent";
 
 export type SenderRole =
   | "vendor"
