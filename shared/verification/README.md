@@ -178,6 +178,11 @@ Moss bills per active device. Each serverless container would otherwise mint its
 
 **Wiring for P2**
 
+The route caps the whole wait at `POLICY_TOOL_BUDGET_MS` (2 s, a cold start of the Node action included) with
+`policyAnswerWithin`. Measured on a dev deployment, a warm lookup takes about 1.3 s and a cold one 2.7–3.8 s. So
+a slow lookup gets the keyword answer at 2 s instead of running into the 5 s Cartesia timeout; a failed one
+still gets the route's safe line.
+
 `convex/channels/voice.ts` and `convex/http.ts` are P2's files. Add a tool that follows their conventions:
 
 ```ts

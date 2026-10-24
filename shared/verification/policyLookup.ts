@@ -9,6 +9,13 @@ import { POLICY_SCOPE } from "./moss";
 export const POLICY_LOOKUP_BUDGET_MS = 2_500;
 
 /**
+ * The voice tool's whole wait, a cold start of the Node action included. Past it the keyword answer goes out
+ * at once, so the tool answers well inside its 5 s Cartesia timeout and never holds up the call. Measured on a
+ * dev deployment: a warm lookup takes about 1.3 s; a cold one 2.7-3.8 s, which would get the keyword answer anyway.
+ */
+export const POLICY_TOOL_BUDGET_MS = 2_000;
+
+/**
  * Moss similarity below this is unrelated. A short question and a policy sentence score low even when the
  * sentence answers it (often under 0.3 with moss-minilm), so this only drops noise; Moss's order decides.
  */
@@ -118,4 +125,25 @@ export function policyAnswer(docs: readonly PolicyDoc[], source: PolicyAnswer["s
     `Countersign policy: ${chosen.map((doc) => doc.text).join(" ")} ` +
     "Explain this in your own words. Don't add amounts, limits, invoice numbers or promises.";
   return { message, rules, source };
+}
+
+/**
+ * The lookup's answer if it arrives within budgetMs, otherwise the keyword answer for the same question, which
+ * needs no Moss and no Node action. A lookup that fails in time still rejects, so the caller can say so.
+ * Never waits past budgetMs.
+ */
+export async function policyAnswerWithin(
+  lookup: Promise<PolicyAnswer>,
+  question: string,
+  budgetMs = POLICY_TOOL_BUDGET_MS,
+): Promise<PolicyAnswer> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<PolicyAnswer>((resolve) => {
+    timer = setTimeout(() => resolve(policyAnswer(rankPolicyByKeywords(question), "keywords")), budgetMs);
+  });
+  try {
+    return await Promise.race([lookup, late]);
+  } finally {
+    clearTimeout(timer);
+  }
 }

@@ -6,6 +6,7 @@ import { httpAction, internalMutation, internalQuery, type QueryCtx } from "../_
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { PolicyResult } from "../../shared/types";
+import { policyAnswerWithin } from "../../shared/verification/policyLookup";
 import { toolSecretValid } from "../lib/cartesia";
 import { senderOverLimit } from "../lib/rateLimit";
 import { openCase } from "../cases";
@@ -169,7 +170,8 @@ export const lookupPolicy = httpAction(async (ctx, request) => {
 
   let answer;
   try {
-    answer = await ctx.runAction(internal.agents.moss.lookupPolicy, { question });
+    // At most POLICY_TOOL_BUDGET_MS (2 s), a cold Node start included: past it the keyword answer goes out.
+    answer = await policyAnswerWithin(ctx.runAction(internal.agents.moss.lookupPolicy, { question }), question);
   } catch (err) {
     console.warn(`[voice] lookup_policy failed: ${err instanceof Error ? err.message : String(err)}`);
     return text(POLICY_UNAVAILABLE);

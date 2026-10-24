@@ -7,6 +7,7 @@ import schema from "../schema";
 import { modules } from "../test.setup";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
+import { POLICY_TOOL_BUDGET_MS } from "../../shared/verification/policyLookup";
 
 const SECRET = "test-tool-secret";
 const ANSWER = { message: "Countersign policy: An unconfirmed bank change is never paid.", rules: ["R2", "R3"], source: "moss" };
@@ -114,6 +115,24 @@ describe("lookup_policy tool", () => {
     const res = await ask(t, { question: "what is this", conversation_id: "conv-none" });
     expect(await res.text()).toBe(ANSWER.message);
     expect(await lookups(t)).toHaveLength(0);
+  });
+
+  it("answers from keywords at the 2 s cap when Moss is slow, and audits that", async () => {
+    const t = makeTest();
+    const caseId = await callCase(t, "conv-slow");
+    moss.lookup.mockImplementation(() => new Promise(() => {})); // a cold Moss that never comes back
+    let done = false;
+    const pending = ask(t, { question: "Can I pay you in bitcoin?", conversation_id: "conv-slow" }).finally(() => {
+      done = true;
+    });
+    await vi.advanceTimersByTimeAsync(POLICY_TOOL_BUDGET_MS - 1);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const res = await pending;
+    expect(res.status).toBe(200);
+    expect(await res.text()).toMatch(/^Countersign policy: .*gift cards, crypto/);
+    const [event] = await lookups(t);
+    expect(event).toMatchObject({ caseId, payload: { source: "keywords", rules: expect.arrayContaining(["R9"]) } });
   });
 
   it("falls back to a safe line when the lookup fails", async () => {

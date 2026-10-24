@@ -64,7 +64,8 @@ Also enable the system tool **End call**.
   - `case_id`: dynamic variable `case_id` (inbound agent; may be empty)
   - `callback_id`: dynamic variable `callback_id` (callback agent)
   - `conversation_id`: dynamic variable `system__conversation_id`
-- pre_tool_speech `auto`, execution_mode `immediate`, timeout 5 s
+- pre_tool_speech `auto`, execution_mode `immediate`, timeout 5 s. The endpoint answers within 2 s: Moss's
+  answer if it's back in time, otherwise keyword matching over the same policy sentences.
 - Add to each agent's system prompt, under the rules: *"If they ask why you need to check, why you are
   calling, or what happens next, call lookup_policy and explain its answer in your own words. Never add
   amounts, limits or promises."*
