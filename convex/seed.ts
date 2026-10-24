@@ -50,7 +50,7 @@ export const run = internalMutation({
       typicalAmountRange: [310_00, 420_00],
       cadence: "monthly",
     });
-    await ctx.db.insert("vendors", {
+    const harbor = await ctx.db.insert("vendors", {
       name: "Harbor Legal",
       aliases: ["Harbor Legal LLP", "Harbor Law"],
       domains: ["harborlegal.example"],
@@ -78,6 +78,8 @@ export const run = internalMutation({
     await ctx.db.insert("invoices", { vendorId: pixel, number: "1042", amountCents: 4_800_00, dueDate: tomorrow, status: "open" });
     await ctx.db.insert("invoices", { vendorId: northwind, number: "NW-889", amountCents: 362_00, dueDate: tomorrow, status: "open" });
     await ctx.db.insert("invoices", { vendorId: sam, number: "W42", amountCents: 1_200_00, dueDate: tomorrow, status: "open" });
+    // Mirrors scenarios/world.ts, so the answer key and the live seed agree.
+    await ctx.db.insert("invoices", { vendorId: harbor, number: "HL-2210", amountCents: 1_500_00, dueDate: tomorrow, status: "open" });
 
     await appendAudit(ctx, { actor: "system", action: "seed.loaded" });
   },

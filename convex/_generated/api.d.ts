@@ -22,6 +22,7 @@ import type * as channels_reply from "../channels/reply.js";
 import type * as channels_sms from "../channels/sms.js";
 import type * as channels_voice from "../channels/voice.js";
 import type * as http from "../http.js";
+import type * as lib_claude from "../lib/claude.js";
 import type * as lib_withAgentRun from "../lib/withAgentRun.js";
 import type * as pipeline from "../pipeline.js";
 import type * as scoreboard from "../scoreboard.js";
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   "channels/sms": typeof channels_sms;
   "channels/voice": typeof channels_voice;
   http: typeof http;
+  "lib/claude": typeof lib_claude;
   "lib/withAgentRun": typeof lib_withAgentRun;
   pipeline: typeof pipeline;
   scoreboard: typeof scoreboard;

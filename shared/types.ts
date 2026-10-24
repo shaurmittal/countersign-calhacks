@@ -34,6 +34,10 @@ export type PaymentRequest = {
   requestedAction: RequestedAction;
   /** Set by the parser when the text tries to instruct the model. */
   injectionAttempt: boolean;
+  /** Set when the parser could not produce a valid request (model error, bad JSON). Forces HOLD. */
+  parseFailed?: boolean;
+  /** The message asks for more than one payment. Each must arrive as its own request; forces HOLD. */
+  multipleRequests?: boolean;
 };
 
 export type CaseStatus =
@@ -100,7 +104,18 @@ export type CallbackOutcome = "confirmed" | "denied" | "no_answer" | "unclear";
 export type ApprovalState = {
   method: "otp" | "asi_one";
   approved: boolean;
+  /** The owner said no (or cancelled during cooling-off). */
+  cancelled?: boolean;
   coolingOffUntil: number | null; // epoch ms
+};
+
+/** The invoice the Vendor Verifier matched, loaded by the pipeline from the invoices table. */
+export type InvoiceRecord = {
+  id: string;
+  number: string;
+  amountCents: number;
+  status: "open" | "paid" | "void";
+  paidAt: number | null;
 };
 
 export type PolicyConfig = {
@@ -130,13 +145,17 @@ export type RuleId =
   | "R9"
   | "R10"
   | "R11"
-  | "R12";
+  | "R12"
+  | "R13"
+  | "R14"
+  | "R15";
 
 export type PolicyInput = {
   request: PaymentRequest;
   vendor: VendorRecord | null;
   vendorFindings: VendorFindings | null;
   riskFindings: RiskFindings | null;
+  invoice: InvoiceRecord | null;
   callbackOutcome: CallbackOutcome | null;
   approval: ApprovalState | null;
   policy: PolicyConfig;
