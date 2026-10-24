@@ -23,7 +23,8 @@ Only `decide()` can return PAY. These findings are its inputs. They never claim 
 | `invoices.ts` | Normalizes and matches invoice numbers, and detects duplicates |
 | `lookalike.ts` | Detects lookalike domains |
 | `riskFlags.ts` | The nine red flags, Pacific off-hours, and `riskScore` |
-| `explain.ts` | The two-sentence explanation (a template until Claude is wired) |
+| `explain.ts` | The two-sentence template explanation: the fixed no-flags sentence, and the fallback whenever Claude's rewrite can't be used |
+| `explainRewrite.ts` | What Claude reads to rewrite the explanation (the flag names and the template), and the check its answer must pass |
 | `verifyVendor.ts` | Combines the above into `VendorFindings` |
 | `assessRisk.ts` | Combines the above into `RiskFindings` |
 | `moss.ts` | What goes into the Moss index, how its hits become `searchHits`, and the score floor |
@@ -69,7 +70,7 @@ Flags are for display only and never decide anything. Each one is also backed by
 | --- | --- | --- |
 | **CRS** (`CRS_USERNAME`, `CRS_PASSWORD`, `CRS_BASE_URL`) | Wired: AtData Fraud Finder screens strangers' emails; see the CRS section below | Done. KYB and OFAC are dropped, because the team's CRS account has neither product. |
 | **Moss** index (`MOSS_PROJECT_ID`, `MOSS_API_KEY`) | Wired; see the Moss section below | Done: both agents pass Moss hits to `matchVendor`, and matching falls back to memory when Moss isn't set up |
-| **Claude** explanation (`ANTHROPIC_API_KEY`) | Template text from `explainRisk` | Rewrite the explanation from the flags, falling back to the template on any error. |
+| **Claude** explanation (`ANTHROPIC_API_KEY`) | Wired; see the Claude explanation section below. Without the key, the template from `explainRisk` stands | Done: Claude rewrites the explanation of every flagged case, and the template stands on any failure |
 
 ## CRS sender screening (AtData Fraud Finder)
 
@@ -205,6 +206,59 @@ To try it:
 npx convex run agents/moss:lookupPolicy '{"question":"Can I pay you in bitcoin?"}'
 ```
 
+## Claude explanation
+
+`runRiskAnalyst` asks Claude (`convex/lib/riskExplanation.ts`) to rewrite the template explanation as two plain sentences. Claude changes only the wording: the flags and `riskScore` are always `assessRisk`'s, and the explanation decides nothing. P4's War Room on `main` shows it under the Risk Analyst lane.
+
+**What Claude reads.** `rewritePrompt` in `explainRewrite.ts` gives it the flag names, most severe first, and the template built from them inside `<template>` tags. That template is built without lookalike domains, so the prompt depends on the flags alone. No message text, sender address, vendor name, on-file phone, bank details or amount range ever reaches Claude.
+
+**The call** follows P1's `convex/lib/claude.ts`:
+- `CLAUDE_MODEL` (default `claude-opus-5-5`), effort `low`, and the server-side refusal fallback.
+- A 4-second budget for the whole call, retry included. The client has `timeout: 4000` and `maxRetries: 1`. The Risk Analyst runs beside the Vendor Verifier, and the target is SMS to decision in under 10 seconds.
+
+**Overlap with Moss.** Claude starts as soon as the vendor book loads, from the flags of the in-memory vendor match, while Moss is still searching.
+- A Moss hit can change the match, and with it the flags. For example, only Moss matches "NW Cloud" to Northwind Cloud.
+- When Moss changes the flags, the call is cancelled and the template stands.
+- So the lane takes about as long as the slower of Moss and Claude, not the two added together. On 2026-10-24, a cold Moss search on dev kept the lane waiting about 4 s.
+
+**When the template stands**
+
+| Case | What happens |
+| --- | --- |
+| No `ANTHROPIC_API_KEY` | No call |
+| No flags in the in-memory match | No call: the fixed no-flags sentence needs no rewrite, and the happy path stays fast |
+| Moss changes the flags | The call is cancelled, without a log line |
+| An API error, a refusal or `max_tokens` | Logged |
+| No answer within 4 s | The call is cancelled and logged |
+| The answer fails `checkRewrite` | Logged, with the rule it broke |
+
+**The output check.** `checkRewrite` tidies the whitespace, then requires all of these:
+- Exactly two sentences, each ending with a period, 40 to 400 characters in all.
+- Only letters, spaces and light punctuation. So no digits, `@`, `/`, `$`, quotes, markdown or emoji. Any other period (a domain, an abbreviation) fails too.
+- Nothing that only `decide()` or the owner may say:
+  - `decide()`'s words: PAY, HOLD, BLOCK, ESCALATE;
+  - an outcome: "approved", "paid", "blocked", "on hold";
+  - a prediction: "will", "is calling", "needs the owner's approval";
+  - a verdict: "looks like a scam", "the vendor is genuine", "safe to pay".
+
+Every template with flags passes this check, except the lone off-hours reason, which gives the hours in digits.
+
+**Logs.** A failure logs one line: `[riskAnalyst] Claude explanation: <reason>; showing the template`. The reason is one of:
+- the API's status and message;
+- a stop reason;
+- `timeout`;
+- `failed the output check (<rule>: <culprit>)`, for example `(outcome: "approved")` or `(plain text only: "?" (U+003F))`.
+
+The culprit is the one word, phrase or character that broke the rule. The log never includes Claude's whole answer or the key.
+
+**To try it.** On a deployment with `ANTHROPIC_API_KEY` set, this makes one Claude call. Without the key, it returns the template:
+
+```bash
+npx convex run agents/riskAnalyst:explainFlags '{"flags":["owner_impersonation","new_sender","urgency"]}'
+```
+
+It returns `{ text, source }`, where `source` is `"claude"` or `"template"`.
+
 ## Notes for P1 (`decide()`) and P4 (UI)
 
 - **The answer key with real P3:** `seedScenarios.test.ts` runs all of `scenarios.json` through `verifyVendor`, `assessRisk` and `decide()` the way `pipeline.advance` does, and expects every decision. `scenarios/world.ts` could call these functions instead of its reference verifier.
@@ -218,4 +272,4 @@ npx convex run agents/moss:lookupPolicy '{"question":"Can I pay you in bitcoin?"
 - **Known-bad senders:** addresses that `cases.markSenderKnownBad` writes for R10 are never on file again, even when the sender is the vendor's own number.
 - **Spoofing:** caller ID and an email's From can be faked, so "on file" isn't proof. The owner's registered phone also counts as on file. Bank changes always go through R2's callback, whoever sends them.
 - **Lane summaries:** `advance` passes no `summarize` function for the P3 lanes. `riskFindings.explanation` is ready-made display text.
-- **Public data:** case documents, including both findings, are returned by public queries. The explanation therefore never contains on-file phones, banks or amount ranges, and `crs.raw` never contains the sender's address.
+- **Public data:** case documents, including both findings, are returned by public queries. The explanation therefore never contains on-file phones, banks or amount ranges, and `crs.raw` never contains the sender's address. Claude's rewrite meets the same rule: Claude never sees that data, and `checkRewrite` rejects digits, emails and links.

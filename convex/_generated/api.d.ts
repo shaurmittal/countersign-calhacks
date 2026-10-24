@@ -29,6 +29,7 @@ import type * as lib_caseView from "../lib/caseView.js";
 import type * as lib_claude from "../lib/claude.js";
 import type * as lib_increase from "../lib/increase.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
+import type * as lib_riskExplanation from "../lib/riskExplanation.js";
 import type * as lib_withAgentRun from "../lib/withAgentRun.js";
 import type * as owner from "../owner.js";
 import type * as payments from "../payments.js";
@@ -66,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   "lib/claude": typeof lib_claude;
   "lib/increase": typeof lib_increase;
   "lib/rateLimit": typeof lib_rateLimit;
+  "lib/riskExplanation": typeof lib_riskExplanation;
   "lib/withAgentRun": typeof lib_withAgentRun;
   owner: typeof owner;
   payments: typeof payments;
