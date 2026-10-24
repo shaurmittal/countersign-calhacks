@@ -21,6 +21,7 @@ npm run dev             # War Room at http://localhost:3000 (second terminal)
 npm test                # Policy Engine, intake, audit chain + 30-scenario answer key
 npm run scenarios       # prints the answer-key table and the pitch line (no API calls)
 npm run eval:intake     # same 30 scenarios through real Claude intake (needs ANTHROPIC_API_KEY locally)
+npm run rehearse        # same 30 scenarios through a DEPLOYED dev pipeline (wipes it; setup in scripts/live-scenarios.ts)
 npm run typecheck
 ```
 

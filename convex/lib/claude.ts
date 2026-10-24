@@ -18,12 +18,32 @@ import { isSafeReply, templateReply, type ReplyContext } from "../../shared/repl
 const MODEL = process.env.CLAUDE_MODEL ?? "claude-opus-5-5";
 // Latency budget: SMS -> decision under 10 s. Low effort is plenty for extraction.
 const EFFORT = (process.env.CLAUDE_EFFORT ?? "low") as "low" | "medium" | "high";
-const TIMEOUT_MS = 12_000;
+// Per-call budgets. Enforced with a race, NOT the SDK's `timeout`: in Convex's runtime the SDK's
+// abort-on-timeout can throw from inside a timer ("The stream is not in a state that permits close"),
+// which nothing can catch and which kills the whole pipeline run. The SDK timeout is only a backstop.
+const INTAKE_BUDGET_MS = 12_000;
+const REPLY_BUDGET_MS = 8_000;
 
 let client: Anthropic | null = null;
 function anthropic(): Anthropic {
-  client ??= new Anthropic({ timeout: TIMEOUT_MS, maxRetries: 1 });
+  client ??= new Anthropic({ timeout: 120_000, maxRetries: 1 });
   return client;
+}
+
+const TIMED_OUT = Symbol("timed out");
+
+/** Resolves to TIMED_OUT after `ms`. The losing request keeps running and is ignored, never aborted. */
+async function withinBudget<T>(call: Promise<T>, ms: number): Promise<T | typeof TIMED_OUT> {
+  call.catch(() => {}); // a late failure of an abandoned call must not surface as unhandled
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<typeof TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(TIMED_OUT), ms);
+  });
+  try {
+    return await Promise.race([call, expired]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export type IntakeResult = { request: PaymentRequest; attempts: number; error?: string };
@@ -38,7 +58,7 @@ export async function extractPaymentRequest(
   let lastError = "";
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const response = await anthropic().beta.messages.parse({
+      const response = await withinBudget(anthropic().beta.messages.parse({
         model: MODEL,
         max_tokens: 2000,
         betas: ["server-side-fallback-2026-07-01"],
@@ -46,7 +66,11 @@ export async function extractPaymentRequest(
         output_config: { effort: EFFORT, format: betaZodOutputFormat(IntakeOutput) },
         system: intakeSystemPrompt(biz),
         messages: [{ role: "user", content: wrapUntrusted(channel, rawContent) }],
-      });
+      }), INTAKE_BUDGET_MS);
+      if (response === TIMED_OUT) {
+        lastError = `timed out after ${INTAKE_BUDGET_MS}ms`;
+        continue;
+      }
       if (response.stop_reason === "refusal") {
         lastError = `refusal: ${response.stop_details?.category ?? "unknown"}`;
         break; // a refusal won't change on retry
@@ -75,7 +99,7 @@ export async function composeReply(args: {
   // Fixed text where there is nothing to explain, and for the callback line the demo relies on.
   if (args.result.decision === "NO_ACTION" || args.result.decision === "PAY" || args.ctx.callbackInProgress) return fallback;
   try {
-    const response = await anthropic().beta.messages.create({
+    const response = await withinBudget(anthropic().beta.messages.create({
       model: MODEL,
       max_tokens: 1000,
       betas: ["server-side-fallback-2026-07-01"],
@@ -95,8 +119,8 @@ export async function composeReply(args: {
           }),
         },
       ],
-    });
-    if (response.stop_reason !== "end_turn") return fallback;
+    }), REPLY_BUDGET_MS);
+    if (response === TIMED_OUT || response.stop_reason !== "end_turn") return fallback;
     const text = response.content
       .flatMap((b) => (b.type === "text" ? [b.text] : []))
       .join("")
