@@ -511,7 +511,7 @@ describe("scenarios.json messages", () => {
   // All arrive in daytime, so off_hours stays out.
   const combos: Combo[] = [
     {
-      id: "pixel-bank-change",
+      id: "pixel-bank-change-denied",
       parsed: req({
         claimedVendorName: "Pixel & Pine",
         claimedSenderRole: "vendor",

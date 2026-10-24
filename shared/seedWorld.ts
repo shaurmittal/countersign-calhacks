@@ -65,11 +65,15 @@ export const SEED_VENDORS: Record<SeedVendorKey, Omit<BookVendor, "id">> = {
   },
 };
 
-/** Open invoices (spec §7.1). All are due the day after seeding. */
+/**
+ * Open invoices (spec §7.1), all due the day after seeding. Mirrors scenarios/world.ts (P1), so the
+ * answer key and the live seed agree.
+ */
 export const SEED_INVOICES: { vendor: SeedVendorKey; number: string; amountCents: number }[] = [
   { vendor: "pixel", number: "1042", amountCents: 4_800_00 },
   { vendor: "northwind", number: "NW-889", amountCents: 362_00 },
   { vendor: "sam", number: "W42", amountCents: 1_200_00 },
+  { vendor: "harbor", number: "HL-2210", amountCents: 1_500_00 },
 ];
 
 /** ISO date one day after `now`. */
