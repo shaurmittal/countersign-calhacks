@@ -43,6 +43,9 @@ shared/                     pure TS, no Convex imports, runs in tests/Convex/bro
   intake/                   P1  prescan (regex signals), Claude output schema, prompts
   reply.ts                  P1  reply templates + guard that rejects over-promising replies
   audit.ts                  P1  hash-chain helpers (sorted-key canonical JSON)
+  totp.ts                   P4  owner step-up code check (RFC 6238, replay guard)
+  ledger.ts                 P4  double-entry journal lines per payment
+  scoreboard.ts             P4  scoreboard definitions (scam attempt, dollars lost, decision time)
 convex/
   schema.ts                 P1  tables (spec §4)
   pipeline.ts               P1  leader: `advance(caseId)` step function
@@ -55,23 +58,33 @@ convex/
   agents/vendorVerifier.ts  P3  vendor book (Moss), CRS KYB + OFAC
   agents/riskAnalyst.ts     P3  red flags + Claude explanation
   agents/callbackVerifier.ts P2 Cartesia outbound call to phoneOnFile; outcome, retry, timeout
-  agents/ownerConcierge.ts  P4  OTP / ASI:One approval, cooling-off, owner alerts
-  agents/payer.ts           P4  Increase sandbox / mock ledger
+  agents/ownerConcierge.ts  P4  authenticator-code approval (owner page / ASI:One), cooling-off, owner alerts
+  agents/payer.ts           P4  mock ledger always; Increase sandbox ACH when INCREASE_API_KEY is set
+  payments.ts               P4  payment rows, idempotency, `provisionIncrease` sandbox setup
+  owner.ts                  P4  owner page queries (pending approvals, alert feed)
+  warRoom.ts                P4  War Room case detail (lanes, callbacks, approvals, payments)
+  lib/caseView.ts           P4  masked read helpers shared by the UI queries and the agent bridge
+  lib/increase.ts           P4  Increase REST client (fetch, idempotency keys, one retry)
   channels/voice.ts         P2  Cartesia webhook tools (submit request, case status, callback outcome)
   channels/web.ts           P2  web chat channel (replaces SMS), used by app/try
   channels/reply.ts         P2/P4 send replyText back on the original channel
   lib/cartesia.ts           P2  Cartesia API client + tool secret check
-  channels/agentBridge.ts   P4  Fetch.ai → Convex bridge
+  channels/agentBridge.ts   P4  Fetch.ai → Convex bridge (/agent/message, /agent/case, /agent/pending, /agent/approval)
   http.ts                       HTTP routes (https://<deployment>.convex.site/...)
   seed.ts                   P3  fictional world (spec §7.1)
   scoreboard.ts             P4  top-bar numbers
 app/                        P4  War Room (Next.js + Convex React hooks)
+app/owner/                  P4  owner approvals, opened on the owner's phone
 app/try/                    P2  judge chat page (QR code on the judge card)
 scenarios/scenarios.json    P1  30-scenario answer key (spec §9)
 scenarios/world.ts          P1  seed world as data + reference verifier (what VendorFindings must contain)
 scripts/eval-intake.ts      P1  live intake eval
+scripts/enroll-owner-totp.ts P4 one-time authenticator enrollment for the owner
 fetch-agents/               P4  uAgents (Python): Countersign + fake vendor billing agent
 ```
+
+Owner approvals, payments and the Fetch.ai agents: setup and demo runbook in
+[docs/p4-experience.md](docs/p4-experience.md).
 
 ## How a case flows
 
@@ -171,4 +184,14 @@ are in [docs/cartesia-setup.md](docs/cartesia-setup.md).
 
 ## What's real, what's simulated
 
-_To fill in before submission (Hyphenate asks for this)._
+| Real | Simulated |
+| --- | --- |
+| Phone calls: the Countersign line and the vendor callback are real Cartesia calls | The company (Lumen Labs), its owner and its vendors are fictional |
+| Claude parses every request and writes every reply | Teammates play the owner and the vendor on their own phones |
+| The Policy Engine, rules R1-R15 and the 30-scenario answer key | Money: the mock ledger, or the Increase **sandbox** (no real funds) |
+| Owner step-up: real TOTP codes from an authenticator app, checked server-side | Vendor bank accounts store only routing + last 4; the sandbox uses a stand-in account number ending in those 4 digits |
+| Hash-chained audit log, recomputed live in the War Room | CRS business checks and OFAC screening are not wired yet; the vendor lane shows them as not checked |
+| Fetch.ai agents on Agentverse speaking the Chat Protocol; the owner flow in ASI:One | The vendor billing agent is ours, playing a compromised vendor |
+
+Every lane in the War Room is a real database row written by the agent that did the work.
+The rail used for each payment (mock ledger or Increase sandbox) is shown on the payment.

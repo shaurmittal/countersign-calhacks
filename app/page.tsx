@@ -1,79 +1,66 @@
 "use client";
 // War Room (owner: P4). Spec §7.2. Everything shown here comes from real Convex rows; never animate fakes.
+// Follows the newest case by default; click a case in the queue to pin it.
 import { useQuery } from "convex/react";
+import { useState } from "react";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
+import { AgentLanes } from "./components/AgentLanes";
+import { AuditTrail } from "./components/AuditTrail";
+import { DecisionCard } from "./components/DecisionCard";
+import { CaseQueue, Incoming } from "./components/Incoming";
+import { Scoreboard } from "./components/Scoreboard";
+import "./war-room.css";
 
-const LANES = ["intake", "vendorVerifier", "riskAnalyst", "callback", "policy", "payer"] as const;
+const QUEUE_LENGTH = 12;
 
 export default function WarRoom() {
-  const cases = useQuery(api.cases.recent, { limit: 10 });
-  const score = useQuery(api.scoreboard.get);
-  const current = cases?.[0];
+  const cases = useQuery(api.cases.recent, { limit: QUEUE_LENGTH });
+  const [pinnedId, setPinnedId] = useState<Id<"cases"> | null>(null);
+  const current = cases?.find((c) => c._id === pinnedId) ?? cases?.[0];
+  const detail = useQuery(api.warRoom.caseDetail, current ? { caseId: current._id } : "skip");
 
   return (
-    <main>
-      <header className="scoreboard">
-        <strong>Countersign</strong>
-        <span>Scam attempts: {score?.scamAttempts ?? "–"}</span>
-        <span>Dollars lost: ${((score?.dollarsLostCents ?? 0) / 100).toFixed(0)}</span>
-        <span>Real bills paid: {score?.realBillsPaid ?? "–"}</span>
-        <span>Median decision: {score?.medianDecisionMs != null ? `${Math.round(score.medianDecisionMs / 1000)}s` : "–"}</span>
-      </header>
-      <div className="grid">
-        <section className="panel">
-          <h2>Incoming</h2>
+    <div className="war-room">
+      <Scoreboard />
+      <main className="grid">
+        <div className="column">
+          {current ? (
+            <Incoming c={current} />
+          ) : (
+            <section className="panel">
+              <h2>Incoming</h2>
+              <p className="empty">{cases === undefined ? "Connecting…" : "Waiting for the first request…"}</p>
+            </section>
+          )}
+          {cases && cases.length > 0 && (
+            <CaseQueue
+              cases={cases}
+              selectedId={current?._id ?? null}
+              following={pinnedId === null}
+              onSelect={setPinnedId}
+              onFollow={() => setPinnedId(null)}
+            />
+          )}
+        </div>
+        <section className="panel" aria-labelledby="agents-heading">
+          <h2 id="agents-heading">Agents</h2>
+          {detail ? <AgentLanes detail={detail} /> : <p className="empty">No case selected.</p>}
+        </section>
+        <div className="column">
           {current ? (
             <>
-              <div className="muted">
-                {current.channel} from {current.fromAddress}
-              </div>
-              <p>{current.rawContent}</p>
+              <DecisionCard c={current} detail={detail ?? undefined} />
+              <AuditTrail caseId={current._id} />
             </>
           ) : (
-            <p className="muted">Waiting for a message…</p>
+            <section className="panel">
+              <h2>Decision</h2>
+              <p className="empty">–</p>
+            </section>
           )}
-        </section>
-        <section className="panel">
-          <h2>Agents</h2>
-          {current ? <AgentLanes caseId={current._id} /> : <p className="muted">No case yet.</p>}
-        </section>
-        <section className="panel">
-          <h2>Decision</h2>
-          {current?.decision ? <p style={{ fontSize: 32, margin: 0 }}>{current.decision}</p> : <p className="muted">{current?.status ?? "–"}</p>}
-          {current && <AuditTrail caseId={current._id} />}
-        </section>
-      </div>
-    </main>
-  );
-}
-
-function AgentLanes({ caseId }: { caseId: Id<"cases"> }) {
-  const runs = useQuery(api.agentRuns.forCase, { caseId }) ?? [];
-  return (
-    <>
-      {LANES.map((agent) => {
-        const run = [...runs].reverse().find((r) => r.agent === agent);
-        return (
-          <div key={agent} className="lane" data-status={run?.status ?? "idle"}>
-            <strong>{agent}</strong> <span className="muted">{run?.status ?? "idle"}</span>
-            {run?.summary && <div>{run.summary}</div>}
-          </div>
-        );
-      })}
-    </>
-  );
-}
-
-function AuditTrail({ caseId }: { caseId: Id<"cases"> }) {
-  const events = useQuery(api.audit.forCase, { caseId }) ?? [];
-  return (
-    <div className="mono" style={{ marginTop: 16 }}>
-      {events.map((e) => (
-        <div key={e._id}>
-          #{e.seq} {e.actor} {e.action} <span className="muted">{e.hash.slice(0, 10)}</span>
         </div>
-      ))}
+      </main>
     </div>
   );
 }

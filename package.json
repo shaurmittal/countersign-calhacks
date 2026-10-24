@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "convex run seed:run",
+    "enroll:owner": "tsx scripts/enroll-owner-totp.ts",
     "scenarios": "tsx scripts/eval-intake.ts --offline",
     "eval:intake": "tsx scripts/eval-intake.ts"
   },
