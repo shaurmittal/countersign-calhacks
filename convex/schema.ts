@@ -46,6 +46,7 @@ export default defineSchema({
     phone: v.string(),
     email: v.string(),
     otpPhone: v.string(),
+    lastTotpCounter: v.optional(v.number()), // P4: last accepted TOTP step; older or equal codes are replays
     policy: v.object({
       autoPayLimitCents: v.number(),
       coolingOffThresholdCents: v.number(),
@@ -142,6 +143,8 @@ export default defineSchema({
     approvedAt: v.optional(v.number()),
     cancelledAt: v.optional(v.number()),
     coolingOffUntil: v.optional(v.number()),
+    attempts: v.optional(v.number()), // P4: wrong codes entered so far
+    lockedUntil: v.optional(v.number()), // P4: set after too many wrong codes
   }).index("by_case", ["caseId"]),
 
   payments: defineTable({
