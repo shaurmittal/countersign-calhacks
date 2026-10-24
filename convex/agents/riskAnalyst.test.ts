@@ -224,15 +224,11 @@ describe("runRiskAnalyst with Claude and Moss at once", () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
-  it("cancels a Claude call still running when Moss changes the flags, without waiting for it", async () => {
+  it("stops waiting for a Claude call still running when Moss changes the flags, without aborting it", async () => {
     vi.useFakeTimers(); // time stands still, so waiting for Claude's budget would hang the test
-    let signal: AbortSignal | undefined;
-    create.mockImplementation((_params: unknown, options: { signal: AbortSignal }) => {
-      signal = options.signal;
-      return new Promise(() => {}); // never answers
-    });
+    create.mockReturnValue(new Promise(() => {})); // never answers
     expect(await run(NW_CLOUD, fakeCtx(async () => NORTHWIND_HIT))).toEqual(assessed(NW_CLOUD, NORTHWIND_HIT));
-    expect(signal?.aborted).toBe(true);
+    expect(create.mock.calls[0]).toHaveLength(1); // no AbortSignal reaches the SDK
     expect(vi.mocked(console.warn)).not.toHaveBeenCalled();
   });
 });

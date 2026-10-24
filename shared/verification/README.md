@@ -217,11 +217,11 @@ npx convex run agents/moss:lookupPolicy '{"question":"Can I pay you in bitcoin?"
 
 **The call** follows P1's `convex/lib/claude.ts`:
 - `CLAUDE_MODEL` (default `claude-opus-5-5`), effort `low`, and the server-side refusal fallback.
-- A 4-second budget for the whole call, retry included. The client has `timeout: 4000` and `maxRetries: 1`. The Risk Analyst runs beside the Vendor Verifier, and the target is SMS to decision in under 10 seconds.
+- A 4-second budget for the whole call, retry included, enforced with a race like P1's budgets: past it the template stands, and the late request keeps running and is ignored. It is never aborted, because in Convex's runtime the SDK's abort can throw an uncatchable error that kills the whole pipeline run (see P1's PR #20). So the client's `timeout` is only a 120 s backstop, with `maxRetries: 1`, and no abort signal is passed. The Risk Analyst runs beside the Vendor Verifier, and the target is SMS to decision in under 10 seconds.
 
 **Overlap with Moss.** Claude starts as soon as the vendor book loads, from the flags of the in-memory vendor match, while Moss is still searching.
 - A Moss hit can change the match, and with it the flags. For example, only Moss matches "NW Cloud" to Northwind Cloud.
-- When Moss changes the flags, the call is cancelled and the template stands.
+- When Moss changes the flags, the Risk Analyst stops waiting for the call (it isn't aborted) and the template stands.
 - So the lane takes about as long as the slower of Moss and Claude, not the two added together. On 2026-10-24, a cold Moss search on dev kept the lane waiting about 4 s.
 
 **When the template stands**
@@ -230,9 +230,9 @@ npx convex run agents/moss:lookupPolicy '{"question":"Can I pay you in bitcoin?"
 | --- | --- |
 | No `ANTHROPIC_API_KEY` | No call |
 | No flags in the in-memory match | No call: the fixed no-flags sentence needs no rewrite, and the happy path stays fast |
-| Moss changes the flags | The call is cancelled, without a log line |
+| Moss changes the flags | The wait stops at once, without a log line; the call isn't aborted |
 | An API error, a refusal or `max_tokens` | Logged |
-| No answer within 4 s | The call is cancelled and logged |
+| No answer within 4 s | Logged; a late answer is ignored, and the call isn't aborted |
 | The answer fails `checkRewrite` | Logged, with the rule it broke |
 
 **The output check.** `checkRewrite` tidies the whitespace, then requires all of these:

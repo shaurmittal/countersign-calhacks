@@ -25,6 +25,7 @@ export async function runRiskAnalyst(
   const caseInfo = { channel: c.channel, fromAddress: c.fromAddress, rawContent: c.rawContent, receivedAt: c.createdAt };
   // Claude starts from the in-memory match while Moss searches, so the two waits overlap. A Moss hit can change
   // the vendor match and with it the flags. Claude's words would then describe other flags, so the template stands.
+  // `drop` only stops the wait for Claude; rewriteExplanation never aborts the request itself.
   const early = assessRisk({ request, caseInfo, book });
   const drop = new AbortController();
   const rewrite = rewriteExplanation(early.flags, early.explanation, drop.signal);
