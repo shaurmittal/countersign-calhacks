@@ -2,13 +2,16 @@
 // Every endpoint requires the X-Countersign-Secret header. None of them can move money:
 // they open cases, read decisions and record callback outcomes. Setup: docs/cartesia-setup.md
 import { v } from "convex/values";
-import { httpAction, internalQuery } from "../_generated/server";
+import { httpAction, internalMutation, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { PolicyResult } from "../../shared/types";
 import { toolSecretValid } from "../lib/cartesia";
+import { senderOverLimit } from "../lib/rateLimit";
+import { openCase } from "../cases";
 
 const LONG_POLL_MS = 15_000;
+const UNKNOWN_CALLER = "unknown-caller";
 const POLL_INTERVAL_MS = 1_000;
 
 function text(body: string, status = 200) {
@@ -47,15 +50,21 @@ export const submitPaymentRequest = httpAction(async (ctx, request) => {
   const requestText = str(body.request_text);
   if (!requestText) return text("request_text is required. Ask the caller what they want paid, then try again.", 400);
   const conversationId = str(body.conversation_id, 200) || "unknown-call";
-  const callerId = str(body.caller_id, 40) || "unknown-caller";
+  const callerId = str(body.caller_id, 40) || UNKNOWN_CALLER;
 
-  const { caseId } = await ctx.runMutation(internal.cases.open, {
-    channel: "call",
+  const opened = await ctx.runMutation(internal.channels.voice.openCallCase, {
     fromAddress: callerId,
     rawContent: requestText,
     // Same call + same text = webhook retry, not a new request.
     externalId: `call:${conversationId}:${await sha8(requestText)}`,
   });
+  if (!opened) {
+    console.warn(`[voice] submit_payment_request rate-limited caller=…${callerId.slice(-4)}`);
+    return text(
+      "Too many requests from this number in the last minute. Tell the caller politely that you can't take more requests right now and to try again in a minute. Do not submit again on this call.",
+    );
+  }
+  const { caseId } = opened;
   console.log(`[voice] submit_payment_request conversation=${conversationId} case=${caseId}`);
   return Response.json({
     case_id: caseId,
@@ -114,6 +123,15 @@ export const recordCallbackOutcome = httpAction(async (ctx, request) => {
   } catch {
     return text("Unknown callback.", 404);
   }
+});
+
+/** Opens a call case unless this caller is over the per-minute limit (null). Unknown caller IDs share no bucket. */
+export const openCallCase = internalMutation({
+  args: { fromAddress: v.string(), rawContent: v.string(), externalId: v.string() },
+  handler: async (ctx, args) => {
+    if (args.fromAddress !== UNKNOWN_CALLER && (await senderOverLimit(ctx, args.fromAddress))) return null;
+    return openCase(ctx, { channel: "call", ...args });
+  },
 });
 
 /** Voice-friendly status of a case. `final` means the agent should stop polling. */

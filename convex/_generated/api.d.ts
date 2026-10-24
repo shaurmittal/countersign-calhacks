@@ -24,6 +24,7 @@ import type * as channels_web from "../channels/web.js";
 import type * as http from "../http.js";
 import type * as lib_cartesia from "../lib/cartesia.js";
 import type * as lib_claude from "../lib/claude.js";
+import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_withAgentRun from "../lib/withAgentRun.js";
 import type * as pipeline from "../pipeline.js";
 import type * as scoreboard from "../scoreboard.js";
@@ -52,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/cartesia": typeof lib_cartesia;
   "lib/claude": typeof lib_claude;
+  "lib/rateLimit": typeof lib_rateLimit;
   "lib/withAgentRun": typeof lib_withAgentRun;
   pipeline: typeof pipeline;
   scoreboard: typeof scoreboard;

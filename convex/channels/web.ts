@@ -4,6 +4,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { LIMITS } from "../../shared/config";
 import { openCase } from "../cases";
+import { senderOverLimit } from "../lib/rateLimit";
 
 const SENDER_ID = /^[a-zA-Z0-9-]{8,64}$/;
 
@@ -15,14 +16,8 @@ export const submit = mutation({
     if (!SENDER_ID.test(senderId)) throw new ConvexError("Invalid session.");
     const fromAddress = `web:${senderId}`;
 
-    const recent = await ctx.db
-      .query("cases")
-      .withIndex("by_from", (q) => q.eq("fromAddress", fromAddress))
-      .order("desc")
-      .take(LIMITS.rateLimitPerSenderPerMinute);
-    const oneMinuteAgo = Date.now() - 60_000;
-    if (recent.length >= LIMITS.rateLimitPerSenderPerMinute && recent.every((c) => c.createdAt > oneMinuteAgo)) {
-      throw new ConvexError("Slow down: at most 10 messages a minute.");
+    if (await senderOverLimit(ctx, fromAddress)) {
+      throw new ConvexError(`Slow down: at most ${LIMITS.rateLimitPerSenderPerMinute} messages a minute.`);
     }
 
     const { caseId } = await openCase(ctx, { channel: "web", fromAddress, rawContent });
