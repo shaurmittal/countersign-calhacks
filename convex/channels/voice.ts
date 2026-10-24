@@ -6,6 +6,7 @@ import { httpAction, internalMutation, internalQuery } from "../_generated/serve
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { PolicyResult } from "../../shared/types";
+import { policyAnswerWithin } from "../../shared/verification/policyLookup";
 import { toolSecretValid } from "../lib/cartesia";
 import { senderOverLimit } from "../lib/rateLimit";
 import { openCase } from "../cases";
@@ -143,6 +144,30 @@ export const recordCallbackOutcome = httpAction(async (ctx, request) => {
   } catch {
     return text("Unknown callback.", 404);
   }
+});
+
+/**
+ * Tool `lookup_policy` on both agents: the Countersign policy that answers "why does this need a callback?",
+ * "can I pay in gift cards?" or "what happens next?" (internal.agents.moss.lookupPolicy, P3). Policy sentences
+ * only, never invoices, amounts or accounts. Body: { question (model), conversation_id (system__conversation_id) }.
+ * Moss answers when it's back within POLICY_TOOL_BUDGET_MS, a cold Node start included; otherwise the keyword
+ * ranking does, so the agent never waits longer than that. Always 200 + plain text, like get_case_status.
+ * It reads nothing about the case, so it can't slow down or change a decision.
+ */
+export const lookupPolicy = httpAction(async (ctx, request) => {
+  if (!toolSecretValid(request)) {
+    console.warn("[voice] lookup_policy rejected: bad or missing X-Countersign-Secret");
+    return text("unauthorized", 401);
+  }
+  const body = await readJson(request);
+  const question = str(body.question, 500);
+  if (!question) {
+    return text("Ask what they want to know about how Countersign handles payments, then call lookup_policy with it.");
+  }
+  const started = Date.now();
+  const answer = await policyAnswerWithin(ctx.runAction(internal.agents.moss.lookupPolicy, { question }), question);
+  console.log(`[voice] lookup_policy source=${answer.source} rules=${answer.rules.join(",") || "-"} ms=${Date.now() - started}`);
+  return text(answer.message);
 });
 
 /** Opens a call case unless this caller is over the per-minute limit (null). Unknown caller IDs share no bucket. */

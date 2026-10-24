@@ -159,6 +159,9 @@ are in [docs/cartesia-setup.md](docs/cartesia-setup.md).
   - `submit_payment_request` and `get_case_status` on the inbound agent. `get_case_status` long-polls,
     so the agent announces the callback once and then waits quietly.
   - `record_callback_outcome` on the callback agent.
+  - `lookup_policy` on both agents: a mid-call Moss lookup of Countersign's policy ("why do you need to
+    call them?"). It answers within 2 s, with keyword matching when Moss isn't back in time, and never
+    touches the case.
 - **System dynamic variables** `system__caller_id` and `system__conversation_id` (tool parameters the
   model can't change), plus an **assignment** that saves `case_id` from a tool response.
 - **System tools:** End call on both agents; Voicemail detection on the callback agent, with no

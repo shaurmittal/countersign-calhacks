@@ -3,10 +3,17 @@
 // in its own words. Nothing about invoices, amounts, limits or vendors is ever returned: an inbound caller
 // isn't verified, and on a callback the vendor must say the invoice number unprompted (P2's check, §8.2).
 import type { RuleId } from "../types";
-import { POLICY_SCOPE } from "./moss";
+import { POLICY_SCOPE, withTimeout } from "./moss";
 
 /** Budget for one lookup inside the Node action; the voice tool waits on a live call. */
 export const POLICY_LOOKUP_BUDGET_MS = 2_500;
+
+/**
+ * The voice tool's whole wait, a cold start of the Node action included. Past it the keyword answer goes out
+ * at once, so the tool answers well inside its 5 s Cartesia timeout and never holds up the call. Measured on a
+ * dev deployment: a warm lookup takes about 1.3 s; a cold one 2.7-3.8 s, which would get the keyword answer anyway.
+ */
+export const POLICY_TOOL_BUDGET_MS = 2_000;
 
 /**
  * Moss similarity below this is unrelated. A short question and a policy sentence score low even when the
@@ -117,4 +124,16 @@ export function policyAnswer(docs: readonly PolicyDoc[], source: PolicyAnswer["s
     `Countersign policy: ${chosen.map((doc) => doc.text).join(" ")} ` +
     "Explain this in your own words. Don't add amounts, limits, invoice numbers or promises.";
   return { message, rules, source };
+}
+
+/**
+ * The lookup's answer if it arrives within budgetMs, otherwise (or if it fails) the keyword answer for the
+ * same question, which needs no Moss and no Node action. Never throws and never waits past budgetMs.
+ */
+export function policyAnswerWithin(
+  lookup: Promise<PolicyAnswer>,
+  question: string,
+  budgetMs = POLICY_TOOL_BUDGET_MS,
+): Promise<PolicyAnswer> {
+  return withTimeout(lookup, budgetMs, policyAnswer(rankPolicyByKeywords(question), "keywords"));
 }

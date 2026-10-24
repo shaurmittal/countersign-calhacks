@@ -1,12 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { RULES } from "../policy/rules";
 import type { RuleId } from "../types";
 import {
   POLICY_DOCS,
+  POLICY_LOOKUP_BUDGET_MS,
   POLICY_MIN_SCORE,
+  POLICY_TOOL_BUDGET_MS,
   docsFromHits,
   mergeRankings,
   policyAnswer,
+  policyAnswerWithin,
   policySearchDocs,
   rankPolicyByKeywords,
 } from "./policyLookup";
@@ -135,4 +138,37 @@ describe("the owner-impersonation call", () => {
       expect(ids(rankPolicyByKeywords(question))).toContain("owner-approval");
     },
   );
+});
+
+describe("policyAnswerWithin (the voice tool's time cap)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("answers within 2 s, well inside the 5 s Cartesia tool timeout, and never past Moss's own budget", () => {
+    expect(POLICY_TOOL_BUDGET_MS).toBeLessThanOrEqual(2_000);
+    expect(POLICY_TOOL_BUDGET_MS).toBeLessThanOrEqual(POLICY_LOOKUP_BUDGET_MS);
+  });
+
+  it("uses the lookup's answer when it arrives in time", async () => {
+    const fromMoss = policyAnswer(docsFromHits([{ id: "policy:forbidden-rails", score: 0.6 }]), "moss");
+    await expect(policyAnswerWithin(Promise.resolve(fromMoss), "Can I pay you in bitcoin?")).resolves.toEqual(fromMoss);
+  });
+
+  it("answers from keywords when the lookup fails", async () => {
+    const answer = await policyAnswerWithin(Promise.reject(new Error("worker crashed")), "Can I pay you in bitcoin?");
+    expect(answer.source).toBe("keywords");
+    expect(answer.rules).toContain("R9");
+  });
+
+  it("answers from keywords at the budget when the lookup hangs, and not a moment later", async () => {
+    vi.useFakeTimers();
+    let settled = false;
+    const answer = policyAnswerWithin(new Promise<never>(() => {}), "Can I pay you in bitcoin?").finally(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(POLICY_TOOL_BUDGET_MS - 1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(settled).toBe(true);
+    await expect(answer).resolves.toMatchObject({ source: "keywords", rules: expect.arrayContaining(["R9"]) });
+  });
 });
