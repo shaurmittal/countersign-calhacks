@@ -37,7 +37,11 @@ POLL_INTERVAL_SECONDS = 2
 POLL_TIMEOUT_SECONDS = 120  # covers a vendor callback with one retry
 
 OWNER_COMMAND = re.compile(r"\b(approve|decline|cancel)\s+([a-z0-9]{6})\s+(\d{6})\b", re.IGNORECASE)
-PENDING_COMMAND = re.compile(r"^\W*(pending|list|what'?s pending)\W*$", re.IGNORECASE)
+PENDING_COMMAND = re.compile(
+    r"^\W*(show|list|what'?s|what is)?\s*(me\s+)?(my\s+|the\s+)?(pending|waiting)"
+    r"(\s+(approvals?|payments?|cases?|requests?))?\W*$",
+    re.IGNORECASE,
+)
 HELP_TEXT = (
     "I'm Countersign, the payments assistant for Lumen Labs. Send me a payment request and I'll verify it. "
     "Owner: say \"pending\" to see what's waiting, then \"approve <ref> <code>\" with a code from your "
