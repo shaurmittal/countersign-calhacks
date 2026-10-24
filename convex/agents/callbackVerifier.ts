@@ -10,14 +10,14 @@
 //   applyOutcome re-runs the pipeline, which owns the decision to retry a no_answer
 //   (it calls start() again; each call gets a new callbacks row with attempt = existing + 1)
 import { v } from "convex/values";
-import { internalAction, internalMutation, type MutationCtx } from "../_generated/server";
+import { internalAction, internalMutation, internalQuery, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
-import type { CallbackOutcome, PaymentRequest } from "../../shared/types";
+import type { CallbackOutcome, PaymentRequest, VendorFindings } from "../../shared/types";
 import { LIMITS } from "../../shared/config";
 import { appendAudit } from "../audit";
 import { finishRun, startRun } from "../agentRuns";
-import { placeOutboundCall, spokenAmount } from "../lib/cartesia";
+import { getCall, placeOutboundCall, spokenAmount } from "../lib/cartesia";
 
 // Ringing timeout plus a short conversation; after this a missing outcome counts as no_answer.
 const CALL_DEADLINE_MS = (LIMITS.callbackAnswerTimeoutSeconds + 135) * 1000;
@@ -91,6 +91,11 @@ export const prepare = internalMutation({
 
     const request = c.request as PaymentRequest | undefined;
     const newAccount = request?.newBankDetails?.account;
+    // Requests often name only the invoice ("send #1042"); read its amount so the vendor hears a figure.
+    const invoiceId = (c.vendorFindings as VendorFindings | undefined)?.matchingInvoiceId;
+    const invoiceDocId = invoiceId ? ctx.db.normalizeId("invoices", invoiceId) : null;
+    const invoice = invoiceDocId ? await ctx.db.get(invoiceDocId) : null;
+    const amountCents = request?.amountCents ?? invoice?.amountCents ?? null;
     return {
       callbackId,
       toNumber: vendor.phoneOnFile,
@@ -101,7 +106,7 @@ export const prepare = internalMutation({
         owner_name: owner?.name ?? "the owner",
         company_name: owner?.company ?? "our company",
         vendor_name: vendor.name,
-        amount: spokenAmount(request?.amountCents),
+        amount: spokenAmount(amountCents),
         bank_change: newAccount ? "yes" : "no",
         new_account_last4: newAccount ? newAccount.replace(/\D/g, "").slice(-4) : "",
       },
@@ -200,7 +205,80 @@ async function applyOutcome(
   }
 
   await ctx.scheduler.runAfter(0, internal.pipeline.advance, { caseId: cb.caseId as Id<"cases"> });
+  // The agent usually says goodbye after recording the outcome, so give the call time to end.
+  if (cb.callSid) {
+    await ctx.scheduler.runAfter(TRANSCRIPT_DELAY_MS, internal.agents.callbackVerifier.fetchTranscript, {
+      callbackId: cb._id,
+      triesLeft: 3,
+    });
+  }
 }
+
+const TRANSCRIPT_DELAY_MS = 15_000;
+
+/** Stores the call transcript and summary (for the War Room and the audit trail). Never affects the decision. */
+export const fetchTranscript = internalAction({
+  args: { callbackId: v.id("callbacks"), triesLeft: v.number() },
+  handler: async (ctx, { callbackId, triesLeft }) => {
+    const cb = await ctx.runQuery(internal.agents.callbackVerifier.getCallback, { callbackId });
+    if (!cb?.callSid) return;
+    try {
+      const call = await getCall(cb.callSid, cb.vendorName);
+      if (call.status !== "completed" && triesLeft > 1) {
+        await ctx.scheduler.runAfter(TRANSCRIPT_DELAY_MS, internal.agents.callbackVerifier.fetchTranscript, {
+          callbackId,
+          triesLeft: triesLeft - 1,
+        });
+        return;
+      }
+      await ctx.runMutation(internal.agents.callbackVerifier.saveTranscript, {
+        callbackId,
+        transcript: call.transcript ?? undefined,
+        summary: call.summary ?? undefined,
+        endReason: call.endReason ?? undefined,
+      });
+    } catch (err) {
+      console.warn(`[callback] transcript fetch failed for ${callbackId}: ${String(err).slice(0, 200)}`);
+      if (triesLeft > 1) {
+        await ctx.scheduler.runAfter(TRANSCRIPT_DELAY_MS, internal.agents.callbackVerifier.fetchTranscript, {
+          callbackId,
+          triesLeft: triesLeft - 1,
+        });
+      }
+    }
+  },
+});
+
+export const getCallback = internalQuery({
+  args: { callbackId: v.id("callbacks") },
+  handler: async (ctx, { callbackId }) => {
+    const cb = await ctx.db.get(callbackId);
+    if (!cb) return null;
+    const vendor = await ctx.db.get(cb.vendorId);
+    return { callSid: cb.callSid ?? null, vendorName: vendor?.name ?? "Vendor" };
+  },
+});
+
+export const saveTranscript = internalMutation({
+  args: {
+    callbackId: v.id("callbacks"),
+    transcript: v.optional(v.string()),
+    summary: v.optional(v.string()),
+    endReason: v.optional(v.string()),
+  },
+  handler: async (ctx, { callbackId, transcript, summary, endReason }) => {
+    const cb = await ctx.db.get(callbackId);
+    if (!cb) return;
+    await ctx.db.patch(callbackId, { transcript, summary });
+    await appendAudit(ctx, {
+      caseId: cb.caseId,
+      actor: "callback",
+      action: "callback.transcript",
+      // The full transcript lives on the callbacks row; the chain records that it was captured.
+      payload: { summary: summary ?? null, lines: transcript ? transcript.split("\n").length : 0, endReason: endReason ?? null },
+    });
+  },
+});
 
 function normalizeInvoice(s: string | null | undefined): string {
   return (s ?? "").toLowerCase().replace(/^(invoice|inv|number|no\.?|#)\s*/g, "").replace(/[^a-z0-9]/g, "");

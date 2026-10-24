@@ -17,6 +17,7 @@ import type * as agents_payer from "../agents/payer.js";
 import type * as agents_riskAnalyst from "../agents/riskAnalyst.js";
 import type * as agents_vendorVerifier from "../agents/vendorVerifier.js";
 import type * as audit from "../audit.js";
+import type * as callbacks from "../callbacks.js";
 import type * as cases from "../cases.js";
 import type * as channels_agentBridge from "../channels/agentBridge.js";
 import type * as channels_reply from "../channels/reply.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   "agents/riskAnalyst": typeof agents_riskAnalyst;
   "agents/vendorVerifier": typeof agents_vendorVerifier;
   audit: typeof audit;
+  callbacks: typeof callbacks;
   cases: typeof cases;
   "channels/agentBridge": typeof channels_agentBridge;
   "channels/reply": typeof channels_reply;
