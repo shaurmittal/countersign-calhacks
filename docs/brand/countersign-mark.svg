@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Countersign constellation mark">
+<title>Countersign constellation mark</title>
+    <path d="M193.88 72.72 A86 86 0 1 0 193.88 183.28" fill="none" stroke="#7cc4f5" stroke-opacity="0.55" stroke-width="7" stroke-linecap="round"/>
+    <line x1="128" y1="128" x2="180.9" y2="60.2" stroke="#fafafa" stroke-opacity="0.28" stroke-width="5" stroke-linecap="round"/><line x1="128" y1="128" x2="107.2" y2="44.6" stroke="#fafafa" stroke-opacity="0.28" stroke-width="5" stroke-linecap="round"/><line x1="128" y1="128" x2="49.4" y2="93.0" stroke="#fafafa" stroke-opacity="0.28" stroke-width="5" stroke-linecap="round"/><line x1="128" y1="128" x2="52.1" y2="168.4" stroke="#fafafa" stroke-opacity="0.28" stroke-width="5" stroke-linecap="round"/><line x1="128" y1="128" x2="113.1" y2="212.7" stroke="#fafafa" stroke-opacity="0.28" stroke-width="5" stroke-linecap="round"/><line x1="128" y1="128" x2="185.5" y2="191.9" stroke="#fafafa" stroke-opacity="0.28" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="180.9" cy="60.2" r="15" fill="#000000" stroke="#f2b04c" stroke-width="7"/><circle cx="107.2" cy="44.6" r="15" fill="#000000" stroke="#f2b04c" stroke-width="7"/><circle cx="49.4" cy="93.0" r="15" fill="#000000" stroke="#f2b04c" stroke-width="7"/><circle cx="52.1" cy="168.4" r="15" fill="#000000" stroke="#f2b04c" stroke-width="7"/><circle cx="113.1" cy="212.7" r="15" fill="#000000" stroke="#f2b04c" stroke-width="7"/>
+    <rect x="169.5" y="175.9" width="32" height="32" rx="8.96" fill="#000000" stroke="#7cc4f5" stroke-width="7"/>
+    <circle cx="128" cy="128" r="23" fill="#f2b04c"/><circle cx="128" cy="128" r="9" fill="#000000"/>
+</svg>
