@@ -196,8 +196,8 @@ export function Film() {
       <Scrubber t={t} onSeek={(x) => film.seek(x)} />
       <p className="lp-film-note">
         A replay of a real case on our test deployment. The voices are the real recordings of both calls: one teammate plays the
-        scammer, and another answers as “Jordan” on Pixel &amp; Pine's number on file. The two calls overlapped, so their lines play
-        one after another in the order they started, trimmed at pauses. The case clock shows real elapsed time.
+        scammer, and another answers as “Jordan” on Pixel &amp; Pine's number on file. The two calls overlapped: the film plays the
+        caller's side first, then the callback, trimmed at pauses. The case clock shows the real time of the case's own steps.
       </p>
     </section>
   );
