@@ -73,7 +73,7 @@ convex/
   agents/vendorVerifier.ts  P3  vendor book (Moss), CRS email screening (AtData Fraud Finder)
   agents/riskAnalyst.ts     P3  red flags + Claude explanation
   agents/callbackVerifier.ts P2 Cartesia outbound call to phoneOnFile; outcome, retry, timeout
-  agents/ownerConcierge.ts  P4  authenticator-code approval (owner page / ASI:One), cooling-off, owner alerts
+  agents/ownerConcierge.ts  P4  authenticator-code approval (owner page), cooling-off, owner alerts
   agents/payer.ts           P4  Lumen Bank by default; PAYMENT_RAIL=mock or ach_sandbox (Increase) instead
   lib/countersign.ts        P1  signRelease: the only reader of COUNTERSIGN_SIGNING_KEY, called only by the Payer
   bank.ts                   P1  Lumen Bank: transfers (Payer + POST /bank/transfers), payees, bank-detail changes
@@ -88,7 +88,7 @@ convex/
   channels/reply.ts         P2/P4 send replyText back on the original channel
   lib/cartesia.ts           P2  Cartesia API client + tool secret check
   lib/whatsapp.ts           P2  WhatsApp Graph API client (sends text replies; logs failures, never throws)
-  channels/agentBridge.ts   P4  Fetch.ai → Convex bridge (/agent/message, /agent/case, /agent/pending, /agent/approval)
+  channels/agentBridge.ts   P4  agent channel bridge (/agent/message, /agent/case, /agent/pending, /agent/approval)
   http.ts                       HTTP routes (https://<deployment>.convex.site/...)
   seed.ts                   P3  fictional world (spec §7.1)
   senderLists.ts            P3  the owner's block and trust lists: masked list query, add/remove behind an authenticator code
@@ -101,10 +101,10 @@ scenarios/scenarios.json    P1  30-scenario answer key (spec §9)
 scenarios/world.ts          P1  seed world as data + reference verifier (what VendorFindings must contain)
 scripts/eval-intake.ts      P1  live intake eval
 scripts/enroll-owner-totp.ts P4 one-time authenticator enrollment for the owner
-fetch-agents/               P4  uAgents (Python): Countersign + fake vendor billing agent
+fetch-agents/               P4  Python agents for the agent channel: Countersign + a demo vendor billing agent
 ```
 
-Owner approvals, payments and the Fetch.ai agents: setup and demo runbook in
+Owner approvals and payments: setup and demo runbook in
 [docs/p4-experience.md](docs/p4-experience.md).
 
 ## How a case flows
@@ -128,7 +128,7 @@ event can simply re-run it.
 
 ## Policy rules (shared/policy/engine.ts)
 
-Strongest effect wins: **BLOCK > HOLD > ESCALATE > PAY**. An owner OTP/ASI:One approval satisfies
+Strongest effect wins: **BLOCK > HOLD > ESCALATE > PAY**. An owner OTP approval satisfies
 ESCALATE only; it never lifts a BLOCK or HOLD. PAY requires R12's positive checks, not just "no rule fired".
 
 | Rule | Fires when | Effect |
@@ -242,7 +242,7 @@ Convex is the whole backend: the database, every agent step, the timers and the 
 - **Scheduler:** the pipeline runs as scheduled steps; the vendor callback retries and times out on
   timers; after the owner approves a large payment, the pipeline schedules its own wake-up at
   `coolingOffUntil` and pays only if the approval still stands.
-- **HTTP actions:** Cartesia's webhook tools, the WhatsApp webhook and the Fetch.ai agent bridge, each
+- **HTTP actions:** Cartesia's webhook tools, the WhatsApp webhook and the agent bridge, each
   authenticated (a secret header, or Meta's signature for WhatsApp).
 - **Indexes** for every lookup, e.g. cases by `externalId` (dedupes webhook retries), payments by
   idempotency key, audit events by sequence.
@@ -282,7 +282,6 @@ Convex is the whole backend: the database, every agent step, the timers and the 
 | Owner step-up: real TOTP codes from an authenticator app, checked server-side | Vendor bank accounts store only routing + last 4; the sandbox uses a stand-in account number ending in those 4 digits |
 | Hash-chained audit log, recomputed live in the War Room | No KYB or OFAC screening: the team's CRS account has neither product, so R8 never fires live |
 | CRS sandbox: AtData Fraud Finder scores the email of any sender not in the vendor book; a high score escalates (R14) | Seed and scenario addresses use reserved `*.example` domains, which AtData always scores 100, so senders on file are not screened |
-| Fetch.ai agents on Agentverse speaking the Chat Protocol; the owner flow in ASI:One | The vendor billing agent is ours, playing a compromised vendor |
 | Email: real mail to the Postmark inbound address, its real SPF/DKIM/DMARC results, attached PDFs read by Claude | The five email attacks on /try are crafted webhook payloads (forged headers can't be sent from a judge's inbox); they run through the same parser and pipeline and are labelled "Simulated" |
 | | Replies to email are drafts shown in the War Room; nothing is ever sent |
 | Lumen Bank's countersignature: real ECDSA P-256 signatures, single-use nonces, checked against the public key | Lumen Bank itself is a sandbox inside the same Convex deployment as the signer; in production the bank holds only the public key and the signer runs in its own isolated service |
