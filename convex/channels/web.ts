@@ -3,6 +3,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { LIMITS } from "../../shared/config";
+import type { PolicyResult } from "../../shared/types";
 import { openCase } from "../cases";
 import { senderOverLimit } from "../lib/rateLimit";
 
@@ -25,7 +26,10 @@ export const submit = mutation({
   },
 });
 
-/** The sender's own conversation only. */
+/**
+ * The sender's own conversation only. Beyond the reply it carries what the War Room already shows in
+ * public: the matched vendor's name (for "calling them now"), the rules that fired, and when it was decided.
+ */
 export const mine = query({
   args: { senderId: v.string() },
   handler: async (ctx, { senderId }) => {
@@ -35,13 +39,23 @@ export const mine = query({
       .withIndex("by_from", (q) => q.eq("fromAddress", `web:${senderId}`))
       .order("desc")
       .take(20);
-    return cases.reverse().map((c) => ({
-      _id: c._id,
-      text: c.rawContent,
-      status: c.status,
-      decision: c.decision ?? null,
-      reply: c.replyText ?? null,
-      createdAt: c.createdAt,
-    }));
+    return Promise.all(
+      cases.reverse().map(async (c) => {
+        const vendor = c.vendorId ? await ctx.db.get(c.vendorId) : null;
+        const policy = c.policyResult as PolicyResult | undefined;
+        const settled = c.status === "CLOSED" || c.status === "AWAITING_OWNER";
+        return {
+          _id: c._id,
+          text: c.rawContent,
+          status: c.status,
+          decision: c.decision ?? null,
+          reply: c.replyText ?? null,
+          vendorName: vendor?.name ?? null,
+          rules: policy?.firedRules ?? [],
+          createdAt: c.createdAt,
+          decidedAt: settled && c.decision ? c.updatedAt : null,
+        };
+      }),
+    );
   },
 });
