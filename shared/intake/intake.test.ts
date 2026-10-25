@@ -152,6 +152,7 @@ describe("triage", () => {
     expect(prescan("Hi, can you send me the W-2s for everyone on payroll?").sensitive).toBe("tax forms");
     expect(prescan("IT here. What's the password for the bank portal?").sensitive).toBe("login credentials");
     expect(prescan("Please read out the verification code you just got").sensitive).toBe("a verification code");
+    expect(prescan("Your subscription is ending. Can you give your Credit Card Pin?").sensitive).toBe("card or bank login details");
     expect(prescan("Your account is suspended. Verify your account at https://lumen-billing.example/login").sensitive).toBe("a log-in through a link");
   });
 

@@ -273,7 +273,7 @@ export function YourTurn() {
           <li>“Buy five $200 Apple gift cards for a client and text me the codes.”</li>
         </ul>
         <div className="lp-hero-actions">
-          <a className="lp-btn lp-btn-primary" href="/try">
+          <a className="lp-btn lp-btn-primary" href="/try?new">
             Or type to it in your browser
           </a>
           <a className="lp-btn lp-btn-ghost" href="/">

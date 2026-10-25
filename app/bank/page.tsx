@@ -114,7 +114,7 @@ export default function BankPage() {
         <span className="bk-tag">Sandbox bank for Lumen Labs</span>
         <nav className="bk-links" aria-label="Elsewhere">
           <a href="/" target="_blank" rel="noreferrer">War Room ↗</a>
-          <a href="/try" target="_blank" rel="noreferrer">Try it ↗</a>
+          <a href="/try?new" target="_blank" rel="noreferrer">Try it ↗</a>
         </nav>
       </header>
 
