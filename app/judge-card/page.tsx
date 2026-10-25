@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 const PHONE_DISPLAY = "+1 (256) 215-6932";
 const PHONE_TEL = "+12562156932";
 const TRY_URL = process.env.NEXT_PUBLIC_TRY_URL ?? "";
+const EMAIL_ADDRESS = process.env.NEXT_PUBLIC_EMAIL_ADDRESS ?? "";
 
 const SCAMS = [
   {
@@ -48,6 +49,15 @@ export default function JudgeCard() {
               {PHONE_DISPLAY}
             </a>
             <p className="jc-muted">US number. Calls from anywhere work.</p>
+            {EMAIL_ADDRESS && (
+              <>
+                <h2 className="jc-or">Or email it</h2>
+                <a className="jc-email" href={`mailto:${EMAIL_ADDRESS}`}>
+                  {EMAIL_ADDRESS}
+                </a>
+                <p className="jc-muted">Forward a real invoice, or pretend to be a vendor. Attach a PDF.</p>
+              </>
+            )}
           </div>
           <div>
             <h2>Or type to it</h2>
@@ -70,12 +80,15 @@ export default function JudgeCard() {
               </li>
             ))}
           </ol>
-          <p className="jc-muted">Or invent your own. Every attempt takes a real path; nothing is scripted.</p>
+          <p className="jc-muted">
+            Or invent your own. Every attempt takes a real path; nothing is scripted. At /try you can also fire
+            forged emails your own inbox could never send.
+          </p>
         </section>
 
         <footer className="jc-foot">
-          Fictional company, sandbox money. We show only the last 4 digits of your number and delete the full
-          number after the event.
+          Fictional company, sandbox money. We show only the last 4 digits of your number (and only the domain of
+          your email) and delete the rest after the event. Countersign never emails anyone back.
         </footer>
       </article>
       <button className="jc-print" onClick={() => window.print()}>

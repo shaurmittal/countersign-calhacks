@@ -5,7 +5,7 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import schema from "../schema";
 import { modules } from "../test.setup";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { safeEqual, webhookAuthorized } from "./email";
 import type { EmailSignals, PostmarkInbound } from "../../shared/email/inbound";
 import { EMAIL_ATTACKS } from "../../shared/email/attacks";
@@ -144,5 +144,15 @@ describe("simulated attacks on /try", () => {
     await expect(t.action(api.channels.email.simulateAttack, { attack: "forged-vendor", senderId: "x" })).rejects.toThrow(/Invalid session/);
     for (let i = 0; i < 5; i++) await t.action(api.channels.email.simulateAttack, { attack: "forged-ceo", senderId: SENDER });
     await expect(t.action(api.channels.email.simulateAttack, { attack: "forged-ceo", senderId: SENDER })).rejects.toThrow(/Slow down/);
+  });
+});
+
+describe("after the event", () => {
+  it("the privacy purge cuts email senders down to their domain", async () => {
+    const t = makeTest();
+    await post(t, payload);
+    await t.mutation(internal.privacy.purgeCallerNumbers, {});
+    const [c] = await t.run((ctx) => ctx.db.query("cases").collect());
+    expect(c.fromAddress).toBe("…@gmail.com");
   });
 });

@@ -2,13 +2,18 @@
 // full numbers are deleted after the event. Run once judging is over:
 //   npx convex run privacy:purgeCallerNumbers
 // Replaces every stored caller phone number with "…1234", in cases, known-bad senders and the owner's
-// lists. Web senders are random IDs, not people, and audit payloads only ever hold last-4s, so neither
-// needs touching.
+// lists, and every email sender with its domain ("…@gmail.com") in cases and known-bad senders. Web
+// senders are random IDs, not people, and audit payloads only ever hold last-4s, so neither needs touching.
 import { internalMutation } from "./_generated/server";
 import { appendAudit } from "./audit";
 
 const PHONE = /^\+?\d[\d\s().-]{6,}$/;
-const mask = (s: string) => (PHONE.test(s) ? `…${s.replace(/\D/g, "").slice(-4)}` : s);
+const EMAIL = /^[^\s@…]+@([^\s@]+)$/;
+const mask = (s: string) => {
+  if (PHONE.test(s)) return `…${s.replace(/\D/g, "").slice(-4)}`;
+  const email = s.match(EMAIL);
+  return email ? `…@${email[1]}` : s;
+};
 
 export const purgeCallerNumbers = internalMutation({
   args: {},

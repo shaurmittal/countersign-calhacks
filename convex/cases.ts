@@ -41,7 +41,13 @@ export async function openCase(ctx: MutationCtx, args: OpenArgs) {
 }
 
 export const open = internalMutation({
-  args: { channel, fromAddress: v.string(), rawContent: v.string(), externalId: v.optional(v.string()) },
+  args: {
+    channel,
+    fromAddress: v.string(),
+    rawContent: v.string(),
+    externalId: v.optional(v.string()),
+    emailSignals: v.optional(v.any()),
+  },
   handler: (ctx, args) => openCase(ctx, args),
 });
 

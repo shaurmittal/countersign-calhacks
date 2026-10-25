@@ -4,10 +4,11 @@ Short answers for the pitch and the judging table. Each one points at the rule t
 test that proves it, so "what happens if…" is answered with "rule R4, here's the test."
 
 - Tests: `shared/policy/engine.test.ts` (engine), `convex/pipeline.test.ts` (pipeline flows),
-  `scenarios/scenarios.json` (the 30-scenario answer key).
-- Run: `npm test` (984 tests), `npm run scenarios` (offline answer key), `npm run rehearse` (live, dev deployment).
-- Headline: **30 scenarios · 20/20 scams blocked · 10/10 legitimate paid or correctly escalated · 0 false PAY**.
-  Live on a deployed pipeline: **28/28, 0 false PAY** (OFAC and CRS-outage can only be tested offline).
+  `scenarios/scenarios.json` (the 39-scenario answer key), `shared/email/*.test.ts` and
+  `convex/channels/email.test.ts` (email).
+- Run: `npm test` (1,000+ tests), `npm run scenarios` (offline answer key), `npm run rehearse` (live, dev deployment).
+- Headline: **39 scenarios · 26/26 scams blocked · 13/13 legitimate paid or correctly escalated · 0 false PAY**.
+  Live on a deployed pipeline before email: **28/28, 0 false PAY** (OFAC and CRS-outage can only be tested offline).
 
 ## "Can I jailbreak it?"
 
@@ -58,6 +59,26 @@ Unknown vendor → BLOCK (R1). A real vendor name with an invoice we don't have 
 
 - Scenarios `aws-lookalike`, `google-workspace-lookalike`, `northwind-lookalike-invoice`, `franchise-tax-notice`.
 
+## "What about email? That's where most of these scams come from."
+
+Email is a channel like the others: mail to the Countersign address (Postmark Inbound) becomes a case on the same pipeline. Forward an invoice, or write as a vendor. Claude reads an attached PDF invoice as untrusted data; the payment still goes only to the bank account on file.
+
+- Try it: the address on the judge card, or the five forged emails on `/try`.
+- Tests: `convex/channels/email.test.ts`, `shared/email/inbound.test.ts`.
+
+## "What if I forge the From address?"
+
+An email counts as coming from a vendor or the owner only when the receiving mail server says the domain sent it (DMARC, or DKIM/SPF aligned with the From domain). A known address that fails is a forgery: BLOCK (R17). We read only the topmost authentication headers, so a fake `dmarc=pass` written into the message itself doesn't count. A Reply-To on another domain means a callback first (R17 HOLD). A display name like `billing@vendor.com <x@gmail.com>` escalates (R17).
+
+- Scenarios `email-forged-vendor-bank-change`, `email-forged-owner-wire`, `email-reply-to-diverted`, `email-display-name-spoof`.
+- Tests: `shared/email/auth.test.ts` ("trusts only the topmost Authentication-Results").
+
+## "What if the invoice PDF has new bank details, or tells the AI to approve it?"
+
+Claude reads the PDF as part of an untrusted message. New bank details in it are a bank change (R2: callback, then the owner), and text aimed at "automated assistants" is an injection attempt (R15: never auto-paid). Even if Claude missed both, the Payer only ever pays the account on file.
+
+- Try it: "The invoice PDF" on `/try`.
+
 ## "Buy gift cards / pay in crypto."
 
 R9: BLOCK, and nobody can override it, not even the owner with a valid code.
@@ -88,10 +109,13 @@ Every step writes an event with `hash = sha256(prevHash + event)`. Editing or de
 
 ## "Isn't this just Ramp or Brex approvals?"
 
-Those need two people. Countersign *is* the second person, and it works across calls, chat, WhatsApp and agent messages, not only cards.
+Those need two people. Countersign *is* the second person, and it works across calls, email, chat and agent messages, not only cards.
 
 ## Honest limits (say these if asked)
 
 - **OFAC (R8)** is implemented and tested, but the team's CRS account has no OFAC product, so it never fires live.
 - **A compromised vendor phone** can fool the callback; see "vendor's phone is hacked" above.
 - **Claude's wording** of replies varies run to run. The decision never does: it's deterministic.
+- **Email from a domain with no SPF/DKIM/DMARC** can't be authenticated at all. It's treated as "not on file", so it gets a callback rather than a block.
+- **The /try email attacks are simulated** headers (you can't forge DMARC from your own inbox). Real email to the address carries real authentication results.
+- **Countersign never sends email.** Replies are drafts shown in the War Room.

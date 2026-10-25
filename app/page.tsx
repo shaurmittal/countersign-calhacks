@@ -77,7 +77,10 @@ export default function WarRoom() {
                 <span className="lp-live-dot" aria-hidden="true" />
                 <span>
                   {cases === undefined ? "Connecting…" : "Waiting for the first request…"}
-                  <small>Call +1 (256) 215-6932 · or type at /try</small>
+                  <small>
+                    Call +1 (256) 215-6932 · or type at /try
+                    {process.env.NEXT_PUBLIC_EMAIL_ADDRESS ? ` · or email ${process.env.NEXT_PUBLIC_EMAIL_ADDRESS}` : ""}
+                  </small>
                 </span>
               </p>
             </div>

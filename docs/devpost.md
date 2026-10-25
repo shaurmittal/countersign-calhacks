@@ -18,7 +18,8 @@ and now vendors' billing agents can message your agent directly.
 ## What it does
 
 Every request for money to leave the business goes through Countersign first, on any channel: a
-phone call to its own number, web chat, or another agent over Fetch.ai's Chat Protocol.
+phone call to its own number, an email (forwarded invoices welcome, PDFs included), web chat, or
+another agent over Fetch.ai's Chat Protocol.
 
 - **Legitimate bills are paid automatically.** Known vendor, bank on file, open invoice, normal amount.
 - **Anything new or odd is verified out of band.** Countersign calls the vendor back on the number
@@ -34,7 +35,7 @@ We started with payments because that's where social engineering costs the most.
 ## How we built it
 
 - **The safety design:** language models read, reason, talk and propose. They cannot move money.
-  Only the Policy Engine, a deterministic TypeScript function with 15 unit-tested rules, can return
+  Only the Policy Engine, a deterministic TypeScript function with 17 unit-tested rules, can return
   PAY, and the Payer runs only on that branch.
 - **Claude** parses each request into a strict schema (the request is untrusted data; injection
   attempts become a red flag) and writes every reply, behind a guard that rejects replies that
@@ -46,6 +47,9 @@ We started with payments because that's where social engineering costs the most.
   and approve pending payments in ASI:One; a demo vendor billing agent sends requests agent-to-agent.
 - **Increase** sandbox ACH transfers (or a mock double-entry ledger), with idempotency keys so a
   retry can never pay twice.
+- **Email** via Postmark Inbound: the receiving server's SPF/DKIM/DMARC results decide whether a
+  From address counts as a vendor or the owner (rule R17), and Claude reads attached PDF invoices as
+  untrusted data. Countersign never sends email; replies are drafts in the War Room.
 - **Moss** for vendor-book search. The **CRS** sandbox (AtData Fraud Finder) scores the email
   address of any sender not in the vendor book, and a high risk score escalates the request to the
   owner. **[confirm: lands with P3's PR #12]**
@@ -60,9 +64,11 @@ We started with payments because that's where social engineering costs the most.
 
 ## Accomplishments
 
-- 30-scenario answer key, run in CI: "30 scenarios · 20/20 scams blocked · 10/10 legitimate paid
+- 39-scenario answer key, run in CI: "39 scenarios · 26/26 scams blocked · 13/13 legitimate paid
   or correctly escalated · 0 false PAY" (offline run with the reference verifier; rerun
   `npm run scenarios` before submitting).
+- Email that can't be faked into counting: a forged vendor or owner address is refused (R17), using
+  the receiving server's real SPF/DKIM/DMARC results, and Claude reads PDF invoices without obeying them.
 - Scoreboard on screen: dollars lost stays $0 because it is computed from real payments.
 
 ## What's next
