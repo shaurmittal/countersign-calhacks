@@ -21,7 +21,7 @@ type Run = CaseDetail["runs"][number];
 
 const LANES: { agent: AgentName; title: string; role: string }[] = [
   { agent: "intake", title: "Intake Parser", role: "Claude reads the request into a strict form" },
-  { agent: "vendorVerifier", title: "Vendor Verifier", role: "Vendor book, sender, bank, invoice, CRS, OFAC" },
+  { agent: "vendorVerifier", title: "Vendor Verifier", role: "Vendor book, sender, bank, invoice, CRS" },
   { agent: "riskAnalyst", title: "Risk Analyst", role: "Red flags and a risk score" },
   { agent: "callback", title: "Callback Verifier", role: "Calls the vendor on the number on file" },
   { agent: "policy", title: "Policy Engine", role: "Deterministic rules; the only code that can return PAY" },
@@ -162,7 +162,6 @@ function VendorDetail({ findings: f, detail }: { findings: VendorFindings; detai
         <Chip tone={f.bankMatches ? "ok" : "bad"}>Bank {f.bankMatches ? "matches file" : "differs from file"}</Chip>
       )}
       <Chip tone={crsTone(f)}>{crsLaneText(f.crs) ?? "CRS: not checked"}</Chip>
-      <Chip tone={f.ofacHit ? "bad" : "ok"}>OFAC: {f.ofacHit ? "HIT" : "clear"}</Chip>
       {f.alreadyPaidAt != null ? (
         <Chip tone="bad">Invoice already paid</Chip>
       ) : (
