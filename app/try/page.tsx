@@ -257,10 +257,23 @@ export default function TryPage() {
                 {error}
               </p>
             )}
-            <p className="mt-2 text-[12px] text-subtle">
-              Fictional company, sandbox money. We keep only what you type here. {PHONE_DISPLAY} works too
-              {EMAIL_ADDRESS ? `, and so does ${EMAIL_ADDRESS}` : ""}.
-            </p>
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <p className="text-[12px] text-subtle">
+                Fictional company, sandbox money. We keep only what you type here. {PHONE_DISPLAY} works too
+                {EMAIL_ADDRESS ? `, and so does ${EMAIL_ADDRESS}` : ""}.
+              </p>
+              {/* Also here, not only in the page header: in a long conversation the header has scrolled away. */}
+              {entries && entries.length > 0 && (
+                <button
+                  type="button"
+                  onClick={startOver}
+                  disabled={sending}
+                  className="flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-border-strong px-2.5 text-[12px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+                >
+                  <RotateCcw className="size-3.5" aria-hidden="true" /> New chat
+                </button>
+              )}
+            </div>
           </form>
         </section>
 
