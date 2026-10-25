@@ -1,6 +1,6 @@
 "use client";
 // The two phone calls: the inbound line (scene I, then on hold) and the callback to the real vendor (scene III).
-import { CAPTIONS, TIMES, TOOL_CALLS, type Caption } from "./story";
+import { CAPTIONS, CASE_FACTS, INBOUND_FLAGS, TIMES, TOOL_CALLS, type Caption } from "./story";
 import { ramp } from "./useFilm";
 
 const BARS = Array.from({ length: 56 }, (_, i) => {
@@ -46,22 +46,18 @@ function Tools({ t, line }: { t: number; line: Caption["line"] }) {
 /** Scene I: the scam call arriving on Countersign's line. */
 export function InboundCall({ t }: { t: number }) {
   const ringing = t < CAPTIONS[0].start;
-  const flags = [
-    { at: 8.9, text: "Bank change" },
-    { at: 12.2, text: "New account …9921" },
-  ];
   return (
     <div className="lp-call">
       <div className="lp-call-head">
         <span className={`lp-live-dot${ringing ? " is-ringing" : ""}`} aria-hidden="true" />
         <span>{ringing ? "Incoming call" : "On the line"}</span>
-        <span className="lp-call-num">+1 (•••) •••-6410</span>
+        <span className="lp-call-num">+1 (•••) •••-{CASE_FACTS.callerLast4}</span>
         <span className="lp-call-to">→ Countersign · Lumen Labs</span>
         {!ringing && <span className="lp-call-time">{clock(t - CAPTIONS[0].start)}</span>}
       </div>
       <Waveform t={t} line="inbound" big />
       <ul className="lp-flags" aria-label="Red flags">
-        {flags.map((f) =>
+        {INBOUND_FLAGS.map((f) =>
           t >= f.at ? (
             <li key={f.text} style={{ opacity: ramp(t, f.at, 0.35), transform: `translateY(${(1 - ramp(t, f.at, 0.35)) * 8}px)` }}>
               {f.text}
@@ -91,7 +87,7 @@ export function TwoCalls({ t }: { t: number }) {
         <p className="lp-callback-label">Line 2 · Countersign is calling</p>
         <p className="lp-callback-who">Pixel &amp; Pine Design</p>
         <p className="lp-callback-num">
-          Number on file <b>…9782</b>
+          Number on file <b>…{CASE_FACTS.callbackNumberLast4}</b>
           <span>never the number in the message</span>
         </p>
         <div className="lp-callback-status">{connected ? (denied ? "Call ended · outcome recorded" : "Connected") : "Ringing…"}</div>

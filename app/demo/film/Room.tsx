@@ -5,6 +5,7 @@ import { RULES } from "../../../shared/policy/rules";
 import type { RuleId } from "../../../shared/types";
 import {
   AGENTS,
+  CASE_FACTS,
   DECISIONS,
   EDGES,
   FINDINGS,
@@ -80,7 +81,7 @@ export function Room({ t, compact }: { t: number; compact: boolean }) {
       </div>
 
       <div className="lp-casefile" aria-label="Case file">
-        <p className="lp-casefile-title">Case file · …8gx7rm</p>
+        <p className="lp-casefile-title">Case file · …{CASE_FACTS.caseId}</p>
         {FINDINGS.map((f) => (
           <FindingCard key={f.agent} f={f} t={t} />
         ))}
@@ -104,7 +105,7 @@ function Node({ a, t }: { a: AgentNode; t: number }) {
       <span className="lp-node-name">{a.name}</span>
       <span className="lp-node-tech">{a.tech}</span>
       {a.id === "callback" && t >= TIMES.dial && t < TIMES.outcome && (
-        <span className="lp-node-status">{t < TIMES.connect ? "Ringing …9782" : "On the call"}</span>
+        <span className="lp-node-status">{t < TIMES.connect ? `Ringing …${CASE_FACTS.callbackNumberLast4}` : "On the call"}</span>
       )}
       {a.id === "payer" && <span className="lp-node-status lp-money">{blocked ? "$0 moved · sealed" : "Never called"}</span>}
     </div>
@@ -133,13 +134,13 @@ function LockPanel({ t, decision }: { t: number; decision: (typeof DECISIONS)[nu
   const runs = WORK.filter((w) => w.agent === "lock");
   const run = [...runs].reverse().find((w) => t >= w.start) ?? null;
   const scan = run ? ramp(t, run.start, Math.max(0.3, run.end - run.start)) : 0;
-  const shown = window01(t, 25.6, TIMES.callbackScene, 0.4) + window01(t, 78.9, 999, 0.3);
+  const shown = window01(t, TIMES.lockPanel, TIMES.callbackScene, 0.4) + window01(t, TIMES.outcome + 0.9, 999, 0.3);
   if (shown <= 0) return null;
   const fired = new Set<string>(decision && t >= decision.at ? decision.fired : []);
   return (
     <div className="lp-lockpanel" style={{ opacity: Math.min(1, shown) }} aria-label="Policy Engine rules">
       <p className="lp-lockpanel-title">
-        The lock checks all 16 rules <span>· no AI</span>
+        The lock checks all {RULE_IDS.length} rules <span>· no AI</span>
       </p>
       <ol className="lp-rules">
         {RULE_IDS.map((id, i) => {
