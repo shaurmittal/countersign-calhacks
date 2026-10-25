@@ -7,6 +7,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useState, type FormEvent } from "react";
 import { api } from "../../convex/_generated/api";
 import { OWNER_CODE } from "../../shared/config";
+import { CodeBoxes } from "./CodeBoxes";
 import { clockTime, secondsLeft, useNow } from "../components/format";
 
 type Change = FunctionReturnType<typeof api.bank.pendingChanges>[number];
@@ -17,17 +18,19 @@ export function BankChangesSection() {
   const [done, setDone] = useState<string | null>(null);
   if (!done && (!changes || changes.length === 0)) return null;
   return (
-    <>
-      <h2>Bank-detail changes</h2>
+    <section className="ow-section" aria-labelledby="bank-changes-h">
+      <h2 id="bank-changes-h" className="ow-h">
+        Bank-detail changes
+      </h2>
       {changes?.map((c) => (
         <BankChangeCard key={c.payeeId} item={c} onDone={setDone} />
       ))}
       {done && (
-        <p className="result ok" aria-live="polite">
+        <p className="ow-result ok" aria-live="polite">
           {done}
         </p>
       )}
-    </>
+    </section>
   );
 }
 
@@ -58,50 +61,48 @@ function BankChangeCard({ item, onDone }: { item: Change; onDone: (message: stri
 
   const ready = code.length === OWNER_CODE.digits && !busy && lockedFor === 0;
   return (
-    <article className="approval" data-state="waiting" aria-labelledby={`bank-payee-${item.payeeId}`}>
-      <div>
-        <div className="approval-amount">
-          …{item.fromLast4} → …{item.toLast4}
-        </div>
-        <div className="approval-payee" id={`bank-payee-${item.payeeId}`}>
-          {item.name}
-        </div>
-        <div className="approval-meta">
-          Lumen Bank · new routing {item.toRouting} · vendor confirmed by phone at {clockTime(item.confirmedAt)}
-        </div>
+    <article className="ow-card" data-state="waiting" aria-labelledby={`bank-payee-${item.payeeId}`}>
+      <div className="ow-card-head">
+        <span className="ow-badge">New bank details</span>
+        <span className="ow-meta">Lumen Bank · confirmed by phone at {clockTime(item.confirmedAt)}</span>
       </div>
-      <ul>
-        <li>Countersign called the number on file and the vendor said they asked for this change.</li>
-        <li>Approving moves future payouts to the new account. Nothing is paid now.</li>
-      </ul>
+      <div className="ow-amount ow-amount-sm">
+        …{item.fromLast4} <span className="ow-arrow">→</span> …{item.toLast4}
+      </div>
+      <p className="ow-payee" id={`bank-payee-${item.payeeId}`}>
+        <b>{item.name}</b>
+        <span className="ow-mono"> · new routing {item.toRouting}</span>
+      </p>
+      <div className="ow-why">
+        <p className="ow-why-title">What happened</p>
+        <ul>
+          <li>
+            <span className="ow-rule">R2</span>
+            <span>Countersign called the number on file and the vendor said they asked for this change.</span>
+          </li>
+          <li>
+            <span className="ow-rule">$0</span>
+            <span>Approving moves future payouts to the new account. Nothing is paid now.</span>
+          </li>
+        </ul>
+      </div>
 
-      <form className="code-form" onSubmit={(e) => act("approve", e)}>
-        <label htmlFor={codeId}>Code from your authenticator app</label>
-        <input
-          id={codeId}
-          className="code-input"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          pattern="[0-9]*"
-          maxLength={OWNER_CODE.digits}
-          value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, OWNER_CODE.digits))}
-          aria-describedby={`bank-help-${item.payeeId}`}
-        />
-        <p className="code-help" id={`bank-help-${item.payeeId}`}>
+      <form className="ow-form" onSubmit={(e) => act("approve", e)}>
+        <CodeBoxes id={codeId} value={code} onChange={setCode} describedBy={`bank-help-${item.payeeId}`} disabled={lockedFor > 0} />
+        <p className="ow-help" id={`bank-help-${item.payeeId}`}>
           {lockedFor > 0
             ? `Locked after too many wrong codes. Try again in ${lockedFor}s.`
-            : `${OWNER_CODE.digits} digits, from the Countersign entry. Codes change every ${OWNER_CODE.periodSeconds} seconds.`}
+            : `${OWNER_CODE.digits} digits from the Countersign entry in your authenticator app. Each code works once.`}
         </p>
-        <div className="actions">
-          <button type="button" className="btn btn-danger" disabled={!ready} onClick={() => act("decline")}>
+        <div className="ow-actions">
+          <button type="button" className="ow-btn ow-btn-danger" disabled={!ready} onClick={() => act("decline")}>
             Decline
           </button>
-          <button type="submit" className="btn btn-primary" disabled={!ready}>
+          <button type="submit" className="ow-btn ow-btn-approve" disabled={!ready}>
             Approve change
           </button>
         </div>
-        <div aria-live="polite">{result && <p className="result bad">{result.text}</p>}</div>
+        <div aria-live="polite">{result && <p className="ow-result bad">{result.text}</p>}</div>
       </form>
     </article>
   );

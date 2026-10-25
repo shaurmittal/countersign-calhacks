@@ -9,6 +9,7 @@ import { useState, type FormEvent } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { OWNER_CODE } from "../../shared/config";
+import { CodeBoxes } from "./CodeBoxes";
 import { clockTime } from "../components/format";
 
 type Lists = FunctionReturnType<typeof api.senderLists.list>;
@@ -86,29 +87,27 @@ export function ListsSection() {
   }
 
   return (
-    <section className="lists" aria-labelledby="lists-title">
-      <h2 id="lists-title">Block and trust lists</h2>
-      <p className="code-help">
+    <section className="ow-section" aria-labelledby="lists-title">
+      <details className="ow-details">
+      <summary>
+        <h2 id="lists-title" className="ow-h">
+          Block and trust lists
+        </h2>
+        <span className="ow-muted">Advanced</span>
+      </summary>
+      <p className="ow-help">
         Block refuses anything from or to an entry. Trust only says a sender belongs to a vendor: bank changes still
         need a callback and your approval.
       </p>
 
-      <div className="code-form">
-        <label htmlFor="lists-code">Code from your authenticator app</label>
-        <input
-          id="lists-code"
-          className="code-input"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          pattern="[0-9]*"
-          maxLength={OWNER_CODE.digits}
-          value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, OWNER_CODE.digits))}
-        />
-        <p className="code-help">Each add or remove uses one code. Wait for the next one before the next change.</p>
+      <div className="ow-panel">
+        <CodeBoxes id="lists-code" value={code} onChange={setCode} describedBy="lists-code-help" />
+        <p className="ow-help" id="lists-code-help">
+          Each add or remove uses one code. Wait for the next one before the next change.
+        </p>
       </div>
 
-      <form className="list-form" onSubmit={onAdd}>
+      <form className="ow-panel ow-list-form" onSubmit={onAdd}>
         <div className="segmented" role="radiogroup" aria-label="List">
           {(["deny", "trust"] as const).map((k) => (
             <button key={k} type="button" role="radio" aria-checked={kind === k} className="seg" onClick={() => chooseKind(k)}>
@@ -116,7 +115,7 @@ export function ListsSection() {
             </button>
           ))}
         </div>
-        <label className="field">
+        <label className="ow-field">
           <span>Match</span>
           <select value={match} onChange={(e) => setMatch(e.target.value as Match)}>
             {matches.map((m) => (
@@ -126,12 +125,12 @@ export function ListsSection() {
             ))}
           </select>
         </label>
-        <label className="field">
+        <label className="ow-field">
           <span>{MATCH_LABELS[match]}</span>
           <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={PLACEHOLDERS[match]} required />
         </label>
         {kind === "trust" && (
-          <label className="field">
+          <label className="ow-field">
             <span>Vendor</span>
             <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} required>
               <option value="">Choose a vendor…</option>
@@ -143,27 +142,27 @@ export function ListsSection() {
             </select>
           </label>
         )}
-        <label className="field">
+        <label className="ow-field">
           <span>Note (optional)</span>
           <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="Why" />
         </label>
-        <label className="field">
+        <label className="ow-field">
           <span>Expires after (days, optional)</span>
           <input value={days} onChange={(e) => setDays(e.target.value.replace(/\D/g, "").slice(0, 3))} inputMode="numeric" placeholder="Never" />
         </label>
-        <button type="submit" className="btn btn-primary" disabled={!codeReady || value.trim() === ""}>
+        <button type="submit" className="ow-btn ow-btn-approve" disabled={!codeReady || value.trim() === ""}>
           {kind === "deny" ? "Add to block list" : "Add to trust list"}
         </button>
       </form>
 
-      <div aria-live="polite">{result && <p className={`result ${result.ok ? "ok" : "bad"}`}>{result.text}</p>}</div>
+      <div aria-live="polite">{result && <p className={`ow-result ${result.ok ? "ok" : "bad"}`}>{result.text}</p>}</div>
 
       {lists === undefined ? (
-        <p className="muted">Loading…</p>
+        <p className="ow-muted">Loading…</p>
       ) : lists.entries.length === 0 ? (
-        <p className="muted">No entries yet.</p>
+        <p className="ow-muted">No entries yet.</p>
       ) : (
-        <ul className="feed">
+        <ul className="ow-entries">
           {lists.entries.map((entry) => (
             <EntryItem key={entry.id} entry={entry} disabled={!codeReady} onRemove={() => run(() => remove({ entryId: entry.id, code }))} />
           ))}
@@ -172,8 +171,8 @@ export function ListsSection() {
 
       {lists && lists.knownBad.length > 0 && (
         <>
-          <h2>Marked bad after a denied callback</h2>
-          <ul className="feed">
+          <h3 className="ow-h3">Marked bad after a denied callback</h3>
+          <ul className="ow-entries">
             {lists.knownBad.map((k, i) => (
               <li key={`${k.vendorName}-${i}`}>
                 <time>Never counts as on file again</time>
@@ -183,6 +182,7 @@ export function ListsSection() {
           </ul>
         </>
       )}
+      </details>
     </section>
   );
 }
@@ -197,9 +197,9 @@ function EntryItem({ entry, disabled, onRemove }: { entry: Entry; disabled: bool
           {entry.expired ? " · expired" : entry.expiresAt ? ` · until ${new Date(entry.expiresAt).toLocaleDateString()}` : ""}
         </time>
         <span className="list-value">{entry.value}</span>
-        {entry.note && <span className="muted"> · {entry.note}</span>}
+        {entry.note && <span className="ow-muted"> · {entry.note}</span>}
       </div>
-      <button type="button" className="btn btn-danger" disabled={disabled} onClick={onRemove} aria-label={`Remove ${entry.value}`}>
+      <button type="button" className="ow-btn ow-btn-danger" disabled={disabled} onClick={onRemove} aria-label={`Remove ${entry.value}`}>
         Remove
       </button>
     </li>
