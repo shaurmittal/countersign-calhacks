@@ -104,7 +104,7 @@ function sameAddress(fromAddress: string, onFile: string): boolean {
  * The sender is on this vendor's record: its phone, an email on file, or any address at one of its domains or their
  * subdomains. Exact checks only. Caller ID and email From can be spoofed, so this is not proof (§8.2).
  */
-export function senderMatchesVendor(fromAddress: string, vendor: BookVendor): boolean {
+export function senderMatchesVendor(fromAddress: string, vendor: Pick<BookVendor, "phoneOnFile" | "emailsOnFile" | "domains">): boolean {
   if (isPhoneLike(fromAddress)) return sameAddress(fromAddress, vendor.phoneOnFile);
   if (normalizeEmail(fromAddress) !== "") {
     const domain = emailDomain(fromAddress);
@@ -118,7 +118,7 @@ export function senderMatchesVendor(fromAddress: string, vendor: BookVendor): bo
 }
 
 /** The owner's registered phone, OTP phone or email. Caller ID can be spoofed, so this is never an approval (R11). */
-export function isOwnerAddress(fromAddress: string, owner: BookOwner | null): boolean {
+export function isOwnerAddress(fromAddress: string, owner: Pick<BookOwner, "phone" | "otpPhone" | "email"> | null): boolean {
   if (!owner) return false;
   const phone = normalizePhone(fromAddress);
   if (phone) return phone === normalizePhone(owner.phone) || phone === normalizePhone(owner.otpPhone);

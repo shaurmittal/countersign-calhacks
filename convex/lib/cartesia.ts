@@ -1,6 +1,8 @@
 // Cartesia Agents API helpers (owner: P2). Docs: https://docs.cartesia.ai/line/integrations/telephony/outbound-dialing
 const API_BASE = "https://api.cartesia.ai";
 const API_VERSION = "2026-08-14";
+/** Placing a call returns as soon as it is queued; a request that takes longer than this is treated as a failed dial. */
+export const DIAL_TIMEOUT_MS = 20_000;
 
 function env(name: string): string {
   const value = process.env[name];
@@ -17,20 +19,30 @@ export async function placeOutboundCall(args: {
   dynamicVariables: Record<string, string>;
   ringingTimeoutSeconds: number;
 }): Promise<string> {
-  const res = await fetch(`${API_BASE}/agents/calls`, {
-    method: "POST",
-    headers: {
-      "X-API-Key": env("CARTESIA_API_KEY"),
-      "Cartesia-Version": API_VERSION,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      agent_id: env("CARTESIA_CALLBACK_AGENT_ID"),
-      from_number_id: env("CARTESIA_CALLBACK_NUMBER_ID"),
-      ringing_timeout_seconds: args.ringingTimeoutSeconds,
-      outbound_calls: [{ to_number: args.toNumber, dynamic_variables: args.dynamicVariables }],
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DIAL_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/agents/calls`, {
+      method: "POST",
+      headers: {
+        "X-API-Key": env("CARTESIA_API_KEY"),
+        "Cartesia-Version": API_VERSION,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        agent_id: env("CARTESIA_CALLBACK_AGENT_ID"),
+        from_number_id: env("CARTESIA_CALLBACK_NUMBER_ID"),
+        ringing_timeout_seconds: args.ringingTimeoutSeconds,
+        outbound_calls: [{ to_number: args.toNumber, dynamic_variables: args.dynamicVariables }],
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    throw new Error(`Cartesia outbound call failed: ${controller.signal.aborted ? `no response in ${DIAL_TIMEOUT_MS / 1000} s` : String(err).slice(0, 300)}`);
+  } finally {
+    clearTimeout(timer);
+  }
   const text = await res.text();
   if (!res.ok) throw new Error(`Cartesia outbound call failed: HTTP ${res.status} ${text.slice(0, 300)}`);
   const body = JSON.parse(text) as { calls?: { agent_call_id?: string; error?: string }[] };

@@ -87,13 +87,15 @@ async function applyOwnerCode(
 
   const secret = process.env.OWNER_TOTP_SECRET;
   if (!secret) return fail("Owner codes are not set up on this deployment (OWNER_TOTP_SECRET).");
+  // The owner row holds the replay counter; without it a code could be reused for the rest of its window.
   const owner = await ctx.db.query("owner").first();
-  const check = checkTotp({ secretBase32: secret, code: args.code, now, lastCounter: owner?.lastTotpCounter });
+  if (!owner) return fail("The owner is not set up on this deployment (run npm run seed).");
+  const check = checkTotp({ secretBase32: secret, code: args.code, now, lastCounter: owner.lastTotpCounter });
   if (!check.ok) {
     if (check.reason !== "malformed") await recordWrongCode(ctx, approval, method, check.reason, now);
     return fail(describeRejection(check.reason));
   }
-  if (owner) await ctx.db.patch(owner._id, { lastTotpCounter: check.counter });
+  await ctx.db.patch(owner._id, { lastTotpCounter: check.counter });
 
   const message = await applyAction(ctx, c, approval, action, method, now);
   await ctx.scheduler.runAfter(0, internal.pipeline.advance, { caseId });
@@ -142,12 +144,14 @@ async function applyAction(
   const via = method === "otp" ? "authenticator code" : "ASI:One + authenticator code";
   if (action === "approve") {
     const { coolingOffSeconds } = await summarizeCase(ctx, c);
-    const coolingOffUntil = coolingOffSeconds > 0 ? now + coolingOffSeconds * 1000 : undefined;
+    // Always a timestamp: the engine reads a missing one as "cooling-off not started" and holds forever.
+    const coolingOffUntil = now + coolingOffSeconds * 1000;
+    const coolingOff = coolingOffSeconds > 0;
     await ctx.db.patch(approval._id, { method, approvedAt: now, coolingOffUntil, attempts: 0 });
     await appendAudit(ctx, { caseId: c._id, actor: "owner", action: "approval.approved", payload: { method, coolingOffUntil } });
-    const summary = coolingOffUntil ? `Approved via ${via} · cooling-off ${coolingOffSeconds}s` : `Approved via ${via}`;
+    const summary = coolingOff ? `Approved via ${via} · cooling-off ${coolingOffSeconds}s` : `Approved via ${via}`;
     await finishLane(ctx, c._id, summary);
-    const message = coolingOffUntil
+    const message = coolingOff
       ? `Approved. The payment is released in ${coolingOffSeconds}s unless you cancel.`
       : "Approved. Countersign is releasing the payment.";
     await notify(ctx, c._id, message);
