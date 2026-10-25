@@ -10,6 +10,7 @@ export const channel = v.union(
   v.literal("email"),
   v.literal("agent"),
   v.literal("whatsapp"),
+  v.literal("bank"), // P1: Lumen Bank opened the case (a bank-detail change on /bank)
 );
 
 export const caseStatus = v.union(
@@ -194,7 +195,9 @@ export default defineSchema({
     routing: v.string(),
     accountLast4: v.string(),
     status: v.union(v.literal("active"), v.literal("frozen")),
-    pendingChange: v.optional(v.object({ routing: v.string(), accountLast4: v.string(), requestedAt: v.number() })),
+    pendingChange: v.optional(
+      v.object({ routing: v.string(), accountLast4: v.string(), requestedAt: v.number(), caseId: v.optional(v.id("cases")) }),
+    ),
     note: v.optional(v.string()), // shown on /bank, e.g. "Frozen: Countersign is calling Pixel & Pine"
     updatedAt: v.number(),
   }).index("by_vendor", ["vendorId"]),

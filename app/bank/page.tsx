@@ -2,8 +2,9 @@
 // Lumen Bank (owner: P1). The sandbox bank's own view: balance, payee file, the live transfer ledger, and a
 // panel that plays a hijacked agent: four real requests to POST /bank/transfers, each refused by the bank's
 // own checks (convex/bank.ts). Everything shown comes from real rows and real HTTP responses.
-import { useQuery } from "convex/react";
-import { useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
+import { useState, type FormEvent } from "react";
 import { api } from "../../convex/_generated/api";
 import { generateCountersignKeys, signPayload, type ReleasePayload } from "../../shared/bank/payload";
 import { formatCents } from "../../shared/ledger";
@@ -137,15 +138,7 @@ export default function BankPage() {
             <p className="bk-label">Payees on file</p>
             <ul className="bk-payees">
               {overview?.payees.map((p) => (
-                <li key={p._id} data-status={p.status}>
-                  <span className="bk-payee-name">{p.name}</span>
-                  <span className="bk-mono">…{p.accountLast4}</span>
-                  {p.status === "frozen" ? (
-                    <span className="bk-frozen">{p.note ?? `Frozen: Countersign is calling ${p.name}`}</span>
-                  ) : (
-                    <span className="bk-active">Active</span>
-                  )}
-                </li>
+                <Payee key={p._id} p={p} />
               ))}
             </ul>
           </section>
@@ -234,3 +227,66 @@ function BankMark() {
     </svg>
   );
 }
+
+type PayeeRow = NonNullable<ReturnType<typeof useQuery<typeof api.bank.overview>>>["payees"][number];
+
+/** One payee, with "Change bank details": the bank freezes the payee and asks Countersign to check. */
+function Payee({ p }: { p: PayeeRow }) {
+  const request = useMutation(api.bank.requestBankChange);
+  const [open, setOpen] = useState(false);
+  const [routing, setRouting] = useState("");
+  const [account, setAccount] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await request({ payeeId: p._id, routing, account });
+      setOpen(false);
+      setRouting("");
+      setAccount("");
+    } catch (err) {
+      setError(err instanceof ConvexError ? String(err.data) : "Couldn't send the change. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const refused = p.status === "active" && p.note;
+  return (
+    <li data-status={p.status}>
+      <span className="bk-payee-name">{p.name}</span>
+      <span className="bk-mono">…{p.accountLast4}{p.pendingLast4 && <span className="bk-pending"> → …{p.pendingLast4}?</span>}</span>
+      {p.status === "frozen" ? (
+        <span className="bk-frozen">{p.note ?? `Frozen: Countersign is calling ${p.name}`}</span>
+      ) : (
+        <span className={refused ? "bk-refused" : "bk-active"}>{refused ? p.note : "Active"}</span>
+      )}
+      {p.status === "active" && !open && (
+        <button type="button" className="bk-change" onClick={() => setOpen(true)}>
+          Change bank details
+        </button>
+      )}
+      {open && (
+        <form className="bk-change-form" onSubmit={submit}>
+          <input inputMode="numeric" placeholder="New routing (9 digits)" value={routing} onChange={(e) => setRouting(e.target.value)} aria-label="New routing number" />
+          <input inputMode="numeric" placeholder="New account number" value={account} onChange={(e) => setAccount(e.target.value)} aria-label="New account number" />
+          <div className="bk-change-actions">
+            <button type="submit" className="lp-btn lp-btn-primary" disabled={busy || !routing || !account}>
+              {busy ? "Sending…" : "Ask the bank to change it"}
+            </button>
+            <button type="button" className="bk-cancel" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+          </div>
+          <p className="bk-change-note">The bank freezes this payee and Countersign phones {p.name} on the number already on file before anything changes.</p>
+          {error && <p className="bk-change-error" role="alert">{error}</p>}
+        </form>
+      )}
+    </li>
+  );
+}
+

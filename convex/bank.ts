@@ -7,11 +7,13 @@
 // Doors in:  internal.bank.transfer (the Payer)   ·   POST /bank/transfers (anyone, e.g. a hijacked agent)
 // Same checks for both. Honesty: the bank and the signer share one deployment here; in production the
 // bank holds only the public key and the signer runs in its own isolated service.
-import { v } from "convex/values";
-import { httpAction, internalMutation, query, type MutationCtx } from "./_generated/server";
+import { ConvexError, v } from "convex/values";
+import { httpAction, internalMutation, mutation, query, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { appendAudit } from "./audit";
+import { openCase } from "./cases";
+import type { PaymentRequest } from "../shared/types";
 import { jwkFromEnv, parsePayload, sha256Hex } from "../shared/bank/payload";
 import { evaluateTransfer } from "../shared/bank/verify";
 
@@ -198,7 +200,14 @@ export const overview = query({
       // Only payees for the current vendor book (a reseeded dev deployment leaves old ones behind).
       payees: payees
         .filter((p) => vendors.has(p.vendorId))
-        .map((p) => ({ _id: p._id, name: p.name, accountLast4: p.accountLast4, status: p.status, note: p.note ?? null, pendingLast4: p.pendingChange?.accountLast4 ?? null })),
+        .map((p) => ({
+          _id: p._id,
+          name: p.name,
+          accountLast4: p.accountLast4,
+          status: p.status,
+          note: p.note ?? null,
+          pendingLast4: p.pendingChange?.accountLast4 ?? null,
+        })),
       transfers: transfers.map((t) => ({
         _id: t._id,
         payeeName: t.payeeName,
@@ -230,3 +239,124 @@ export const replaySample = query({
   },
 });
 
+// ---- 2c. A bank-detail change goes through Countersign before the bank applies it ----
+// /bank's "Change bank details" freezes the payee and opens a Countersign case with the request already
+// filled in (no LLM intake). R2/R3 make the pipeline call the vendor back on the number on file. When the
+// case closes, onCaseSettled applies the outcome: denied -> the change is refused and the payee is active
+// again on its old details; confirmed -> it stays frozen until Priya approves; anything else -> frozen.
+// The engine can't return PAY here (no amount, no invoice), and nothing moves money.
+
+export const BANK_SENDER = "bank:lumen";
+const CHANGES_PER_10_MIN = 5;
+
+export const requestBankChange = mutation({
+  args: { payeeId: v.id("bankPayees"), routing: v.string(), account: v.string() },
+  handler: async (ctx, { payeeId, routing, account }) => {
+    const r = routing.replace(/\s/g, "");
+    const a = account.replace(/\s/g, "");
+    if (!/^\d{9}$/.test(r)) throw new ConvexError("Routing numbers are 9 digits.");
+    if (!/^\d{4,17}$/.test(a)) throw new ConvexError("Account numbers are 4 to 17 digits.");
+    const payee = await ctx.db.get(payeeId);
+    if (!payee) throw new ConvexError("That payee isn't on file.");
+    if (payee.status === "frozen") throw new ConvexError(`${payee.name} is already frozen while Countersign checks a change.`);
+    const vendor = await ctx.db.get(payee.vendorId);
+    if (!vendor) throw new ConvexError("That payee's vendor is no longer in the vendor book.");
+    if (r === payee.routing && a.slice(-4) === payee.accountLast4) throw new ConvexError("Those are the details already on file.");
+
+    // Abuse limit for a public button: a handful of change checks every ten minutes.
+    const recent = await ctx.db
+      .query("cases")
+      .withIndex("by_from", (q) => q.eq("fromAddress", BANK_SENDER))
+      .order("desc")
+      .take(CHANGES_PER_10_MIN);
+    if (recent.length >= CHANGES_PER_10_MIN && recent.every((c) => c.createdAt > Date.now() - 10 * 60_000)) {
+      throw new ConvexError("Too many bank-detail changes right now. Try again in a few minutes.");
+    }
+
+    const now = Date.now();
+    const { caseId } = await openCase(ctx, {
+      channel: "bank",
+      fromAddress: BANK_SENDER,
+      rawContent: `Lumen Bank: request to change ${payee.name}'s payout account to routing ${r}, account ending ${a.slice(-4)}. The payee is frozen until Countersign checks it.`,
+    });
+    // Filled in now, so the pipeline skips the LLM intake (it only parses cases without a request).
+    const request: PaymentRequest = {
+      claimedVendorName: payee.name,
+      claimedSenderRole: "unknown",
+      amountCents: null,
+      currency: "USD",
+      invoiceNumber: null,
+      newBankDetails: { routing: r, account: a },
+      urgencyClaims: [],
+      requestedAction: "change_bank",
+      injectionAttempt: false,
+    };
+    await ctx.db.patch(caseId, { request, status: "PARSED", updatedAt: now });
+    await ctx.db.patch(payeeId, {
+      status: "frozen",
+      pendingChange: { routing: r, accountLast4: a.slice(-4), requestedAt: now, caseId },
+      note: `Frozen: Countersign is calling ${payee.name}`,
+      updatedAt: now,
+    });
+    await appendAudit(ctx, {
+      caseId,
+      actor: "bank",
+      action: "bank.payee.change_requested",
+      payload: { payee: payee.name, fromLast4: payee.accountLast4, toLast4: a.slice(-4) },
+    });
+    return { caseId };
+  },
+});
+
+/** Called by channels/reply.dispatch for "bank" cases. Acts once, when the case is closed. */
+export const onCaseSettled = internalMutation({
+  args: { caseId: v.id("cases") },
+  handler: async (ctx, { caseId }) => {
+    const c = await ctx.db.get(caseId);
+    if (!c || c.status !== "CLOSED") return;
+    const payee = (await ctx.db.query("bankPayees").collect()).find((p) => p.pendingChange?.caseId === caseId);
+    if (!payee || payee.status !== "frozen") return; // already settled
+
+    const callback = await ctx.db
+      .query("callbacks")
+      .withIndex("by_case", (q) => q.eq("caseId", caseId))
+      .order("desc")
+      .first();
+    const outcome = callback?.outcome ?? null;
+    const now = Date.now();
+
+    if (outcome === "denied") {
+      await ctx.db.patch(payee._id, {
+        status: "active",
+        pendingChange: undefined,
+        note: `Change refused: ${payee.name} said they didn't ask for this`,
+        updatedAt: now,
+      });
+      await appendAudit(ctx, { caseId, actor: "bank", action: "bank.payee.change_refused", payload: { payee: payee.name, keptLast4: payee.accountLast4 } });
+      return;
+    }
+    const note =
+      outcome === "confirmed"
+        ? "Vendor confirmed by phone; Priya must approve on /owner"
+        : `Couldn't confirm with ${payee.name}; the change stays frozen`;
+    await ctx.db.patch(payee._id, { note, updatedAt: now });
+    await appendAudit(ctx, { caseId, actor: "bank", action: "bank.payee.change_held", payload: { payee: payee.name, outcome } });
+  },
+});
+
+
+/**
+ * Operator reset for a frozen payee: back to active on the details already on file, pending change dropped.
+ * npx convex run bank:unfreezePayee '{"name":"Pixel & Pine Design"}'    (CLI only; not a public button)
+ */
+export const unfreezePayee = internalMutation({
+  args: { name: v.string() },
+  handler: async (ctx, { name }) => {
+    const payees = (await ctx.db.query("bankPayees").collect()).filter((p) => p.name === name);
+    for (const p of payees) {
+      await ctx.db.patch(p._id, { status: "active", pendingChange: undefined, note: undefined, updatedAt: Date.now() });
+    }
+    await appendAudit(ctx, { actor: "bank", action: "bank.payee.unfrozen", payload: { name, count: payees.length } });
+    return { unfrozen: payees.length };
+  },
+});
