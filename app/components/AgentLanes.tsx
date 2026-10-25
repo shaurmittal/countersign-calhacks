@@ -122,7 +122,7 @@ function Summary({ text }: { text: string }) {
   if (!glyph.test(text)) return <>{text}</>;
   return (
     <span className="inline-flex items-start gap-1.5">
-      <TriangleAlert className="mt-[3px] size-3.5 shrink-0 text-hold-ink" aria-hidden="true" />
+      <TriangleAlert className="mt-[3px] size-3.5 shrink-0 text-foreground" aria-hidden="true" />
       {text.replace(new RegExp(glyph.source, "gu"), "").replace(/\s{2,}/g, " ").trim()}
     </span>
   );
@@ -231,7 +231,7 @@ function RiskDetail({ risk }: { risk: RiskFindings }) {
         <span className="flex h-[22px] w-28 items-center" role="img" aria-label={`Risk score ${score} of 100`}>
           <span className="h-1 w-full overflow-hidden rounded-full bg-white/10">
             <span
-              className={cn("block h-full origin-left rounded-full transition-transform duration-500", score >= 60 ? "bg-block" : score >= 30 ? "bg-hold" : "bg-white/60")}
+              className={cn("block h-full origin-left rounded-full transition-transform duration-500", "bg-white/70")}
               style={{ transform: `scaleX(${score / 100})` }}
             />
           </span>

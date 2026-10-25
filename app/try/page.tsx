@@ -398,7 +398,7 @@ function VendorBook() {
           <li key={v.name} className="bg-background px-4 py-3">
             <p className="flex items-center justify-between gap-2 text-[13.5px] font-medium">
               {v.name}
-              {v.realPhone && <span className="text-[11.5px] font-normal text-hold-ink">Rings a real phone</span>}
+              {v.realPhone && <span className="text-[11.5px] font-normal text-muted-foreground">Rings a real phone</span>}
             </p>
             <p className="mt-0.5 font-mono text-[11.5px] text-muted-foreground">
               {v.openInvoices.length > 0

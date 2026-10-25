@@ -227,7 +227,7 @@ function EntryItem({ entry, disabled, onRemove }: { entry: Entry; disabled: bool
     <li className={cn("flex items-center justify-between gap-3 bg-background px-4 py-3", entry.expired && "opacity-55")}>
       <div className="min-w-0">
         <p className="flex flex-wrap items-center gap-2">
-          <Stamp tone={entry.kind === "deny" ? "block" : "pay"} size="sm">
+          <Stamp tone={entry.kind === "deny" ? "block" : "neutral"} size="sm">
             {entry.kind === "deny" ? "Blocked" : "Trusted"}
           </Stamp>
           <span className="truncate font-mono text-[13.5px]">{entry.value}</span>

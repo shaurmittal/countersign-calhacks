@@ -1,0 +1,492 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-24T00:00:00Z",
+  "title": "Design System: Countersign",
+  "extensions": {
+    "colorMeta": {
+      "oled-black": {
+        "role": "neutral",
+        "displayName": "OLED Black",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(48% 0 0)",
+          "oklch(60% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "white-ink": {
+        "role": "primary",
+        "displayName": "White Ink",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(48% 0 0)",
+          "oklch(60% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "bay-surface": {
+        "role": "neutral",
+        "displayName": "Bay Surface",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(48% 0 0)",
+          "oklch(60% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "skeleton-fill": {
+        "role": "neutral",
+        "displayName": "Skeleton Fill",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(48% 0 0)",
+          "oklch(60% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "rgb(255 255 255 / 0.09)",
+        "tonalRamp": [
+          "rgb(255 255 255 / 0.02)",
+          "rgb(255 255 255 / 0.04)",
+          "rgb(255 255 255 / 0.06)",
+          "rgb(255 255 255 / 0.08)",
+          "rgb(255 255 255 / 0.09)",
+          "rgb(255 255 255 / 0.10)",
+          "rgb(255 255 255 / 0.16)",
+          "rgb(255 255 255 / 0.25)"
+        ]
+      },
+      "hairline-strong": {
+        "role": "neutral",
+        "displayName": "Hairline Strong",
+        "canonical": "rgb(255 255 255 / 0.16)",
+        "tonalRamp": [
+          "rgb(255 255 255 / 0.02)",
+          "rgb(255 255 255 / 0.04)",
+          "rgb(255 255 255 / 0.06)",
+          "rgb(255 255 255 / 0.08)",
+          "rgb(255 255 255 / 0.09)",
+          "rgb(255 255 255 / 0.10)",
+          "rgb(255 255 255 / 0.16)",
+          "rgb(255 255 255 / 0.25)"
+        ]
+      },
+      "muted-ink": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(48% 0 0)",
+          "oklch(60% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "subtle-ink": {
+        "role": "neutral",
+        "displayName": "Subtle Ink",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(48% 0 0)",
+          "oklch(60% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "placeholder-ink": {
+        "role": "neutral",
+        "displayName": "Placeholder Ink",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(48% 0 0)",
+          "oklch(60% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "cleared-green": {
+        "role": "secondary",
+        "displayName": "Cleared Green",
+        "tonalRamp": [
+          "oklch(15% 0.19 149.6)",
+          "oklch(25% 0.19 149.6)",
+          "oklch(35% 0.19 149.6)",
+          "oklch(48% 0.19 149.6)",
+          "oklch(60% 0.19 149.6)",
+          "oklch(72% 0.19 149.6)",
+          "oklch(84% 0.19 149.6)",
+          "oklch(95% 0.19 149.6)"
+        ]
+      },
+      "cleared-green-ink": {
+        "role": "secondary",
+        "displayName": "Cleared Green Ink",
+        "tonalRamp": [
+          "oklch(15% 0.19 149.6)",
+          "oklch(25% 0.19 149.6)",
+          "oklch(35% 0.19 149.6)",
+          "oklch(48% 0.19 149.6)",
+          "oklch(60% 0.19 149.6)",
+          "oklch(72% 0.19 149.6)",
+          "oklch(84% 0.19 149.6)",
+          "oklch(95% 0.19 149.6)"
+        ]
+      },
+      "refusal-red": {
+        "role": "secondary",
+        "displayName": "Refusal Red",
+        "tonalRamp": [
+          "oklch(15% 0.21 25.3)",
+          "oklch(25% 0.21 25.3)",
+          "oklch(35% 0.21 25.3)",
+          "oklch(48% 0.21 25.3)",
+          "oklch(60% 0.21 25.3)",
+          "oklch(72% 0.21 25.3)",
+          "oklch(84% 0.21 25.3)",
+          "oklch(95% 0.21 25.3)"
+        ]
+      },
+      "refusal-red-ink": {
+        "role": "secondary",
+        "displayName": "Refusal Red Ink",
+        "tonalRamp": [
+          "oklch(15% 0.21 25.3)",
+          "oklch(25% 0.21 25.3)",
+          "oklch(35% 0.21 25.3)",
+          "oklch(48% 0.21 25.3)",
+          "oklch(60% 0.21 25.3)",
+          "oklch(72% 0.21 25.3)",
+          "oklch(84% 0.21 25.3)",
+          "oklch(95% 0.21 25.3)"
+        ]
+      },
+      "hold-amber": {
+        "role": "secondary",
+        "displayName": "Hold Amber",
+        "tonalRamp": [
+          "oklch(15% 0.17 70.1)",
+          "oklch(25% 0.17 70.1)",
+          "oklch(35% 0.17 70.1)",
+          "oklch(48% 0.17 70.1)",
+          "oklch(60% 0.17 70.1)",
+          "oklch(72% 0.17 70.1)",
+          "oklch(84% 0.17 70.1)",
+          "oklch(95% 0.17 70.1)"
+        ]
+      },
+      "hold-amber-ink": {
+        "role": "secondary",
+        "displayName": "Hold Amber Ink",
+        "tonalRamp": [
+          "oklch(15% 0.17 70.1)",
+          "oklch(25% 0.17 70.1)",
+          "oklch(35% 0.17 70.1)",
+          "oklch(48% 0.17 70.1)",
+          "oklch(60% 0.17 70.1)",
+          "oklch(72% 0.17 70.1)",
+          "oklch(84% 0.17 70.1)",
+          "oklch(95% 0.17 70.1)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page title in the header, one per page (22px mobile, 26px desktop)."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "The dominant money figure on a page (28 to 40px)."
+      },
+      "metric": {
+        "displayName": "Metric",
+        "purpose": "Scoreboard rail values, rolled digit by digit."
+      },
+      "stamp": {
+        "displayName": "Stamp",
+        "purpose": "Verdict stamps only; the one uppercase, letter-spaced style (up to 30px with 0.1em on the live strip)."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Payee line on a strip."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "The .cs default text."
+      },
+      "section": {
+        "displayName": "Section",
+        "purpose": "Bay and section headings, button labels."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Metric labels, row secondary lines, tags, notes."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Times, sequence numbers, hashes, routing and last-4, rule IDs."
+      }
+    },
+    "shadows": [
+      {
+        "name": "none",
+        "value": "none",
+        "purpose": "The app is flat; depth is tonal (black ground, #0a0a0a bays, white washes) and hairlines."
+      }
+    ],
+    "motion": [
+      {
+        "name": "spring-smooth",
+        "value": "spring(stiffness 200, damping 28, mass 0.85)",
+        "purpose": "Rows and panels settling into place; audit feed insertion."
+      },
+      {
+        "name": "spring-snappy",
+        "value": "spring(stiffness 380, damping 30, mass 0.5)",
+        "purpose": "Rail hover pill following the pointer."
+      },
+      {
+        "name": "spring-morph",
+        "value": "spring(stiffness 220, damping 32, mass 1)",
+        "purpose": "Shared-layout moves: active nav pill, selected strip."
+      },
+      {
+        "name": "spring-stamp",
+        "value": "spring(stiffness 260, damping 22, mass 0.8)",
+        "purpose": "Verdict stamp landing from scale 1.18 and 6px blur."
+      },
+      {
+        "name": "spring-digit",
+        "value": "spring(stiffness 170, damping 22, mass 0.6)",
+        "purpose": "Rolling digit columns in live numbers."
+      },
+      {
+        "name": "ease-soft",
+        "value": "0.32s cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Soft reveals."
+      },
+      {
+        "name": "ease-fast",
+        "value": "0.2s cubic-bezier(0.2, 0, 0, 1)",
+        "purpose": "Quick state changes."
+      },
+      {
+        "name": "live-ring",
+        "value": "2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite",
+        "purpose": "Live dot pulse; off under reduced motion."
+      },
+      {
+        "name": "skeleton-sweep",
+        "value": "1.6s ease-in-out infinite",
+        "purpose": "Loading sweep; off under reduced motion."
+      },
+      {
+        "name": "button-press",
+        "value": "150ms background-color/color/transform; active scale 0.98",
+        "purpose": "Button feedback."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Filled white on black; the default action.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Send code</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:500;font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;cursor:pointer;transition:background-color 150ms,color 150ms,transform 150ms;}.ds-btn:active{transform:scale(0.98);}.ds-btn:focus-visible{outline:2px solid #fafafa;outline-offset:2px;}.ds-btn-primary{background:#fafafa;color:#000;border:0;}.ds-btn-primary:hover{background:rgb(255 255 255 / 0.85);}"
+    },
+    {
+      "name": "Approve Button",
+      "kind": "button",
+      "refersTo": "button-approve",
+      "description": "Filled green; only for the owner's approval of a payment or bank change.",
+      "html": "<button class=\"ds-btn ds-btn-approve\">Approve $4,800.00</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:500;font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;cursor:pointer;transition:background-color 150ms,color 150ms,transform 150ms;}.ds-btn:active{transform:scale(0.98);}.ds-btn:focus-visible{outline:2px solid #fafafa;outline-offset:2px;}.ds-btn-approve{background:#22c55e;color:#000;border:0;}.ds-btn-approve:hover{background:#4ade80;}"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Red ink and hairline; declines and refusals.",
+      "html": "<button class=\"ds-btn ds-btn-danger\">Decline</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:500;font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;cursor:pointer;transition:background-color 150ms,color 150ms,transform 150ms;}.ds-btn:active{transform:scale(0.98);}.ds-btn:focus-visible{outline:2px solid #fafafa;outline-offset:2px;}.ds-btn-danger{background:transparent;color:#f87171;border:1px solid rgb(239 68 68 / 0.5);}.ds-btn-danger:hover{background:rgb(239 68 68 / 0.1);}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Strong hairline, white text; secondary actions such as Follow newest.",
+      "html": "<button class=\"ds-btn ds-btn-ghost\">Follow newest</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:500;font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;cursor:pointer;transition:background-color 150ms,color 150ms,transform 150ms;}.ds-btn:active{transform:scale(0.98);}.ds-btn:focus-visible{outline:2px solid #fafafa;outline-offset:2px;}.ds-btn-ghost{background:transparent;color:#fafafa;border:1px solid rgb(255 255 255 / 0.16);}.ds-btn-ghost:hover{background:rgb(255 255 255 / 0.06);}"
+    },
+    {
+      "name": "Verdict Stamps",
+      "kind": "chip",
+      "refersTo": "stamp",
+      "description": "Mono uppercase verdict at a strip's end, toned by decision.",
+      "html": "<div class=\"ds-stamps\"><span class=\"ds-stamp ds-pay\">PAY</span><span class=\"ds-stamp ds-block\">BLOCK</span><span class=\"ds-stamp ds-hold\">HOLD</span><span class=\"ds-stamp ds-owner\">ESCALATE</span><span class=\"ds-stamp ds-neutral\">checking…</span></div>",
+      "css": ".ds-stamps{display:flex;gap:8px;flex-wrap:wrap;background:#000;padding:12px;}.ds-stamp{display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:6px;border:1px solid;font-family: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace; font-variant-numeric: tabular-nums;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;}.ds-pay{border-color:rgb(34 197 94 / 0.5);background:rgb(34 197 94 / 0.12);color:#4ade80;}.ds-block{border-color:rgb(239 68 68 / 0.5);background:rgb(239 68 68 / 0.12);color:#f87171;}.ds-hold{border-color:rgb(245 158 11 / 0.4);background:rgb(245 158 11 / 0.08);color:#fbbf24;}.ds-owner{border-color:rgb(255 255 255 / 0.4);background:rgb(255 255 255 / 0.06);color:#fafafa;}.ds-neutral{border-color:rgb(255 255 255 / 0.16);color:#a3a3a3;}"
+    },
+    {
+      "name": "Tag",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "A fact about a case; the key fired rule takes its decision's tone.",
+      "html": "<div class=\"ds-tags\"><span class=\"ds-tag ds-tag-block\"><b>R1</b> Unknown vendor</span><span class=\"ds-tag\"><b>R15</b> Injection attempt</span></div>",
+      "css": ".ds-tags{display:flex;gap:6px;background:#000;padding:12px;}.ds-tag{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:6px;border:1px solid rgb(255 255 255 / 0.16);color:rgb(250 250 250 / 0.85);font-size:12px;line-height:18px;font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;}.ds-tag b{font-family: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace; font-variant-numeric: tabular-nums;font-weight:500;}.ds-tag-block{color:#f87171;border-color:rgb(239 68 68 / 0.3);background:rgb(239 68 68 / 0.07);}"
+    },
+    {
+      "name": "Flight Strip List",
+      "kind": "custom",
+      "refersTo": "strip-row",
+      "description": "Fixed-column rows in a bay; 1px gaps draw the hairlines; refused names struck through.",
+      "html": "<ol class=\"ds-strips\"><li class=\"ds-strip\"><time>10:03 PM</time><span class=\"ds-who\">Northwind Cloud<small>change bank details</small></span><span class=\"ds-mini ds-mini-hold\">HOLD</span></li><li class=\"ds-strip ds-selected\"><time>10:04 PM</time><span class=\"ds-who\"><s>…49ae</s><small>send a wire · $500.00</small></span><span class=\"ds-mini ds-mini-block\">BLOCK</span></li></ol>",
+      "css": ".ds-strips{list-style:none;margin:0;padding:0;display:grid;gap:1px;background:rgb(255 255 255 / 0.09);border:1px solid rgb(255 255 255 / 0.09);border-radius:8px;overflow:hidden;width:340px;font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;}.ds-strip{display:grid;grid-template-columns:64px minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px 12px;background:#000;color:rgb(250 250 250 / 0.9);font-size:14px;transition:background 150ms;}.ds-strip:hover{background:#0a0a0a;}.ds-selected{background:#141414;}.ds-strip time{font-family: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace; font-variant-numeric: tabular-nums;font-size:13px;color:#8f8f8f;}.ds-who small{display:block;font-size:13px;color:#a3a3a3;}.ds-who s{text-decoration-color:rgb(248 113 113 / 0.55);text-decoration-thickness:1px;}.ds-mini{height:24px;display:inline-flex;align-items:center;padding:0 6px;border-radius:6px;border:1px solid;font-family: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace; font-variant-numeric: tabular-nums;font-size:11.5px;font-weight:600;letter-spacing:0.08em;}.ds-mini-hold{border-color:rgb(245 158 11 / 0.4);background:rgb(245 158 11 / 0.08);color:#fbbf24;}.ds-mini-block{border-color:rgb(239 68 68 / 0.5);background:rgb(239 68 68 / 0.12);color:#f87171;}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Black field, strong hairline, white border on focus.",
+      "html": "<input class=\"ds-input\" placeholder=\"sender@example.com\" />",
+      "css": ".ds-input{height:40px;width:280px;padding:0 12px;border-radius:8px;border:1px solid rgb(255 255 255 / 0.16);background:#000;color:#fafafa;font-size:14px;font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;outline:none;transition:border-color 150ms;}.ds-input::placeholder{color:#737373;}.ds-input:focus{border-color:#fafafa;}"
+    },
+    {
+      "name": "OTP Input",
+      "kind": "input",
+      "refersTo": "otp-digit",
+      "description": "Six mono digit boxes for the owner's authenticator code.",
+      "html": "<div class=\"ds-otp\"><input value=\"4\" maxlength=\"1\"/><input value=\"8\" maxlength=\"1\"/><input value=\"2\" maxlength=\"1\"/><input maxlength=\"1\"/><input maxlength=\"1\"/><input maxlength=\"1\"/></div>",
+      "css": ".ds-otp{display:flex;gap:8px;background:#000;padding:12px;}.ds-otp input{width:48px;height:56px;border-radius:8px;border:1px solid rgb(255 255 255 / 0.16);background:#0a0a0a;color:#fafafa;text-align:center;font-size:22px;font-family: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace; font-variant-numeric: tabular-nums;outline:none;transition:border-color 150ms;}.ds-otp input:not(:placeholder-shown),.ds-otp input[value]{border-color:rgb(255 255 255 / 0.35);}.ds-otp input:focus{border-color:#fafafa;}"
+    },
+    {
+      "name": "Rail Navigation",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Left rail items with a hover wash and an 8% active pill; filled-white count badge.",
+      "html": "<nav class=\"ds-rail\"><a class=\"ds-nav ds-active\" href=\"#\">War Room</a><a class=\"ds-nav\" href=\"#\">Approvals <span class=\"ds-badge\">1</span></a><a class=\"ds-nav\" href=\"#\">Lumen Bank</a><a class=\"ds-nav\" href=\"#\">Try to scam it</a></nav>",
+      "css": ".ds-rail{display:flex;flex-direction:column;gap:2px;width:208px;padding:12px;background:#000;border-right:1px solid rgb(255 255 255 / 0.09);font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;}.ds-nav{display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 10px;border-radius:8px;font-size:13.5px;color:#a3a3a3;text-decoration:none;transition:color 150ms,background 150ms;}.ds-nav:hover{color:#fafafa;background:rgb(255 255 255 / 0.04);}.ds-nav:focus-visible{outline:2px solid #fafafa;outline-offset:2px;}.ds-active{color:#fafafa;background:rgb(255 255 255 / 0.08);}.ds-badge{background:#fafafa;color:#000;border-radius:6px;padding:0 6px;font-size:11px;font-weight:600;line-height:20px;}"
+    },
+    {
+      "name": "Bay Card",
+      "kind": "card",
+      "refersTo": "bay",
+      "description": "Raised bay holding a decision; border tints when the verdict lands.",
+      "html": "<section class=\"ds-bay\"><p class=\"ds-bay-meta\">10:04:01 PM · Web chat</p><p class=\"ds-bay-title\">Unknown payee <span>$500.00</span></p><p class=\"ds-bay-body\">Refused. The owner has been alerted.</p></section>",
+      "css": ".ds-bay{width:360px;padding:16px 24px;border-radius:12px;background:#0a0a0a;border:1px solid rgb(239 68 68 / 0.3);color:#fafafa;font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;}.ds-bay-meta{margin:0;font-family: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace; font-variant-numeric: tabular-nums;font-size:13px;color:#a3a3a3;}.ds-bay-title{margin:8px 0 0;font-size:16px;font-weight:500;letter-spacing:-0.01em;}.ds-bay-title span{font-family: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace; font-variant-numeric: tabular-nums;font-size:15px;font-weight:400;color:rgb(250 250 250 / 0.85);margin-left:8px;}.ds-bay-body{margin:12px 0 0;font-size:15px;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Flight Strip Board",
+    "overview": "Every payment request is a strip a controller must clear before it lands. The board is OLED black, written in white at stepped alphas, ruled with one-pixel white hairlines. Strips are long, low rows with a fixed column grammar (time, channel, from and ask, verdict stamp); the columns never move, only their values change. One region dominates each page (the live strip in the War Room, the waiting approval on /owner, the account on /bank), and everything else sits in quiet bays beside it.\n\nColour is reserved for outcomes. Green appears only when money is cleared or an approval lands, red only for refusals, amber only for holds; every other pixel is black, white or grey. The verdict is stamped in monospace capitals at the strip's end, the one place the system raises its voice. Motion is spring-settled and conveys state only: a row arriving, a verdict landing, a selection gliding.\n\nDensity is operational, not editorial: 14px body, 12 to 13px labels, mono for every time, amount, hash and code. Nothing disappears when it is cancelled or refused; refused strips stay on the board, struck through.",
+    "keyCharacteristics": [
+      "OLED black ground with white as the only secondary ink, stepped by alpha.",
+      "One rule weight: a 1px white hairline at 9% (16% where a container must read as interactive).",
+      "Fixed-column strips grouped into bays (Working, Waiting, Cleared, Refused, Held).",
+      "A monospace verdict stamp is the only uppercase, letter-spaced text.",
+      "Geist for words, Geist Mono for numbers, times, hashes and codes.",
+      "Flat surfaces; depth comes from tone and hairlines, never shadows."
+    ],
+    "rules": [
+      {
+        "name": "The Outcome-Only Colour Rule",
+        "body": "Green only when money is cleared or an approval lands, red only for refusals, amber only for holds. Everything else is neutral. If a hue does not name a decision, it is grey.",
+        "section": "colors"
+      },
+      {
+        "name": "The White Waits Rule",
+        "body": "A case waiting for the owner is white, not a colour. Escalation is a question, not an outcome.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink-On-Black Rule",
+        "body": "Signal text on black uses the lighter -ink tint, never the base hue; the base hue is for fills, borders and the one filled key-rule cell.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mono-For-Figures Rule",
+        "body": "Every amount, time, hash, code, rule ID and count is Geist Mono with tabular numerals. Words are never mono except inside a stamp.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Shout Rule",
+        "body": "Uppercase and wide letter-spacing belong to the verdict stamp alone. Headings, labels and section titles stay sentence case.",
+        "section": "typography"
+      },
+      {
+        "name": "The Fixed Columns Rule",
+        "body": "A strip's columns never reflow by content; only values change. New information arrives as a new row, not a new layout.",
+        "section": "layout"
+      },
+      {
+        "name": "The Hairline Discipline Rule",
+        "body": "One rule weight (1px) at two strengths (9% and 16%). Separation is a hairline or a tone step, never a shadow or a thicker line.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Wash Ladder Rule",
+        "body": "Interactive emphasis climbs a white-alpha ladder: 4% hover, 6% ghost hover, 8% selected or active, 9 to 10% a user's own chat bubble or mobile active pill.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the ground pure OLED black (#000000) and lift containers only to the bay surface (#0a0a0a).",
+      "Do use green only for cleared money or a landed approval, red only for refusals, amber only for holds, and grey for everything else.",
+      "Do set every amount, time, hash, code and rule ID in Geist Mono with tabular numerals.",
+      "Do separate with 1px white hairlines at 9% or 16%, and draw row dividers with a 1px gap over a hairline-coloured list.",
+      "Do keep refused and cancelled strips on the board, struck through, rather than removing them.",
+      "Do animate only state: rows settle on the smooth spring (stiffness 200, damping 28), selections glide on the morph spring, and all looping motion stops under reduced motion."
+    ],
+    "donts": [
+      "Don't use a signal hue for decoration, status chrome, risk levels, warnings or icons that do not name a decision.",
+      "Don't add box shadows, gradients (beyond the skeleton sweep) or glass effects; depth is tonal.",
+      "Don't set uppercase or letter-spaced text anywhere but the verdict stamp; no eyebrow labels above headings.",
+      "Don't fill a panel with amber; holds stay small (text, stamp, a 5% row wash at most).",
+      "Don't let columns in a strip reflow or move between states.",
+      "Don't import the /demo film's Bricolage Grotesque, JetBrains Mono or amber accent into the app pages."
+    ]
+  }
+}
