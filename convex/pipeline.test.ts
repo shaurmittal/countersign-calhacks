@@ -10,7 +10,7 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { PaymentRequest, VendorFindings } from "../shared/types";
 import { templateReply } from "../shared/reply";
-import { extractPaymentRequest } from "./lib/claude";
+import { composeReply, extractPaymentRequest } from "./lib/claude";
 import { runVendorVerifier } from "./agents/vendorVerifier";
 import { runPayer } from "./agents/payer";
 import { placeOutboundCall } from "./lib/cartesia";
@@ -229,6 +229,27 @@ describe("leader pipeline", () => {
     expect((await callbacksFor(t, caseId2))[0].outcome).toBe("confirmed");
   });
 
+  it("a denied request spoofed from the vendor's own number never marks that number known-bad", async () => {
+    const { t, w } = await setup();
+    given(
+      { claimedVendorName: "Pixel & Pine", claimedSenderRole: "vendor", invoiceNumber: "1042", newBankDetails: NEW_BANK },
+      findings(w.pixel._id, w.inv1042._id, { bankMatches: false, senderOnFile: true }),
+    );
+    const caseId = await open(t, "Pixel & Pine here, we switched banks, pay 1042 to acct 55519921", w.pixel.phoneOnFile);
+    await step(t);
+    await step(t);
+    const [cb] = await callbacksFor(t, caseId);
+    await t.mutation(internal.agents.callbackVerifier.recordOutcome, { callbackId: cb._id, outcome: "denied" });
+    await drain(t);
+
+    const c = await getCase(t, caseId);
+    expect(c?.decision).toBe("BLOCK");
+    expect(c?.policyResult.firedRules).toEqual(expect.arrayContaining(["R2", "R10"]));
+    const pixel = await t.run((ctx) => ctx.db.get(w.pixel._id));
+    expect(pixel?.knownBadSenders ?? []).not.toContain(w.pixel.phoneOnFile);
+    expect(runPayer).not.toHaveBeenCalled();
+  });
+
   it("genuine bank change: callback confirmed -> owner OTP -> vendor record updated (audited) -> PAY", async () => {
     const { t, w } = await setup();
     given(
@@ -258,6 +279,27 @@ describe("leader pipeline", () => {
     expect(pixel?.bankLast4).toBe("9921");
     const audit = await t.run((ctx) => ctx.db.query("auditEvents").collect());
     expect(audit.some((e) => e.action === "vendor.bank_updated")).toBe(true);
+  });
+
+  it("an escalated case is AWAITING_OWNER before its reply is composed, so the owner page never lags the alert", async () => {
+    const { t, w } = await setup();
+    const hl2210 = await t.run(async (ctx) => (await ctx.db.query("invoices").collect()).find((i) => i.number === "HL-2210")!);
+    // Harbor Legal is alwaysEscalate (R6): ESCALATE with no callback.
+    given({ claimedVendorName: "Harbor Legal", invoiceNumber: "HL-2210" }, findings(w.harbor._id, hl2210._id, { senderOnFile: true }));
+    let caseId: Id<"cases"> | null = null;
+    let statusWhenReplyComposed: string | undefined;
+    vi.mocked(composeReply).mockImplementationOnce(async ({ result, ctx }) => {
+      statusWhenReplyComposed = caseId ? (await getCase(t, caseId))?.status : undefined;
+      return { text: templateReply(result, ctx), source: "template" };
+    });
+    caseId = await open(t);
+    await drain(t);
+
+    expect(statusWhenReplyComposed).toBe("AWAITING_OWNER");
+    const c = await getCase(t, caseId);
+    expect(c?.status).toBe("AWAITING_OWNER");
+    expect(c?.replyText).toMatch(/./);
+    expect(await t.query(api.owner.pending, {})).toHaveLength(1);
   });
 
   it("over the auto-pay limit -> ESCALATE, waits for the owner, PAY after OTP", async () => {
@@ -320,6 +362,16 @@ describe("leader pipeline", () => {
     c = await getCase(t, caseId);
     expect(c?.decision).toBe("PAY");
     expect(runPayer).toHaveBeenCalledTimes(1);
+  });
+
+  it("the payment lock refuses a case whose approval was cancelled after the run loaded it", async () => {
+    const { t, w } = await setup();
+    given({ claimedVendorName: "Pixel & Pine", invoiceNumber: "1042" }, findings(w.pixel._id, w.inv1042._id));
+    const caseId = await open(t);
+    await drain(t);
+    await approve(t, caseId, { coolingOffUntil: Date.now() + 60_000, cancelledAt: Date.now() + 1 });
+    expect(await t.mutation(internal.cases.claimPayment, { caseId })).toBe(false);
+    expect((await getCase(t, caseId))?.payStartedAt).toBeUndefined();
   });
 
   it("two pipeline runs racing on an approved case pay exactly once", async () => {

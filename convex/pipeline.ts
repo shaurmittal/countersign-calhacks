@@ -259,8 +259,11 @@ export const advance = internalAction({
     // 4d. Owner step-up.
     if (result.decision === "ESCALATE") {
       if (!approval) {
+        // Status first: the owner page lists AWAITING_OWNER cases, and the alert must not arrive before
+        // the case shows there. The requester's reply (a Claude call) follows.
+        await ctx.runMutation(internal.cases.update, { caseId, status: "AWAITING_OWNER" });
         await ctx.scheduler.runAfter(0, internal.agents.ownerConcierge.requestApproval, { caseId });
-        await settle({ status: "AWAITING_OWNER" });
+        await settle({});
       } else {
         await ctx.runMutation(internal.cases.update, { caseId, status: "AWAITING_OWNER" });
       }
