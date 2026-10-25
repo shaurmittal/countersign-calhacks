@@ -308,7 +308,8 @@ export const advance = internalAction({
     }
 
     // 4f. Final: BLOCK, terminal HOLD, NO_ACTION.
-    if (result.firedRules.includes("R10")) {
+    // The bank's own change request isn't a scammer's address, so it never goes on the known-bad list.
+    if (result.firedRules.includes("R10") && c.channel !== "bank") {
       await ctx.runMutation(internal.cases.markSenderKnownBad, { caseId });
     }
     await finish(result);

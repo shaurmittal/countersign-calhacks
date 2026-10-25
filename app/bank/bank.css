@@ -75,3 +75,18 @@
   .bk-row-why, .bk-row-src, .bk-row-time { grid-column: 2; text-align: left; }
   .bk-tag { display: none; }
 }
+
+/* 2c: changing a payee's bank details */
+.bk-refused { grid-column: 1 / -1; font-size: 13px; color: #ffb4a3; }
+.bk-pending { color: var(--lp-amber-hi); }
+.bk-change { grid-column: 1 / -1; justify-self: start; margin-top: 4px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--lp-line-2); background: transparent; color: var(--lp-soft); font-family: var(--lp-display); font-size: 13px; cursor: pointer; }
+.bk-change:hover { color: var(--lp-fg); border-color: var(--lp-amber); }
+.bk-change-form { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.bk-change-form input { padding: 9px 12px; border-radius: 10px; border: 1px solid var(--lp-line-2); background: var(--lp-panel); color: var(--lp-fg); font-family: var(--lp-mono); font-size: 14px; }
+.bk-change-form input:focus { outline: none; border-color: var(--lp-amber); }
+.bk-change-actions { display: flex; gap: 10px; align-items: center; }
+.bk-change-actions .lp-btn { min-height: 40px; font-size: 14.5px; border: 0; cursor: pointer; }
+.bk-change-actions .lp-btn:disabled { opacity: 0.55; cursor: default; }
+.bk-cancel { background: none; border: 0; color: var(--lp-muted); font-size: 14px; cursor: pointer; }
+.bk-change-note { font-size: 12.5px; color: var(--lp-muted); }
+.bk-change-error { font-size: 13px; color: var(--lp-red); }

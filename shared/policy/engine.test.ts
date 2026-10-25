@@ -362,6 +362,23 @@ describe("policy engine", () => {
     expect(r.decision).toBe("NO_ACTION");
   });
 
+  it("a Lumen Bank change request (change_bank, no amount, no invoice) never PAYs, whatever happens", () => {
+    // What bank:requestBankChange puts on the case; see convex/bankChange.test.ts for the full flow.
+    const bankChange = {
+      request: { claimedVendorName: "Pixel & Pine", requestedAction: "change_bank" as const, invoiceNumber: null, amountCents: null, newBankDetails: { routing: "021000021", account: "55519921" } },
+      vendorFindings: { senderOnFile: false, bankMatches: false, matchingInvoiceId: null },
+      invoice: null,
+    };
+    expect(decide(input(bankChange))).toMatchObject({ decision: "HOLD", needs: { callback: true } });
+    expect(decide(input(bankChange)).firedRules).toEqual(expect.arrayContaining(["R2", "R3", "R5", "R14"]));
+    for (const callbackOutcome of ["confirmed", "denied", "no_answer", "unclear"] as const) {
+      for (const approval of [null, APPROVED]) {
+        expect(decide(input({ ...bankChange, callbackOutcome, approval })).decision, `${callbackOutcome} ${approval ? "approved" : ""}`).not.toBe("PAY");
+      }
+    }
+    expect(decide(input({ ...bankChange, callbackOutcome: "denied" })).decision).toBe("BLOCK");
+  });
+
   it("only R12 ever produces PAY", () => {
     // Exhaustive-ish sweep over the flags that could matter; every PAY must carry R12.
     const outcomes = [null, "confirmed", "denied", "no_answer", "unclear"] as const;

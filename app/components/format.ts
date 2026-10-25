@@ -9,6 +9,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   agent: "Agent (Fetch.ai)",
   web: "Web chat",
   whatsapp: "WhatsApp",
+  bank: "Lumen Bank",
 };
 
 export function channelLabel(channel: string): string {
