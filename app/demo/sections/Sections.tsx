@@ -249,7 +249,7 @@ export function YourTurn() {
   useEffect(() => {
     const url = `${window.location.origin}/try`;
     setTryUrl(url);
-    QRCode.toString(url, { type: "svg", margin: 0, errorCorrectionLevel: "M", color: { dark: "#ECEEF1", light: "#00000000" } })
+    QRCode.toString(url, { type: "svg", margin: 0, errorCorrectionLevel: "M", color: { dark: "#FAFAFA", light: "#00000000" } })
       .then(setQr)
       .catch(() => setQr(null));
   }, []);
