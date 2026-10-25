@@ -185,6 +185,7 @@ export default function TryPage() {
               Or email a real one: <a href={`mailto:${EMAIL_ADDRESS}`}>{EMAIL_ADDRESS}</a>
             </p>
           )}
+          <VendorBook />
           <div className="tr-side-note">
             <p>
               <b>What you're up against.</b> Six AI agents read, check and talk. Only the Policy Engine, plain code with{" "}
@@ -223,7 +224,7 @@ export default function TryPage() {
             onChange={(e) => setDraft(e.target.value)}
             maxLength={2000}
             rows={1}
-            placeholder="Ask Countersign to pay someone…"
+            placeholder="Message Countersign: a payment request, a question, anything…"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -282,7 +283,7 @@ function Turn({ m }: { m: Message }) {
         <div className="tr-cs" data-decision={settled ? m.decision : undefined}>
           <p className="tr-cs-who">Countersign</p>
           <p className="tr-cs-text">{m.reply}</p>
-          {settled && <Verdict m={m} />}
+          {settled && <Verdict m={m} triage={m.triage} />}
         </div>
       )}
     </li>
@@ -320,14 +321,22 @@ const VERDICT_LABEL: Record<string, string> = {
   NO_ACTION: "Nothing to pay",
 };
 
-function Verdict({ m }: { m: Outcome }) {
+/** A message that asks for no money: forwarded to Priya, filtered as spam, or just answered. */
+function noActionStamp(triage: string | null | undefined): [string, string] {
+  if (triage === "sales_or_spam") return ["FILTERED", "Spam, not passed on"];
+  if (triage && triage !== "payment") return ["FORWARDED", "Not a payment: passed to Priya"];
+  return ["OK", VERDICT_LABEL.NO_ACTION];
+}
+
+function Verdict({ m, triage }: { m: Outcome; triage?: string | null }) {
   const seconds = m.decidedAt ? (m.decidedAt - m.createdAt) / 1000 : null;
   const decision = m.decision ?? "HOLD";
+  const [word, label] = decision === "NO_ACTION" ? noActionStamp(triage) : [decision, VERDICT_LABEL[decision]];
   return (
     <div className="tr-verdict">
       <p className="tr-stamp" data-decision={decision}>
-        {decision === "NO_ACTION" ? "OK" : decision}
-        <span>{VERDICT_LABEL[decision]}</span>
+        {word}
+        <span>{label}</span>
       </p>
       {m.rules.length > 0 && (
         <ul className="tr-rules" aria-label="Rules that fired">
@@ -340,6 +349,34 @@ function Verdict({ m }: { m: Outcome }) {
       )}
       {seconds !== null && <p className="tr-time">Decided by plain code in {seconds.toFixed(1)}s</p>}
     </div>
+  );
+}
+
+/** Who Lumen Labs pays: the names to impersonate, and whose number on file rings a real person. */
+function VendorBook() {
+  const book = useQuery(api.channels.web.vendorBook, {});
+  if (!book?.length) return null;
+  return (
+    <section className="tr-book" aria-label="Lumen Labs' vendor book">
+      <p className="tr-side-title">Lumen Labs pays</p>
+      <ul>
+        {book.map((v) => (
+          <li key={v.name}>
+            <span className="tr-book-name">{v.name}</span>
+            {v.realPhone && <span className="tr-book-real">Rings a real phone</span>}
+            <span className="tr-book-meta">
+              {v.openInvoices.length > 0
+                ? v.openInvoices.map((i) => `#${i.number} · $${(i.amountCents / 100).toLocaleString("en-US")}`).join(", ")
+                : `usually $${(v.typicalCents[0] / 100).toLocaleString("en-US")}–$${(v.typicalCents[1] / 100).toLocaleString("en-US")}, ${v.cadence}`}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="tr-book-note">
+        Pretend to be any of them, or anyone else. Countersign calls back only the number it already has on file; the
+        others are fictional, so nobody answers and nothing is paid.
+      </p>
+    </section>
   );
 }
 

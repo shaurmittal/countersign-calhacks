@@ -114,6 +114,11 @@ function emailLaneText(a: VendorFindings["emailAuth"]): string | null {
   return parts.join(" · ");
 }
 
+/** Non-payment messages worth the owner's attention. Greetings and spam are filtered. */
+function forwardsToOwner(req: PaymentRequest): boolean {
+  return !!req.messageType && req.messageType !== "payment" && req.messageType !== "sales_or_spam";
+}
+
 /** One line for the Risk Analyst's War Room lane, e.g. "Risk 72 · bank_change, urgency". */
 function summarizeRisk(r: RiskFindings): string {
   return `Risk ${r.riskScore} · ${r.flags.length ? r.flags.join(", ") : "no red flags"}`;
@@ -217,7 +222,9 @@ export const advance = internalAction({
           invoiceNumber: invoice?.number ?? req.invoiceNumber,
           paymentSent,
           callbackInProgress,
+          messageType: req.messageType,
         },
+        summary: req.summary,
       });
       await ctx.runMutation(internal.cases.update, { caseId, ...patch, replyText: text, actor: `leader:${source}` });
       await ctx.scheduler.runAfter(0, internal.channels.reply.dispatch, { caseId });
@@ -229,6 +236,12 @@ export const advance = internalAction({
         await ctx.scheduler.runAfter(0, internal.agents.ownerConcierge.notifyOwner, {
           caseId,
           text: `${decided.decision} (${decided.firedRules.join(", ")}): ${decided.reasons.join("; ")}`,
+        });
+      } else if (forwardsToOwner(req)) {
+        // Not a payment, but something the owner should see: a meeting request, a question, a vendor's news.
+        await ctx.scheduler.runAfter(0, internal.agents.ownerConcierge.notifyOwner, {
+          caseId,
+          text: `Message (${(req.messageType ?? "other").replace("_", " ")}): ${req.summary ?? c.rawContent.slice(0, 160)}`,
         });
       }
     };

@@ -8,7 +8,7 @@
 //   NOTE     the rule fired but is already satisfied (e.g. callback confirmed). Shown, not blocking.
 // PAY (R12) is returned only when there are no BLOCK/HOLD/unsatisfied ESCALATE hits AND the
 // positive checks pass: known vendor, matching open invoice, known USD amount.
-import type { DenyListHit, PolicyInput, PolicyResult, RuleId } from "../types";
+import type { DenyListHit, MessageType, PolicyInput, PolicyResult, RuleId } from "../types";
 import { RULES } from "./rules";
 
 type Effect = "BLOCK" | "HOLD" | "ESCALATE" | "NOTE";
@@ -35,6 +35,27 @@ function denyListReason(hits: readonly DenyListHit[]): string {
   return `On the owner's deny list: ${places.join(" and ")}`;
 }
 
+/** What a message that asks for no money is, and what happens to it. Shown in the War Room and the owner's summary. */
+export const TRIAGE: Record<MessageType, string> = {
+  payment: "nothing to pay",
+  meeting: "a meeting request, passed to the owner",
+  question: "a question, answered and passed to the owner",
+  vendor_update: "a vendor update, passed to the owner",
+  invoice_dispute: "a question about an invoice, passed to the owner",
+  sales_or_spam: "sales or spam, filtered",
+  phishing: "a phishing attempt, refused",
+  data_request: "a request for data, refused",
+  other: "a message, passed to the owner",
+};
+
+/** The sensitive thing a message asks for (R18): what the parser named, or what its type implies. */
+function sensitiveAsk(req: PolicyInput["request"]): string | null {
+  if (req.sensitiveAsk) return req.sensitiveAsk;
+  if (req.messageType === "phishing") return "a log-in through a link";
+  if (req.messageType === "data_request") return "sensitive data";
+  return null;
+}
+
 export function decide(input: PolicyInput): PolicyResult {
   const { request: req, vendor, vendorFindings: vf, riskFindings: rf, invoice, policy, now } = input;
   const cb = input.callbackOutcome;
@@ -43,23 +64,33 @@ export function decide(input: PolicyInput): PolicyResult {
   const hit = (rule: RuleId, effect: Effect, reason: string, needsCallback = false) =>
     hits.push({ rule, effect, reason, needsCallback });
 
-  // Nothing was asked for ("hi", "what is this?").
-  if (
-    req.requestedAction === "none" &&
-    !req.parseFailed &&
-    req.amountCents == null &&
-    req.newBankDetails == null
-  ) {
+  const noMoney = req.requestedAction === "none" && !req.parseFailed && req.amountCents == null && req.newBankDetails == null;
+  const sensitive = sensitiveAsk(req);
+
+  // Not a payment, but asks for something no business hands over (passwords, codes, W-2s, a log-in link).
+  if (noMoney && sensitive) {
+    return {
+      decision: "BLOCK",
+      firedRules: ["R18"],
+      reasons: [`R18 ${RULES.R18.name}: The message asks for ${sensitive}; Countersign never sends that to anyone`],
+      needs: { callback: false, ownerOtp: false, coolingOffSeconds: 0 },
+      overridable: false,
+    };
+  }
+
+  // Nothing to pay ("hi", "can we chat tomorrow?"): triaged, then forwarded to the owner or filtered.
+  if (noMoney) {
     return {
       decision: "NO_ACTION",
       firedRules: [],
-      reasons: ["No payment was requested"],
+      reasons: [`No payment was requested: ${TRIAGE[req.messageType ?? "other"]}`],
       needs: { callback: false, ownerOtp: false, coolingOffSeconds: 0 },
       overridable: true,
     };
   }
 
   // ---- Hard stops ----
+  if (sensitive) hit("R18", "BLOCK", `The message also asks for ${sensitive}; Countersign never sends that to anyone`);
   if (vf?.ofacHit) hit("R8", "BLOCK", "The beneficiary matches the OFAC sanctions list");
   if (FORBIDDEN_ACTIONS.has(req.requestedAction) || flags.has("forbidden_rail")) {
     hit("R9", "BLOCK", "Gift cards, crypto and wires to personal accounts are never allowed");

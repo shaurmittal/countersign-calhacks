@@ -141,6 +141,12 @@ ESCALATE only; it never lifts a BLOCK or HOLD. PAY requires R12's positive check
 | R17 | Email only. The From address is a vendor's or the owner's but failed authentication (forged) | BLOCK |
 | R17 | Email failed authentication for its own domain, or its display name poses as another address | ESCALATE |
 | R17 | Replies go to a different domain than the sender's | HOLD + callback → confirmed: OK, no_answer: ESCALATE |
+| R18 | The message asks for passwords, one-time codes, tax forms, SSNs, card or employee data, or to log in through a link | BLOCK, not overridable |
+
+**Messages that ask for no money** are triaged by the Intake Parser (meeting, question, vendor update,
+invoice question, sales or spam, phishing, data request). Claude writes a reply to what was actually asked,
+the owner gets a one-line summary, and spam is filtered without bothering them. The War Room shows
+FORWARDED or FILTERED. Phishing and data requests are refused by R18.
 
 An email address counts as on file (R3) only when the receiving mail server says its domain sent it:
 DMARC pass, or DKIM/SPF pass aligned with the From domain. Only the topmost authentication headers

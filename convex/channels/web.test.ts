@@ -55,3 +55,20 @@ describe("web chat", () => {
     expect(await makeTest().query(api.channels.web.mine, { senderId: "x" })).toEqual([]);
   });
 });
+
+describe("vendor book", () => {
+  it("lists who Lumen Labs pays with open invoices, real phones first, and never a phone number or bank detail", async () => {
+    const t = makeTest();
+    await t.run(async (ctx) => {
+      const base = { aliases: [], domains: [], emailsOnFile: [], bankLast4: "4417", bankRouting: "021000021", typicalAmountRange: [100_00, 500_00], cadence: "monthly" };
+      const pixel = await ctx.db.insert("vendors", { ...base, name: "Pixel & Pine Design", phoneOnFile: "+16504440123" });
+      await ctx.db.insert("vendors", { ...base, name: "Northwind Cloud", phoneOnFile: "+15555550102" });
+      await ctx.db.insert("invoices", { vendorId: pixel, number: "1042", amountCents: 4_800_00, dueDate: "2026-10-25", status: "open" });
+    });
+    const book = await t.query(api.channels.web.vendorBook, {});
+    expect(book.map((v) => [v.name, v.realPhone])).toEqual([["Pixel & Pine Design", true], ["Northwind Cloud", false]]);
+    expect(book[0].openInvoices).toEqual([{ number: "1042", amountCents: 4_800_00 }]);
+    expect(JSON.stringify(book)).not.toMatch(/650|4417|021000021/);
+  });
+});
+

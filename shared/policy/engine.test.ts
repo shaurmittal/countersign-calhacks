@@ -362,6 +362,26 @@ describe("policy engine", () => {
     expect(r.decision).toBe("NO_ACTION");
   });
 
+  it("a message that asks for no money is triaged: forwarded, or filtered as spam", () => {
+    const none = { ...UNKNOWN, request: { requestedAction: "none" as const, claimedVendorName: null, invoiceNumber: null } };
+    const meeting = decide(input({ ...none, request: { ...none.request, messageType: "meeting" } }));
+    expect(meeting).toMatchObject({ decision: "NO_ACTION", firedRules: [], reasons: ["No payment was requested: a meeting request, passed to the owner"] });
+    expect(decide(input({ ...none, request: { ...none.request, messageType: "sales_or_spam" } })).reasons[0]).toMatch(/filtered/);
+  });
+
+  it("R18: a request for passwords, codes or tax forms is refused outright, and nobody can override it", () => {
+    const none = { ...UNKNOWN, request: { requestedAction: "none" as const, claimedVendorName: null, invoiceNumber: null } };
+    const w2 = decide(input({ ...none, request: { ...none.request, messageType: "data_request", sensitiveAsk: "W-2 forms for all employees" } }));
+    expect(w2).toMatchObject({ decision: "BLOCK", firedRules: ["R18"], overridable: false });
+    expect(w2.reasons[0]).toMatch(/W-2 forms for all employees/);
+    // The type alone is enough when the parser didn't name the thing.
+    expect(decide(input({ ...none, request: { ...none.request, messageType: "phishing" } })).firedRules).toEqual(["R18"]);
+    // Inside a payment request it still refuses, even with an owner approval and a confirmed callback.
+    const pay = decide(input({ request: { sensitiveAsk: "the bank login" }, approval: APPROVED, callbackOutcome: "confirmed" }));
+    expect(pay.decision).toBe("BLOCK");
+    expect(pay.firedRules).toContain("R18");
+  });
+
   it("a Lumen Bank change request (change_bank, no amount, no invoice) never PAYs, whatever happens", () => {
     // What bank:requestBankChange puts on the case; see convex/bankChange.test.ts for the full flow.
     const bankChange = {

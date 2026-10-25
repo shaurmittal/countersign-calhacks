@@ -59,6 +59,15 @@
 .tr-mailcheck[data-verdict="pass"] { border-color: #26503a; background: rgba(15, 36, 25, 0.4); }
 .tr-draft { margin-left: 8px; color: var(--lp-muted); letter-spacing: 0.08em; }
 
+/* Vendor book */
+.tr-book { display: flex; flex-direction: column; gap: 10px; }
+.tr-book ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.tr-book li { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--lp-line-2); background: rgba(16, 19, 24, 0.7); }
+.tr-book-name { font-weight: 700; font-size: 15px; }
+.tr-book-real { align-self: center; font-family: var(--lp-mono); font-size: 10.5px; letter-spacing: 0.04em; color: var(--lp-green); }
+.tr-book-meta { grid-column: 1 / -1; font-family: var(--lp-mono); font-size: 11.5px; color: var(--lp-muted); }
+.tr-book-note { font-size: 12.5px; color: var(--lp-muted); line-height: 1.45; }
+
 /* Conversation */
 .tr-log { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 26px; }
 .tr-turn { display: flex; flex-direction: column; gap: 10px; animation: lp-rise 0.4s var(--lp-ease); }
