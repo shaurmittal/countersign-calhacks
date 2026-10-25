@@ -13,7 +13,8 @@
     "enroll:owner": "tsx scripts/enroll-owner-totp.ts",
     "scenarios": "tsx scripts/eval-intake.ts --offline",
     "eval:intake": "tsx scripts/eval-intake.ts",
-    "rehearse": "tsx scripts/live-scenarios.ts"
+    "rehearse": "tsx scripts/live-scenarios.ts",
+    "keygen:countersign": "tsx scripts/countersign-keygen.ts"
   },
   "license": "MIT",
   "description": "The second signer a one-person company never had.",

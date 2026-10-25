@@ -101,6 +101,18 @@ export const applyConfirmedBankChange = internalMutation({
       ...(bank.account && { bankLast4: bank.account.slice(-4) }),
     };
     await ctx.db.patch(vendor._id, patch);
+    // Lumen Bank pays only to its own payee record, so the owner-approved change goes there too.
+    const payee = await ctx.db.query("bankPayees").withIndex("by_vendor", (q) => q.eq("vendorId", vendor._id)).first();
+    if (payee) {
+      await ctx.db.patch(payee._id, {
+        routing: patch.bankRouting ?? payee.routing,
+        accountLast4: patch.bankLast4 ?? payee.accountLast4,
+        status: "active",
+        pendingChange: undefined,
+        note: undefined,
+        updatedAt: Date.now(),
+      });
+    }
     await appendAudit(ctx, {
       caseId,
       actor: "owner",
