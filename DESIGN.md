@@ -26,13 +26,13 @@ colors:
 typography:
   verdict:
     fontFamily: "Geist Mono, ui-monospace, SF Mono, Menlo, monospace"
-    fontSize: "60px"
+    fontSize: "44px"
     fontWeight: 700
     lineHeight: 1.15
     letterSpacing: "0.08em"
   verdict-compact:
     fontFamily: "Geist Mono, ui-monospace, SF Mono, Menlo, monospace"
-    fontSize: "46px"
+    fontSize: "36px"
     fontWeight: 700
     lineHeight: 1.15
     letterSpacing: "0.08em"
@@ -242,7 +242,7 @@ components:
 
 # Design System: Countersign
 
-Scope: the app pages only (War Room `/`, `/owner`, `/bank`, `/try`), styled by `app/ui/app.css` under the `.cs` root. The `/demo` film (Bricolage Grotesque, JetBrains Mono, amber accent, `landing.css`) and the printable `/judge-card` (light card in `globals.css`) are separate worlds and are not governed by this file.
+Scope: the app pages (War Room `/`, `/owner`, `/bank`, `/try`), styled by `app/ui/app.css` under the `.cs` root. The `/demo` landing film (`landing.css`) shares this system's OLED ground, hairlines, Geist faces, top bar and colour meanings, but keeps its own film-specific deep tints and radii; the printable `/judge-card` (light card in `globals.css`) is separate.
 
 ## Overview
 
@@ -378,7 +378,7 @@ Quiet, compact, and decisive only when the action moves money.
 Built for a projector, in the /demo film's arrangement: a top bar instead of the rail (logo, a WAR ROOM tag, the other pages, a "Call" pill with the line), then the live numbers strip, then one bordered frame holding the case tabs with the case clock at the right, the agent room with the request and reply under it on the left, the verdict card and the agent cards on the right, and the audit ticker along the bottom. The other app pages keep the rail.
 
 ### Verdict Stamp (signature)
-Geist Mono capitals, letter-spaced, bordered and washed in its decision's tone (pay, block, hold, owner-white, neutral, quiet). Small (24px) in lists and alerts. On the War Room's verdict card it is the headline: 60px bold type in a 2px-bordered box, landing with a spring from 1.12 scale and 8px blur, followed by the one-sentence explanation at 19px, the fired-rule chips (the key rule in the verdict's tone) and the 18-rule grid with fired rules lit.
+Geist Mono capitals, letter-spaced, bordered and washed in its decision's tone (pay, block, hold, owner-white, neutral, quiet). Small (24px) in lists and alerts. On the War Room's verdict card it is the headline: 44px bold type (36px on phones) in a 2px-bordered box, landing with a spring from 1.12 scale and 8px blur, followed by the one-sentence explanation at 19px, the fired-rule chips (the key rule in the verdict's tone) and the 18-rule grid with fired rules lit.
 
 ### Case Tabs
 Every recent case newest first as a 40px tab: mono time, channel icon and name, and a dot in its verdict's colour. The selected tab carries a 30% white border and 7% wash that glides between tabs; "Follow newest" appears only when a tab is pinned.

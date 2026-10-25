@@ -34,8 +34,8 @@ export default function WarRoom() {
       <h1 className="sr-only">Countersign War Room</h1>
       <Scoreboard />
 
-      <main className="mt-3 rounded-2xl border border-border" aria-label="Live payment requests">
-        <div className="flex items-center gap-4 border-b border-border px-3 py-2.5 sm:px-4">
+      <main className="mt-2.5 rounded-2xl border border-border" aria-label="Live payment requests">
+        <div className="flex items-center gap-4 border-b border-border px-3 py-1.5 sm:px-4">
           <div className="min-w-0 flex-1">
             {cases && cases.length > 0 ? (
               <CaseQueue cases={cases} selectedId={current?._id ?? null} following={pinnedId === null} onSelect={setPinnedId} onFollow={() => setPinnedId(null)} />
@@ -45,20 +45,18 @@ export default function WarRoom() {
           </div>
           <p className="shrink-0 text-right font-mono" aria-live="off">
             <span className="block text-[11px] uppercase tracking-[0.12em] text-subtle">Case clock · real time</span>
-            <span className="block text-[22px] font-medium leading-tight tracking-[-0.02em] text-foreground">{clock ? `T+${clock}s` : "—"}</span>
+            <span className="block text-[18px] font-medium leading-tight tracking-[-0.02em] text-foreground">{clock ? `T+${clock}s` : "—"}</span>
           </p>
         </div>
 
         {current ? (
           <>
-            <div className="grid gap-5 p-3 sm:p-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(440px,1fr)]">
-              <div className="min-w-0 space-y-5">
-                <section aria-label="The room">
-                  <AgentRoom c={current} detail={detail ?? undefined} />
-                </section>
+            <div className="grid gap-4 p-3 sm:p-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(420px,1fr)]">
+              <section aria-label="The room" className="min-w-0">
+                <AgentRoom c={current} detail={detail ?? undefined} />
+              </section>
+              <div className="min-w-0 space-y-2.5">
                 <IncomingMessage c={current} />
-              </div>
-              <div className="min-w-0 space-y-3">
                 <DecisionCard c={current} detail={detail ?? undefined} />
                 {detail ? (
                   <AgentLanes detail={detail} />
@@ -71,7 +69,7 @@ export default function WarRoom() {
                 )}
               </div>
             </div>
-            <div className="px-3 pb-3 sm:px-5 sm:pb-5">
+            <div className="px-3 pb-3 sm:px-4 sm:pb-4">
               <AuditTrail caseId={current._id} />
             </div>
           </>

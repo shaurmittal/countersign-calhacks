@@ -134,7 +134,7 @@ function Frame({ children }: { children: ReactNode }) {
           })}
         </nav>
       </header>
-      <div className="mx-auto max-w-[1680px] px-3 pb-12 pt-4 sm:px-6">{children}</div>
+      <div className="mx-auto max-w-[1680px] px-3 pb-12 pt-3 sm:px-6">{children}</div>
     </div>
   );
 }

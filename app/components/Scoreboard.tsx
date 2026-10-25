@@ -15,7 +15,7 @@ export function Scoreboard() {
   const median = score?.medianDecisionMs;
 
   return (
-    <section aria-label="Live numbers" className="flex flex-wrap items-center gap-x-7 gap-y-2 rounded-xl border border-border bg-surface px-4 py-3 sm:px-5">
+    <section aria-label="Live numbers" className="flex flex-wrap items-center gap-x-6 gap-y-1.5 rounded-xl border border-border bg-surface px-4 py-2 sm:px-5">
       <p className="flex items-center gap-2 font-mono text-[12px] uppercase tracking-[0.14em] text-accent">
         <span className="live-dot" aria-hidden="true" /> Live
       </p>
@@ -53,11 +53,11 @@ function seconds(ms: number): string {
 function Metric(props: { value: string | undefined; label: string; extra?: ReactNode; tone?: "pay" | "block" }) {
   return (
     <p className="flex items-baseline gap-2" aria-live="polite">
-      <span className={cn("font-mono text-[22px] font-medium leading-none tracking-[-0.02em]", props.tone === "pay" && "text-pay-ink", props.tone === "block" && "text-block-ink")}>
+      <span className={cn("font-mono text-[19px] font-medium leading-none tracking-[-0.02em]", props.tone === "pay" && "text-pay-ink", props.tone === "block" && "text-block-ink")}>
         {props.value === undefined ? <span className="skeleton inline-block h-5 w-10 align-middle" /> : <AnimatedNumber value={props.value} />}
       </span>
       {props.extra && <span className="font-mono text-[13px] text-muted-foreground">{props.extra}</span>}
-      <span className="text-[13.5px] text-muted-foreground">{props.label}</span>
+      <span className="text-[13px] text-muted-foreground">{props.label}</span>
     </p>
   );
 }

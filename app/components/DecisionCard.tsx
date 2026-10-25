@@ -65,15 +65,15 @@ export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | u
   const tone = decisionTone(decision);
 
   return (
-    <section aria-label="Decision" className={cn("rounded-xl border bg-surface px-5 py-5 transition-colors duration-500 sm:px-6", PANEL[tone], decisionTint(tone))}>
+    <section aria-label="Decision" className={cn("rounded-xl border bg-surface px-5 py-4 transition-colors duration-500", PANEL[tone], decisionTint(tone))}>
       <motion.p
         key={decision ?? c.status}
         initial={reduce ? false : { opacity: 0, scale: 1.12, filter: "blur(8px)" }}
         animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
         transition={{ type: "spring", stiffness: 240, damping: 22, mass: 0.9 }}
         className={cn(
-          "inline-flex origin-left items-center rounded-xl border-2 px-5 py-1 font-mono font-bold uppercase tracking-[0.08em]",
-          decision ? "text-[46px] leading-[1.15] sm:text-[60px]" : "text-[22px] leading-[1.6] tracking-[0.04em] sm:text-[26px]",
+          "inline-flex origin-left items-center rounded-lg border-2 px-4 py-0.5 font-mono font-bold uppercase tracking-[0.08em]",
+          decision ? "text-[36px] leading-[1.15] sm:text-[44px]" : "text-[20px] leading-[1.6] tracking-[0.04em]",
           STAMP[tone],
         )}
         role="status"
@@ -82,7 +82,7 @@ export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | u
         {decision ? verdictWord(decision, request) : `${c.status.replace(/_/g, " ").toLowerCase()}…`}
       </motion.p>
 
-      <p className="mt-4 text-[18px] leading-snug text-foreground sm:text-[19px]">
+      <p className="mt-3 text-[16px] leading-snug text-foreground">
         {decision ? explain(decision, result, detail) : "Countersign is checking this request. The verdict lands here."}
       </p>
 
@@ -94,10 +94,10 @@ export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | u
       )}
 
       {result && result.firedRules.length > 0 && (
-        <ul className="mt-4 flex flex-wrap gap-2" aria-label="Rules that fired">
+        <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="Rules that fired">
           {result.firedRules.map((id) => (
             <li key={id}>
-              <Tag tone={id === keyRule ? tone : "neutral"} title={reasonFor(id)} className="px-2.5 py-1 text-[14px]">
+              <Tag tone={id === keyRule ? tone : "neutral"} title={reasonFor(id)} className="text-[13px]">
                 <b className="font-mono font-semibold">{id}</b> {ruleInfo(id)?.name ?? "rule"}
               </Tag>
             </li>
@@ -105,13 +105,13 @@ export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | u
         </ul>
       )}
 
-      <ol className="mt-4 grid grid-cols-6 gap-1.5 sm:grid-cols-9" aria-label={`All ${Object.keys(RULES).length} rules, fired ones lit`}>
+      <ol className="mt-3 grid grid-cols-6 gap-1 sm:grid-cols-9" aria-label={`All ${Object.keys(RULES).length} rules, fired ones lit`}>
         {(Object.keys(RULES) as RuleId[]).map((id) => (
           <li
             key={id}
             title={`${id} ${RULES[id].name}`}
             className={cn(
-              "grid h-8 place-items-center rounded-md font-mono text-[12.5px] transition-colors duration-300",
+              "grid h-6 place-items-center rounded font-mono text-[11.5px] transition-colors duration-300",
               fired.has(id) ? (id === keyRule ? LIT[tone] : "bg-code/85 text-black") : decision ? "border border-border text-subtle" : "border border-border/60 text-white/30",
             )}
           >
@@ -121,7 +121,7 @@ export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | u
       </ol>
 
       {result && result.reasons.length > 0 && (
-        <details className="group mt-4 text-[14px]">
+        <details className="group mt-3 text-[13.5px]">
           <summary className="flex cursor-pointer list-none items-center gap-1.5 font-mono text-[12px] uppercase tracking-[0.12em] text-muted-foreground select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
             <ChevronRight className="size-4 transition-transform duration-200 group-open:rotate-90" aria-hidden="true" />
             Why, in the engine&apos;s words

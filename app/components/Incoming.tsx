@@ -30,23 +30,23 @@ export function ChannelIcon({ channel, className }: { channel: string; className
 export function IncomingMessage({ c }: { c: CaseRow }) {
   const email = c.channel === "email" ? c.emailSignals : null;
   return (
-    <div className="space-y-5 rounded-xl border border-border bg-surface px-5 py-5 sm:px-6" aria-live="polite">
+    <div className="space-y-3 rounded-xl border border-border bg-surface px-5 py-4" aria-live="polite">
       <div>
-        <p className="mb-2 font-mono text-[12px] uppercase tracking-[0.12em] text-foreground">
+        <p className="mb-1.5 truncate font-mono text-[11.5px] uppercase tracking-[0.12em] text-foreground">
           {channelLabel(c.channel)} <span className="text-subtle">· from {c.fromAddress} · {clockTime(c.createdAt)}</span>
         </p>
-        <blockquote className="text-[19px] font-medium leading-snug tracking-[-0.015em] text-foreground sm:text-[21px]">
+        <blockquote className="text-[17px] font-medium leading-snug tracking-[-0.01em] text-foreground">
           {email ? emailBody(c.rawContent) : c.rawContent}
         </blockquote>
         {email && <EmailBadges email={email} />}
       </div>
       {c.replyText && (
-        <motion.div key={c.replyText} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={spring.smooth} className="border-t border-border pt-4">
-          <p className="mb-2 font-mono text-[12px] uppercase tracking-[0.12em] text-accent">
+        <motion.div key={c.replyText} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={spring.smooth} className="border-t border-border pt-3">
+          <p className="mb-1.5 font-mono text-[11.5px] uppercase tracking-[0.12em] text-accent">
             Countersign{" "}
             <span className="text-subtle">{email ? `· draft reply · not sent · Re: ${email.subject || "(no subject)"}` : "· replied"}</span>
           </p>
-          <p className="text-[19px] leading-snug tracking-[-0.015em] text-foreground/90 sm:text-[21px]">{c.replyText}</p>
+          <p className="text-[15px] leading-snug text-foreground/90">{c.replyText}</p>
         </motion.div>
       )}
     </div>
@@ -122,7 +122,7 @@ export function CaseQueue(props: {
                 type="button"
                 aria-current={selected ? "true" : undefined}
                 onClick={() => props.onSelect(c._id)}
-                className={cn("relative flex h-10 items-center gap-2 rounded-lg px-3 text-[14px] transition-colors", selected ? "text-foreground" : "text-muted-foreground hover:text-foreground")}
+                className={cn("relative flex h-9 items-center gap-2 rounded-lg px-3 text-[13.5px] transition-colors", selected ? "text-foreground" : "text-muted-foreground hover:text-foreground")}
               >
                 <span className="font-mono text-[12.5px] text-subtle">{clockTime(c.createdAt)}</span>
                 <ChannelIcon channel={c.channel} className={selected ? "text-foreground" : undefined} />

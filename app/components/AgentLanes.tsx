@@ -36,7 +36,7 @@ export function AgentLanes({ detail }: { detail: CaseDetail }) {
     return <p className="rounded-xl border border-dashed border-border-strong px-5 py-6 text-[14px] text-muted-foreground">The agents haven&apos;t started on this case yet.</p>;
   }
   return (
-    <ol className="space-y-3" aria-label="What each agent found">
+    <ol className="space-y-2" aria-label="What each agent found">
       <AnimatePresence initial={false}>
         {ran.map(({ lane, run }) => (
           <LaneCard key={lane.agent} lane={lane} run={run!} detail={detail} />
@@ -55,7 +55,7 @@ function LaneCard({ lane, run, detail }: { lane: (typeof LANES)[number]; run: Ru
       animate={{ opacity: 1, y: 0 }}
       transition={spring.smooth}
       className={cn(
-        "rounded-xl border bg-surface px-5 py-4",
+        "rounded-xl border bg-surface px-4 py-3",
         status === "running" ? "border-accent/50 shadow-[0_0_24px_rgba(242,176,76,0.12)]" : status === "failed" ? "border-block/40" : lane.agent === "policy" ? "border-code/30" : "border-border",
       )}
       aria-label={`${lane.title}: ${status}`}
@@ -68,10 +68,10 @@ function LaneCard({ lane, run, detail }: { lane: (typeof LANES)[number]; run: Ru
           {run.endedAt ? <span className="text-subtle normal-case">· {((run.endedAt - run.startedAt) / 1000).toFixed(1)}s</span> : null}
         </span>
       </p>
-      <p className="mt-2 text-[16px] font-medium leading-snug text-foreground">
+      <p className="mt-1.5 text-[14.5px] font-medium leading-snug text-foreground">
         {run.error ? `Failed: ${run.error}` : run.summary ? <Summary text={run.summary} /> : lane.role}
       </p>
-      <div className="mt-3">
+      <div className="mt-2">
         <LaneDetail agent={lane.agent} run={run} detail={detail} />
       </div>
     </motion.li>

@@ -68,7 +68,8 @@ export function AgentRoom({ c, detail }: { c: CaseRow; detail: CaseDetail | unde
 
   return (
     <div>
-      <div className="relative mx-auto hidden aspect-[1000/870] w-full max-w-[900px] md:block">
+      {/* Sized to the window's height, so the room, the caption and the verdict fit one screen at 100% zoom. */}
+      <div className="relative mx-auto hidden aspect-[1000/870] w-full md:block" style={{ maxWidth: "min(860px, max(520px, calc((100dvh - 250px) * 1000 / 870)))" }}>
         <div className="room-glow pointer-events-none absolute aspect-square w-[60%] -translate-x-1/2 -translate-y-1/2" style={{ left: "50%", top: `${(byId.leader.y / H) * 100}%` }} aria-hidden="true" />
         <svg className="absolute inset-0 size-full overflow-visible" viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
           <ellipse cx={byId.leader.x} cy={byId.leader.y + 20} rx={400} ry={250} className="room-orbit" />
@@ -96,7 +97,7 @@ export function AgentRoom({ c, detail }: { c: CaseRow; detail: CaseDetail | unde
         ))}
       </div>
 
-      <p className="mx-auto mt-2 flex max-w-[900px] items-start gap-3 text-[16px] leading-snug text-foreground sm:text-[17px]" role="status" aria-live="polite">
+      <p className="mx-auto mt-1 flex items-start gap-2.5 text-[15px] leading-snug text-foreground" role="status" aria-live="polite">
         <span className={cn("mt-2 size-2 shrink-0 rounded-full", caption.live ? "animate-pulse bg-accent shadow-[0_0_10px_rgba(242,176,76,0.7)]" : "bg-white/30")} aria-hidden="true" />
         <motion.span key={caption.text} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={spring.smooth}>
           {caption.text}
@@ -129,8 +130,8 @@ function RoomNode({ n, state, chip, decision }: { n: Node; state: NodeState; chi
   const ran = state !== "idle";
   return (
     <div
-      className="absolute flex w-[190px] flex-col items-center text-center"
-      style={{ left: `${(n.x / W) * 100}%`, top: `${(n.y / H) * 100}%`, transform: `translate(-50%, ${leader ? -40 : -32}px)` }}
+      className="absolute flex w-[170px] flex-col items-center text-center"
+      style={{ left: `${(n.x / W) * 100}%`, top: `${(n.y / H) * 100}%`, transform: `translate(-50%, ${leader ? -30 : -24}px)` }}
       role="group"
       aria-label={`${n.name}: ${state}${chip ? `, ${chip.text}` : ""}`}
     >
@@ -139,7 +140,7 @@ function RoomNode({ n, state, chip, decision }: { n: Node; state: NodeState; chi
         transition={state === "busy" ? { duration: 1.6, repeat: Infinity, ease: "easeInOut" } : spring.smooth}
         className={cn(
           "relative grid place-items-center border-[1.5px] transition-[border-color,color,box-shadow,background-color] duration-300",
-          leader ? "size-20 rounded-full" : code ? "size-16 rounded-2xl" : "size-16 rounded-full",
+          leader ? "size-[60px] rounded-full" : code ? "size-12 rounded-xl" : "size-12 rounded-full",
           // Amber is Countersign at work; ice blue is the Policy Engine (plain code); the Payer's money is green.
           leader && "border-accent/50 bg-[#140f07] text-accent shadow-[0_0_40px_rgba(242,176,76,0.25)]",
           !leader && !code && n.kind !== "money" && state === "idle" && "border-white/15 bg-background text-white/40",
@@ -157,7 +158,7 @@ function RoomNode({ n, state, chip, decision }: { n: Node; state: NodeState; chi
           tone === "quiet" && "border-white/40 bg-background text-foreground",
         )}
       >
-        {state === "busy" && !reduce && <span className={cn("room-ring absolute -inset-2 border", code ? "rounded-[20px] border-code" : "rounded-full border-accent")} aria-hidden="true" />}
+        {state === "busy" && !reduce && <span className={cn("room-ring absolute -inset-1.5 border", code ? "rounded-2xl border-code" : "rounded-full border-accent")} aria-hidden="true" />}
         <Glyph id={n.id} />
         {state === "done" && !leader && !code && (
           <Badge className="bg-accent text-black">
@@ -175,8 +176,8 @@ function RoomNode({ n, state, chip, decision }: { n: Node; state: NodeState; chi
           </Badge>
         )}
       </motion.span>
-      <span className={cn("mt-2 rounded-md px-2 text-[15px] font-semibold leading-tight tracking-[-0.01em]", code ? "text-code-ink" : ran || leader ? "text-foreground" : "text-white/50")}>{n.name}</span>
-      <span className="mt-1 hidden rounded px-2 font-mono text-[11.5px] leading-tight text-subtle lg:block">{n.tech}</span>
+      <span className={cn("mt-1.5 rounded-md px-2 text-[13.5px] font-semibold leading-tight tracking-[-0.01em]", code ? "text-code-ink" : ran || leader ? "text-foreground" : "text-white/50")}>{n.name}</span>
+      <span className="mt-0.5 hidden rounded px-2 font-mono text-[11px] leading-tight text-subtle 2xl:block">{n.tech}</span>
       {chip && (
         <motion.span
           key={chip.text}
@@ -184,7 +185,7 @@ function RoomNode({ n, state, chip, decision }: { n: Node; state: NodeState; chi
           animate={{ opacity: 1, y: 0 }}
           transition={spring.smooth}
           className={cn(
-            "mt-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 font-mono text-[12px]",
+            "mt-1 whitespace-nowrap rounded-full border px-2 py-px font-mono text-[11.5px]",
             state === "paid"
               ? "border-pay/50 bg-pay/10 text-pay-ink"
               : state === "failed"
@@ -207,14 +208,14 @@ function RoomNode({ n, state, chip, decision }: { n: Node; state: NodeState; chi
 
 function Badge({ className, children }: { className: string; children: ReactNode }) {
   return (
-    <span className={cn("absolute -right-1 -top-1 grid size-5 place-items-center rounded-full ring-2 ring-background", className)} aria-hidden="true">
+    <span className={cn("absolute -right-1 -top-1 grid size-[18px] place-items-center rounded-full ring-2 ring-background", className)} aria-hidden="true">
       {children}
     </span>
   );
 }
 
 function Glyph({ id }: { id: AgentId }): ReactNode {
-  const common = { className: id === "leader" ? "size-7" : "size-6", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  const common = { className: id === "leader" ? "size-6" : "size-5", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   switch (id) {
     case "leader":
       return (

@@ -18,7 +18,7 @@ export function Nav() {
   return (
     <nav className="lp-nav" aria-label="Page">
       <a className="lp-logo" href="#top">
-        <LogoMark /> COUNTERSIGN
+        <LogoMark /> Countersign
       </a>
       <ul>
         <li>
@@ -34,6 +34,9 @@ export function Nav() {
           <a href="#break-it">Try to break it</a>
         </li>
       </ul>
+      <a className="lp-nav-room" href="/">
+        War Room
+      </a>
       <a className="lp-nav-cta" href="#your-turn">
         Call it
       </a>
