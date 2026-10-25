@@ -194,7 +194,8 @@ export default function TryPage() {
               {entries.map((e) => (e.kind === "chat" ? <Turn key={e.m._id} m={e.m} /> : <MailTurn key={e.m._id} m={e.m} />))}
             </ol>
           )}
-          <div ref={end} className="h-4" />
+          {/* The composer below is sticky, so scrolling here must stop above it, or the newest reply hides behind it. */}
+          <div ref={end} className="h-4 scroll-mb-[200px]" />
 
           <form className="sticky bottom-0 z-10 mt-auto bg-background pb-4 pt-4" onSubmit={send}>
             {entries && entries.length > 0 && (
