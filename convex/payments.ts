@@ -9,13 +9,15 @@ import { increaseRequest, withOneRetry } from "./lib/increase";
 import { paymentJournal, type PaymentRail } from "../shared/ledger";
 import type { PaymentRequest, PolicyResult } from "../shared/types";
 
-const rail = v.union(v.literal("ach_sandbox"), v.literal("mock"));
+const rail = v.union(v.literal("ach_sandbox"), v.literal("mock"), v.literal("lumen_bank"));
 const DEFAULT_SANDBOX_FUNDING_CENTS = 250_000_00;
 
 export type PaymentPlan =
   | {
       ok: true;
       paymentId: Id<"payments">;
+      caseId: Id<"cases">;
+      vendorId: Id<"vendors">;
       rail: PaymentRail;
       amountCents: number;
       idempotencyKey: string;
@@ -75,6 +77,8 @@ export const begin = internalMutation({
     return {
       ok: true,
       paymentId,
+      caseId,
+      vendorId: vendor._id,
       rail,
       amountCents: invoice.amountCents,
       idempotencyKey,

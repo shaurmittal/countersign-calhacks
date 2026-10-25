@@ -240,7 +240,7 @@ export const advance = internalAction({
       const fresh = await ctx.runQuery(internal.cases.get, { caseId });
       const paid = bankUpdated
         ? await safely(() =>
-            withAgentRun(ctx, caseId, "payer", () => runPayer(ctx, fresh ?? c), (p) => (p.ok ? `Paid: ${p.externalId}` : `Failed: ${p.error}`)),
+            withAgentRun(ctx, caseId, "payer", () => runPayer(ctx, fresh ?? c), (p) => (p.ok ? (p.summary ?? `Paid: ${p.externalId}`) : `Failed: ${p.error}`)),
           )
         : { ok: false as const, error: "the new bank details could not be saved" };
       if (paid?.ok) {
