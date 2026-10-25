@@ -1,0 +1,77 @@
+/* /bank, Lumen Bank's own page. Built on the /demo tokens (.lp in app/demo/landing.css), like /try. */
+.bk { min-height: 100dvh; display: flex; flex-direction: column; }
+
+.bk-top { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding: 14px max(16px, calc((100% - 1180px) / 2)); background: rgba(7, 8, 10, 0.8); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid rgba(42, 49, 59, 0.6); }
+.bk-tag { font-family: var(--lp-mono); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lp-soft); }
+.bk-links { margin-left: auto; display: flex; gap: 16px; font-size: 14.5px; }
+.bk-links a { color: var(--lp-muted); text-decoration: none; }
+.bk-links a:hover { color: var(--lp-fg); }
+
+.bk-main { width: 100%; max-width: 1180px; margin: 0 auto; padding: 32px 16px 48px; display: flex; flex-direction: column; gap: 22px; }
+
+.bk-hero { display: flex; flex-direction: column; gap: 14px; }
+.bk-hero h1 { font-size: clamp(34px, 5.4vw, 60px); font-weight: 800; letter-spacing: -0.04em; line-height: 1; max-width: 18ch; }
+.bk-hero h1 span { color: var(--lp-ice); }
+.bk-sub { font-size: 17.5px; color: var(--lp-soft); max-width: 66ch; }
+
+.bk-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 18px; align-items: start; }
+.bk-card { border: 1px solid var(--lp-line-2); background: var(--lp-panel); border-radius: 18px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px; }
+.bk-label { font-family: var(--lp-mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--lp-muted); }
+.bk-balance { font-family: var(--lp-mono); font-weight: 600; font-size: clamp(34px, 4.6vw, 48px); letter-spacing: -0.02em; color: var(--lp-fg); margin-bottom: 8px; }
+.bk-mono { font-family: var(--lp-mono); }
+.bk-muted { color: var(--lp-muted); }
+
+.bk-payees { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.bk-payees li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--lp-line); background: var(--lp-bg-2); }
+.bk-payee-name { font-weight: 600; }
+.bk-payees .bk-mono { color: var(--lp-soft); font-size: 14px; }
+.bk-active, .bk-frozen { grid-column: 1 / -1; font-size: 13px; }
+.bk-active { color: var(--lp-green); }
+.bk-frozen { color: var(--lp-amber-hi); }
+.bk-payees li[data-status="frozen"] { border-color: #5c4318; background: rgba(58, 42, 16, 0.35); }
+
+.bk-hijack { border-color: #5a2a1f; background: linear-gradient(180deg, rgba(51, 21, 16, 0.35), var(--lp-panel) 40%); }
+.bk-kicker-red { color: var(--lp-red); }
+.bk-hijack h2 { font-size: clamp(22px, 2.6vw, 30px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+.bk-hijack-sub { font-size: 15.5px; color: var(--lp-soft); }
+.bk-attempts { margin: 4px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.bk-attempts li { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--lp-line); background: var(--lp-bg-2); display: flex; flex-direction: column; gap: 4px; transition: border-color 0.25s, background 0.25s; }
+.bk-attempts li[data-state="sending"] { border-color: var(--lp-amber); }
+.bk-attempts li[data-state="rejected"] { border-color: var(--lp-red); background: rgba(51, 21, 16, 0.4); animation: lp-rise 0.35s var(--lp-ease); }
+.bk-attempts li[data-state="accepted"] { border-color: var(--lp-green); }
+.bk-attempt-head { display: flex; align-items: center; gap: 10px; }
+.bk-attempt-n { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-family: var(--lp-mono); font-size: 12px; border: 1px solid var(--lp-line-2); color: var(--lp-soft); }
+.bk-attempt-title { font-weight: 700; }
+.bk-attempt-what { font-size: 14px; color: var(--lp-soft); }
+.bk-attempt-reason { font-family: var(--lp-mono); font-size: 13.5px; color: var(--lp-red); }
+.bk-attempts li[data-state="error"] .bk-attempt-reason { color: var(--lp-amber-hi); }
+.bk-verdict { margin-left: auto; font-family: var(--lp-mono); font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--lp-muted); }
+.bk-verdict.is-sending { color: var(--lp-amber); }
+.bk-verdict.is-rejected { color: var(--lp-red); font-weight: 600; }
+.bk-verdict.is-accepted { color: var(--lp-green); font-weight: 600; }
+.bk-run { align-self: flex-start; min-height: 46px; border: 0; cursor: pointer; }
+.bk-run:disabled { opacity: 0.6; cursor: default; }
+.bk-fine { font-family: var(--lp-mono); font-size: 11.5px; color: var(--lp-muted); overflow-wrap: anywhere; }
+
+.bk-ledger-head { display: flex; align-items: center; justify-content: space-between; }
+.bk-live { display: inline-flex; align-items: center; gap: 8px; font-family: var(--lp-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--lp-soft); }
+.bk-empty { color: var(--lp-muted); font-size: 15px; }
+.bk-rows { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.bk-rows li { display: grid; grid-template-columns: 26px minmax(0, 1.3fr) minmax(0, 1.4fr) 150px 96px; gap: 12px; align-items: baseline; padding: 11px 4px; border-top: 1px solid var(--lp-line); font-size: 15px; animation: lp-rise 0.35s var(--lp-ease); }
+.bk-rows li:first-child { border-top: 0; }
+.bk-mark { font-weight: 800; }
+.bk-rows li[data-status="accepted"] .bk-mark { color: var(--lp-green); }
+.bk-rows li[data-status="rejected"] .bk-mark { color: var(--lp-red); }
+.bk-row-why { color: var(--lp-soft); }
+.bk-rows li[data-status="rejected"] .bk-row-why { color: #ffb4a3; }
+.bk-row-src { font-size: 13px; color: var(--lp-muted); }
+.bk-row-time { font-size: 12.5px; color: var(--lp-muted); text-align: right; }
+
+.bk-honest { font-size: 13px; color: var(--lp-muted); max-width: 90ch; }
+
+@media (max-width: 900px) {
+  .bk-grid { grid-template-columns: minmax(0, 1fr); }
+  .bk-rows li { grid-template-columns: 22px minmax(0, 1fr); }
+  .bk-row-why, .bk-row-src, .bk-row-time { grid-column: 2; text-align: left; }
+  .bk-tag { display: none; }
+}
