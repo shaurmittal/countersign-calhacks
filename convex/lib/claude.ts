@@ -22,6 +22,7 @@ const EFFORT = (process.env.CLAUDE_EFFORT ?? "low") as "low" | "medium" | "high"
 // abort-on-timeout can throw from inside a timer ("The stream is not in a state that permits close"),
 // which nothing can catch and which kills the whole pipeline run. The SDK timeout is only a backstop.
 const INTAKE_BUDGET_MS = 12_000;
+const INTAKE_WITH_PDF_BUDGET_MS = 25_000; // reading a PDF invoice takes longer
 const REPLY_BUDGET_MS = 8_000;
 
 let client: Anthropic | null = null;
@@ -48,13 +49,28 @@ async function withinBudget<T>(call: Promise<T>, ms: number): Promise<T | typeof
 
 export type IntakeResult = { request: PaymentRequest; attempts: number; error?: string };
 
-/** Raw text -> PaymentRequest. Retries once; on a second failure returns a parseFailed request (HOLD). */
+/** A PDF that came with the message (an emailed invoice). It is as untrusted as the message itself. */
+export type IntakeDocument = { name: string; base64: string };
+
+/** Raw text (+ an attached PDF) -> PaymentRequest. Retries once; on a second failure returns a parseFailed request (HOLD). */
 export async function extractPaymentRequest(
   channel: Channel,
   rawContent: string,
   biz: BusinessContext,
+  document?: IntakeDocument,
 ): Promise<IntakeResult> {
   const scan = prescan(rawContent);
+  const budget = document ? INTAKE_WITH_PDF_BUDGET_MS : INTAKE_BUDGET_MS;
+  const content = document
+    ? [
+        {
+          type: "document" as const,
+          source: { type: "base64" as const, media_type: "application/pdf" as const, data: document.base64 },
+          title: `Attachment (untrusted): ${document.name.slice(0, 80)}`,
+        },
+        { type: "text" as const, text: wrapUntrusted(channel, rawContent, { attachment: document.name }) },
+      ]
+    : wrapUntrusted(channel, rawContent);
   let lastError = "";
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
@@ -65,10 +81,10 @@ export async function extractPaymentRequest(
         fallbacks: "default",
         output_config: { effort: EFFORT, format: betaZodOutputFormat(IntakeOutput) },
         system: intakeSystemPrompt(biz),
-        messages: [{ role: "user", content: wrapUntrusted(channel, rawContent) }],
-      }), INTAKE_BUDGET_MS);
+        messages: [{ role: "user", content }],
+      }), budget);
       if (response === TIMED_OUT) {
-        lastError = `timed out after ${INTAKE_BUDGET_MS}ms`;
+        lastError = `timed out after ${budget}ms`;
         continue;
       }
       if (response.stop_reason === "refusal") {

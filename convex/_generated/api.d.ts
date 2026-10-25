@@ -20,6 +20,7 @@ import type * as audit from "../audit.js";
 import type * as callbacks from "../callbacks.js";
 import type * as cases from "../cases.js";
 import type * as channels_agentBridge from "../channels/agentBridge.js";
+import type * as channels_email from "../channels/email.js";
 import type * as channels_reply from "../channels/reply.js";
 import type * as channels_voice from "../channels/voice.js";
 import type * as channels_web from "../channels/web.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   callbacks: typeof callbacks;
   cases: typeof cases;
   "channels/agentBridge": typeof channels_agentBridge;
+  "channels/email": typeof channels_email;
   "channels/reply": typeof channels_reply;
   "channels/voice": typeof channels_voice;
   "channels/web": typeof channels_web;

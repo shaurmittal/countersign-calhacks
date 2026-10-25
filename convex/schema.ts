@@ -181,6 +181,14 @@ export default defineSchema({
     .index("by_case", ["caseId"])
     .index("by_idempotencyKey", ["idempotencyKey"]),
 
+  // Email attacks fired from /try (convex/channels/email.ts): the per-visitor rate limit and the visitor's list.
+  emailSimulations: defineTable({
+    senderId: v.string(), // the /try visitor's random id
+    attack: v.string(),
+    caseId: v.optional(v.id("cases")),
+    at: v.number(),
+  }).index("by_sender", ["senderId", "at"]),
+
   auditEvents: defineTable({
     seq: v.number(),
     caseId: v.optional(v.id("cases")),
