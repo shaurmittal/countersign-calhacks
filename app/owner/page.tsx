@@ -9,6 +9,7 @@ import { api } from "../../convex/_generated/api";
 import { OWNER_CODE } from "../../shared/config";
 import { formatCents } from "../../shared/ledger";
 import { channelLabel, clockTime, ruleInfo, secondsLeft, useNow } from "../components/format";
+import { BankChangesSection } from "./BankChangesSection";
 import { ListsSection } from "./ListsSection";
 import "./owner.css";
 
@@ -34,6 +35,8 @@ export default function OwnerPage() {
       ) : (
         pending.map((p) => <ApprovalCard key={p.caseId} item={p} />)
       )}
+
+      <BankChangesSection />
 
       <h2>Alerts</h2>
       {feed && feed.length > 0 ? (
