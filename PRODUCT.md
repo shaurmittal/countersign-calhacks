@@ -37,7 +37,7 @@ Countersign is the second signer a one-person company never had. Every request f
 ## Brand Commitments
 
 - Name: Countersign. Tagline: "The second signer a one-person company never had."
-- Logo: a padlock with a check mark (inline SVG, `LogoMark` in `app/ui/AppShell.tsx`).
+- Logo: Constellation, the agents in pipeline order around a C wired to the amber Countersign core, ending at the Policy Engine (ice square). Inline SVG `LogoMark` in `app/ui/AppShell.tsx`; files and favicons in `docs/brand/`.
 - Fictional world: Lumen Labs, Priya Raman, vendors Northwind Cloud, Pixel & Pine Design, Harbor Legal, Sam Ortiz.
 - User-pinned for the app UI redesign (Oct 24, 2026): OLED black background, white as the secondary color, green for approvals, red for rejections, otherwise restrained color; reference and components from easyui.site.
 

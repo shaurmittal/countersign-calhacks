@@ -140,13 +140,29 @@ function Frame({ children }: { children: ReactNode }) {
   );
 }
 
-/** The padlock with a check, in the film's amber. */
-export function LogoMark({ className }: { className?: string }) {
+/** The agents around the Countersign core, in pipeline order along a C, ending at the Policy Engine (the ice
+ *  square). The heavier-stroke favicon cut of the brand mark (docs/brand), so it reads at 24 px. */
+const LOGO_AGENTS = [
+  [180.9, 60.2],
+  [107.2, 44.6],
+  [49.4, 93.0],
+  [52.1, 168.4],
+  [113.1, 212.7],
+] as const;
+
+export function LogoMark({ className, size = 24 }: { className?: string; size?: number }) {
   return (
-    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" stroke="currentColor" strokeWidth="1.7" />
-      <path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <path d="M9.5 15.6l1.8 1.8 3.4-3.6" stroke="#f2b04c" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    <svg className={className} width={size} height={size} viewBox="22 22 212 212" aria-hidden="true">
+      <path d="M193.88 72.72 A86 86 0 1 0 193.88 183.28" fill="none" stroke="#7cc4f5" strokeOpacity="0.7" strokeWidth="12" strokeLinecap="round" />
+      {[...LOGO_AGENTS, [185.5, 191.9]].map(([x, y]) => (
+        <line key={`${x}`} x1="128" y1="128" x2={x} y2={y} stroke="#fafafa" strokeOpacity="0.4" strokeWidth="9" strokeLinecap="round" />
+      ))}
+      {LOGO_AGENTS.map(([x, y]) => (
+        <circle key={`${x}`} cx={x} cy={y} r="19" fill="#f2b04c" />
+      ))}
+      <rect x="165.5" y="171.9" width="40" height="40" rx="11.2" fill="#7cc4f5" />
+      <circle cx="128" cy="128" r="28" fill="#f2b04c" />
+      <circle cx="128" cy="128" r="10" fill="#000" />
     </svg>
   );
 }
