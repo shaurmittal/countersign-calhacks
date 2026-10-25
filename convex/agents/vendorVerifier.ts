@@ -24,6 +24,7 @@ import {
 import { MOSS_CALLER_TIMEOUT_MS, withTimeout } from "../../shared/verification/moss";
 import type { BookListEntry, BookVendor, SearchHit, VerificationBook } from "../../shared/verification/types";
 import { verifyVendor } from "../../shared/verification/verifyVendor";
+import type { EmailSignals } from "../../shared/email/inbound";
 
 function toBookVendor(v: Doc<"vendors">): BookVendor {
   // A missing range reads as [0, 0], so every amount is anomalous rather than silently fine.
@@ -137,7 +138,11 @@ export async function runVendorVerifier(
   const hits = mossHits(ctx, request.claimedVendorName);
   const book: VerificationBook = await ctx.runQuery(internal.agents.vendorVerifier.loadVerificationBook, {});
   const [searchHits, crsResult]: [SearchHit[], CrsResult] = await Promise.all([hits, screenCase(c, book)]);
-  return { ...verifyVendor({ request, fromAddress: c.fromAddress, rawContent: c.rawContent, book, searchHits }), crs: crsResult };
+  const emailAuth = c.channel === "email" ? (c.emailSignals as EmailSignals | undefined)?.auth : undefined;
+  return {
+    ...verifyVendor({ request, fromAddress: c.fromAddress, rawContent: c.rawContent, book, searchHits, emailAuth }),
+    crs: crsResult,
+  };
 }
 
 /**

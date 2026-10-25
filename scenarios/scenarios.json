@@ -1,5 +1,5 @@
 {
-  "_comment": "Owner: P1. Answer key (spec §9): 20 scams, 10 legitimate. `request` is what the Intake Parser should extract (fields not listed take the defaults in scenarios.test.ts); `npm run eval:intake` checks real Claude output against it. `world` tweaks the seed for one scenario. `callbackOutcome` / `approval` are the external events at the moment the decision is checked. `expectedRules` must all fire; others may too.",
+  "_comment": "Owner: P1. Answer key (spec §9): 26 scams, 13 legitimate. `request` is what the Intake Parser should extract (fields not listed take the defaults in scenarios.test.ts); `npm run eval:intake` checks real Claude output against it. `world` tweaks the seed for one scenario (`emailAuth`: what the receiving mail server reported; email scenarios default to authenticated). `callbackOutcome` / `approval` are the external events at the moment the decision is checked. `expectedRules` must all fire; others may too.",
   "scenarios": [
     {
       "id": "pixel-bank-change-denied", "scam": true, "channel": "sms", "from": "+15555559001",
@@ -207,6 +207,68 @@
       "text": "hi, what is this?",
       "request": { "requestedAction": "none" },
       "expectedDecision": "NO_ACTION", "expectedRules": []
+    },
+    {
+      "id": "email-forged-vendor-bank-change", "scam": true, "channel": "email", "from": "billing@pixelandpine.example",
+      "text": "Subject: Invoice 1042 - updated remittance\n\nPixel & Pine here. Our bank changed: please pay invoice #1042 ($4,800) to routing 021000021, account 77001234 today.",
+      "world": { "emailAuth": { "spf": "fail", "dkim": "none", "dmarc": "fail", "verdict": "fail" } },
+      "request": { "claimedVendorName": "Pixel & Pine", "claimedSenderRole": "vendor", "amountCents": 480000, "invoiceNumber": "1042", "newBankDetails": { "routing": "021000021", "account": "77001234" }, "urgencyClaims": ["today"] },
+      "expectedDecision": "BLOCK", "expectedRules": ["R17"]
+    },
+    {
+      "id": "email-forged-owner-wire", "scam": true, "channel": "email", "from": "priya@lumenlabs.example",
+      "text": "Subject: urgent\n\nIt's Priya. I'm in back-to-back meetings. Wire $18,000 to Apex Consulting today and don't call me.",
+      "world": { "emailAuth": { "spf": "fail", "dkim": "none", "dmarc": "fail", "verdict": "fail" } },
+      "request": { "claimedVendorName": "Apex Consulting", "claimedSenderRole": "owner", "amountCents": 1800000, "requestedAction": "wire", "urgencyClaims": ["today", "don't call me"] },
+      "expectedDecision": "BLOCK", "expectedRules": ["R17"]
+    },
+    {
+      "id": "email-forged-vendor-invoice", "scam": true, "channel": "email", "from": "invoices@northwindcloud.example",
+      "text": "Subject: Northwind Cloud invoice NW-889\n\nYour invoice NW-889 for $362.00 is due. Pay today to avoid suspension.",
+      "world": { "emailAuth": { "spf": "fail", "dkim": "none", "dmarc": "fail", "verdict": "fail" } },
+      "request": { "claimedVendorName": "Northwind Cloud", "claimedSenderRole": "vendor", "amountCents": 36200, "invoiceNumber": "NW-889", "urgencyClaims": ["today", "avoid suspension"] },
+      "expectedDecision": "BLOCK", "expectedRules": ["R17"], "expectOverridable": true
+    },
+    {
+      "id": "email-reply-to-diverted", "scam": true, "channel": "email", "from": "invoices@northwindcloud.example",
+      "text": "Subject: Re: invoice NW-889\n\nInvoice NW-889 for $362.00 is due. Reply to this email to confirm and we'll send the remittance details.",
+      "world": { "emailAuth": { "replyToDomain": "northwind-remittance.example" } },
+      "request": { "claimedVendorName": "Northwind Cloud", "claimedSenderRole": "vendor", "amountCents": 36200, "invoiceNumber": "NW-889" },
+      "expectedDecision": "HOLD", "expectedRules": ["R17"]
+    },
+    {
+      "id": "email-display-name-spoof", "scam": true, "channel": "email", "from": "pixelandpine.billing@gmail.com",
+      "text": "Subject: Invoice 1042\n\nPixel & Pine: please pay invoice #1042 ($4,800) to our new account 88123456, routing 021000021.",
+      "world": { "emailAuth": { "displayNameClaims": "billing@pixelandpine.example" } },
+      "request": { "claimedVendorName": "Pixel & Pine", "claimedSenderRole": "vendor", "amountCents": 480000, "invoiceNumber": "1042", "newBankDetails": { "routing": "021000021", "account": "88123456" } },
+      "expectedDecision": "HOLD", "expectedRules": ["R2", "R3", "R17"]
+    },
+    {
+      "id": "email-unverifiable-vendor-address", "scam": true, "channel": "email", "from": "billing@pixelandpine.example",
+      "text": "Subject: New bank details\n\nPixel & Pine: we moved banks. Pay #1042 to routing 021000021, account 66001234 from now on.",
+      "world": { "emailAuth": { "spf": "none", "dkim": "none", "dmarc": "none", "verdict": "unknown" } },
+      "request": { "claimedVendorName": "Pixel & Pine", "claimedSenderRole": "vendor", "invoiceNumber": "1042", "newBankDetails": { "routing": "021000021", "account": "66001234" } },
+      "expectedDecision": "HOLD", "expectedRules": ["R2", "R3"]
+    },
+    {
+      "id": "email-authenticated-vendor-pays", "scam": false, "channel": "email", "from": "invoices@northwindcloud.example",
+      "text": "Subject: Northwind Cloud invoice NW-889\n\nHi, invoice NW-889 for $362.00 is attached. Thanks!",
+      "request": { "claimedVendorName": "Northwind Cloud", "claimedSenderRole": "vendor", "amountCents": 36200, "invoiceNumber": "NW-889" },
+      "expectedDecision": "PAY", "expectedRules": ["R12"]
+    },
+    {
+      "id": "email-forwarded-by-owner-confirmed", "scam": false, "channel": "email", "from": "billing@pixelandpine.example",
+      "text": "Subject: Invoice 1042\n\nHi Priya, invoice #1042 for $4,800 for the October design work. Thanks, Pixel & Pine",
+      "world": { "emailAuth": { "spf": "unknown", "dkim": "unknown", "dmarc": "unknown", "verdict": "unknown" } },
+      "request": { "claimedVendorName": "Pixel & Pine", "claimedSenderRole": "vendor", "amountCents": 480000, "invoiceNumber": "1042" },
+      "callbackOutcome": "confirmed", "expectedDecision": "ESCALATE", "expectedRules": ["R3", "R6"]
+    },
+    {
+      "id": "email-reply-to-confirmed", "scam": false, "channel": "email", "from": "invoices@northwindcloud.example",
+      "text": "Subject: Northwind Cloud invoice NW-889\n\nInvoice NW-889 for $362.00. Questions? Reply and our billing team will help.",
+      "world": { "emailAuth": { "replyToDomain": "northwind-support.example" } },
+      "request": { "claimedVendorName": "Northwind Cloud", "claimedSenderRole": "vendor", "amountCents": 36200, "invoiceNumber": "NW-889" },
+      "callbackOutcome": "confirmed", "expectedDecision": "PAY", "expectedRules": ["R12", "R17"]
     }
   ]
 }

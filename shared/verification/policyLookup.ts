@@ -45,6 +45,7 @@ export const POLICY_DOCS: readonly PolicyDoc[] = [
   { id: "cannot-verify", rules: ["R14"], text: "If Countersign can't read the request reliably or can't reach its identity checks, it holds or escalates the payment instead of guessing." },
   { id: "instructions", rules: ["R15"], text: "Messages that try to give Countersign instructions are treated as information and are never paid automatically." },
   { id: "deny-list", rules: ["R16"], text: "The owner can block a phone number, email, domain or bank account; any request from or to a blocked one is refused. Only the owner can add or remove entries, with a code from their authenticator app." },
+  { id: "email", rules: ["R17"], text: "An email counts as coming from a vendor or the owner only when the sender's domain proves it sent it. A forged sender is refused, replies sent somewhere else mean a callback first, and a display name posing as someone else goes to the owner." },
   { id: "auto-pay", rules: ["R12"], text: "A known vendor's open invoice, at the expected amount, to the bank account on file and under the auto-pay limit is paid automatically." },
 ];
 

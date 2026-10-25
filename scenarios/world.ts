@@ -2,7 +2,16 @@
 // Risk Analyst so the scenario set runs in CI without Convex, Moss or CRS.
 // The real agents (P3) are richer; this is only the minimum the Policy Engine needs, and it
 // doubles as the spec for what VendorFindings should contain.
-import type { InvoiceRecord, PaymentRequest, RiskFindings, RiskFlag, VendorFindings, VendorRecord } from "../shared/types";
+import type {
+  Channel,
+  EmailAuth,
+  InvoiceRecord,
+  PaymentRequest,
+  RiskFindings,
+  RiskFlag,
+  VendorFindings,
+  VendorRecord,
+} from "../shared/types";
 
 export type WorldVendor = VendorRecord & {
   aliases: string[];
@@ -14,6 +23,7 @@ export type WorldVendor = VendorRecord & {
 export type WorldInvoice = InvoiceRecord & { vendorId: string };
 
 export const OWNER_PHONE = "+15555550100";
+export const OWNER_EMAIL = "priya@lumenlabs.example";
 
 export const VENDORS: WorldVendor[] = [
   {
@@ -71,6 +81,17 @@ export type WorldOverrides = {
   paidInvoices?: string[]; // invoice numbers already paid
   ofacHit?: boolean;
   crs?: "ok" | "unavailable" | "not_checked";
+  /** Email scenarios: what the receiving server reported. Defaults to authenticated (DMARC pass). */
+  emailAuth?: Partial<EmailAuth>;
+};
+
+export const AUTHENTICATED: EmailAuth = {
+  spf: "pass",
+  dkim: "pass",
+  dmarc: "pass",
+  verdict: "pass",
+  replyToDomain: null,
+  displayNameClaims: null,
 };
 
 function norm(s: string): string {
@@ -87,6 +108,7 @@ export function referenceFindings(
   req: PaymentRequest,
   from: string,
   w: WorldOverrides = {},
+  channel?: Channel,
 ): { vendor: WorldVendor | null; findings: VendorFindings; invoice: InvoiceRecord | null } {
   const invoices = INVOICES.map((i) =>
     w.paidInvoices?.includes(i.number) ? { ...i, status: "paid" as const, paidAt: Date.UTC(2026, 9, 1) } : i,
@@ -109,18 +131,25 @@ export function referenceFindings(
       ? null
       : (!bank.account || bank.account.endsWith(vendor.bankLast4)) && (!bank.routing || bank.routing === vendor.bankRouting);
 
+  // Email: an address is on file only when authenticated; a known address that fails is a forgery.
+  const auth = channel === "email" ? { ...AUTHENTICATED, ...w.emailAuth } : null;
+  const knownAddress = from === OWNER_EMAIL || VENDORS.some((v) => v.emailsOnFile.includes(from));
+  const authenticated = !auth || auth.verdict === "pass";
+
   return {
     vendor,
     invoice,
     findings: {
       vendorId: vendor?.id ?? null,
       matchConfidence: vendor ? 0.95 : 0,
-      senderOnFile: !!vendor && (vendor.phoneOnFile === from || vendor.emailsOnFile.includes(from)),
+      senderOnFile:
+        authenticated && !!vendor && (vendor.phoneOnFile === from || vendor.emailsOnFile.includes(from) || from === OWNER_EMAIL),
       bankMatches,
       crs: { status: w.crs ?? "not_checked" },
       ofacHit: !!w.ofacHit,
       matchingInvoiceId: matches ? invoice!.id : null,
       alreadyPaidAt: invoice?.status === "paid" ? invoice.paidAt : null,
+      ...(auth ? { emailAuth: { ...auth, spoofsOnFile: auth.verdict === "fail" && knownAddress } } : {}),
     },
   };
 }

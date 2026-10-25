@@ -72,6 +72,9 @@ export function decide(input: PolicyInput): PolicyResult {
   }
   // The owner's own block list. Like every BLOCK, an approval can't lift it; the owner removes the entry instead.
   if (vf?.denyListHits?.length) hit("R16", "BLOCK", denyListReason(vf.denyListHits));
+  // A forged From: the address is one we know (a vendor's or the owner's), but its domain says it didn't send it.
+  const email = vf?.emailAuth;
+  if (email?.spoofsOnFile) hit("R17", "BLOCK", "The sender's address is on file, but the email failed authentication: it was forged");
 
   // ---- Missing or unavailable data: never pay on what we could not check ----
   if (req.parseFailed) hit("R14", "HOLD", "The request could not be read reliably");
@@ -90,6 +93,14 @@ export function decide(input: PolicyInput): PolicyResult {
   }
   if (req.injectionAttempt || flags.has("injection_attempt")) {
     hit("R15", "ESCALATE", "The message tries to give the system instructions");
+  }
+
+  // ---- Email authentication beyond a forged on-file address ----
+  if (email && !email.spoofsOnFile && email.verdict === "fail") {
+    hit("R17", "ESCALATE", "The email failed authentication for its own domain");
+  }
+  if (email?.displayNameClaims) {
+    hit("R17", "ESCALATE", `The sender's display name poses as ${email.displayNameClaims}, which isn't the address it came from`);
   }
 
   // ---- Vendor-specific rules ----
@@ -115,17 +126,29 @@ export function decide(input: PolicyInput): PolicyResult {
       else hit("R2", "HOLD", `Could not confirm the new account with ${vendor.name}; bank changes are never paid unconfirmed`);
     }
 
+    // An email address is only "on file" when the email is authenticated. Checked here as well as in the
+    // Vendor Verifier, so no findings, however they were built, can let a typed From line through.
+    const senderOnFile = vf.senderOnFile && (!email || email.verdict === "pass");
     // A trust entry makes senderOnFile true and nothing else: R2, R4-R7 and the invoice check still run below.
-    if (vf.trustedByOwner && vf.senderOnFile) hit("R3", "NOTE", `The owner's trust list ties this sender to ${vendor.name}`);
+    if (vf.trustedByOwner && senderOnFile) hit("R3", "NOTE", `The owner's trust list ties this sender to ${vendor.name}`);
     // Someone not on file who speaks for the payee, or who asks to change where the payee is paid. The second
     // part doesn't depend on how the model labelled the sender: "it's Sam, send my pay here" reads as vendor,
     // employee or unknown from run to run, and only the payee would ask to change the payee's own account.
     const actsForPayee = PAYEE_ROLES.has(req.claimedSenderRole) || BANK_CHANGE_ACTIONS.has(req.requestedAction);
-    if (!vf.senderOnFile && actsForPayee) {
+    if (!senderOnFile && actsForPayee) {
       if (cb === null) hit("R3", "HOLD", `Sender is not on file for ${vendor.name}: calling back on the number on file`, true);
       else if (cb === "confirmed") hit("R3", "NOTE", `Sender not on file, but ${vendor.name} confirmed by callback`);
       else if (cb === "denied") hit("R3", "NOTE", "Sender not on file (denied by the vendor)");
       else hit("R3", "ESCALATE", `Sender not on file and ${vendor.name} could not be reached`);
+    }
+
+    // Email tricks that don't need a forged domain. Replies diverted elsewhere: confirm with the vendor first.
+    if (email?.replyToDomain) {
+      const where = `replies go to ${email.replyToDomain}, not the sender's domain`;
+      if (cb === null) hit("R17", "HOLD", `The email ${where}: calling ${vendor.name} on the number on file`, true);
+      else if (cb === "confirmed") hit("R17", "NOTE", `The email ${where}; ${vendor.name} confirmed by callback`);
+      else if (cb === "denied") hit("R17", "NOTE", `The email ${where} (denied by the vendor)`);
+      else hit("R17", "ESCALATE", `The email ${where} and ${vendor.name} could not be reached`);
     }
 
     invoiceOk =

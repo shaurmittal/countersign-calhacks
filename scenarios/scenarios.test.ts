@@ -1,5 +1,5 @@
 // Runs every scenario in scenarios.json through the real Policy Engine against the seed world.
-// Prints the line for the pitch: "30 scenarios · 20/20 scams blocked · ... · 0 false PAY".
+// Prints the line for the pitch: "39 scenarios · 26/26 scams blocked · ... · 0 false PAY".
 import { describe, expect, it } from "vitest";
 import { prescan } from "../shared/intake/prescan";
 import type { PolicyResult } from "../shared/types";
@@ -8,9 +8,9 @@ import { SCENARIOS, runScenario, summaryLine, type Scenario } from "./run";
 const results: { s: Scenario; r: PolicyResult }[] = [];
 
 describe("scenario answer key", () => {
-  it("has 20 scams and 10 legitimate requests", () => {
-    expect(SCENARIOS.filter((s) => s.scam)).toHaveLength(20);
-    expect(SCENARIOS.filter((s) => !s.scam)).toHaveLength(10);
+  it("has 26 scams and 13 legitimate requests", () => {
+    expect(SCENARIOS.filter((s) => s.scam)).toHaveLength(26);
+    expect(SCENARIOS.filter((s) => !s.scam)).toHaveLength(13);
     expect(new Set(SCENARIOS.map((s) => s.id)).size).toBe(SCENARIOS.length);
   });
 
@@ -28,7 +28,7 @@ describe("scenario answer key", () => {
   it("summary line for the pitch", () => {
     expect(results).toHaveLength(SCENARIOS.length);
     expect(summaryLine(results)).toBe(
-      "30 scenarios · 20/20 scams blocked · 10/10 legitimate paid or correctly escalated · 0 false PAY",
+      "39 scenarios · 26/26 scams blocked · 13/13 legitimate paid or correctly escalated · 0 false PAY",
     );
   });
 

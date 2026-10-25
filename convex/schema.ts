@@ -115,6 +115,7 @@ export default defineSchema({
     riskScore: v.optional(v.number()),
     flags: v.array(v.string()),
     replyText: v.optional(v.string()),
+    emailSignals: v.optional(v.any()), // EmailSignals (shared/email/inbound.ts): subject, authentication, attachments
     payStartedAt: v.optional(v.number()), // set once by cases.claimPayment: the lock against paying twice
     createdAt: v.number(),
     updatedAt: v.number(),

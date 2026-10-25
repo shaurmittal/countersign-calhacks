@@ -7,8 +7,15 @@ import { caseStatus, channel, decision } from "./schema";
 import { appendAudit } from "./audit";
 import { LIMITS } from "../shared/config";
 import type { Channel, PaymentRequest, PolicyResult } from "../shared/types";
+import { publicEmailSignals, type EmailSignals } from "../shared/email/inbound";
 
-type OpenArgs = { channel: Channel; fromAddress: string; rawContent: string; externalId?: string };
+type OpenArgs = {
+  channel: Channel;
+  fromAddress: string;
+  rawContent: string;
+  externalId?: string;
+  emailSignals?: EmailSignals; // email only (convex/channels/email.ts)
+};
 
 /** Entry point for every channel. Dedupes on externalId (webhook retries) and starts the pipeline. */
 export async function openCase(ctx: MutationCtx, args: OpenArgs) {
@@ -133,7 +140,13 @@ export const markSenderKnownBad = internalMutation({
 // ---- Public queries for the War Room. Only the last 4 of a sender's address leave the backend. ----
 
 function mask(c: Doc<"cases">) {
-  return { ...c, fromAddress: `…${c.fromAddress.slice(-4)}` };
+  // An email sender keeps only its domain ("…@gmail.com"): the name part identifies a person, the domain is the evidence.
+  const at = c.channel === "email" ? c.fromAddress.lastIndexOf("@") : -1;
+  return {
+    ...c,
+    fromAddress: at >= 0 ? `…${c.fromAddress.slice(at)}` : `…${c.fromAddress.slice(-4)}`,
+    emailSignals: publicEmailSignals(c.emailSignals as EmailSignals | undefined),
+  };
 }
 
 export const recent = query({
