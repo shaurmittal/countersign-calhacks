@@ -1,0 +1,27 @@
+{
+  "name": "countersign-video",
+  "private": true,
+  "description": "The Countersign demo video: Remotion composition, Playwright captures of the real app, Cartesia voiceover.",
+  "scripts": {
+    "vo": "tsx scripts/voiceover.ts",
+    "capture": "tsx capture/run.ts",
+    "studio": "remotion studio src/index.ts",
+    "render:draft": "remotion render src/index.ts CountersignDemo out/draft.mp4 --scale=0.5",
+    "render": "remotion render src/index.ts CountersignDemo out/video-only.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.538",
+    "@remotion/google-fonts": "^4.0.538",
+    "@remotion/media-utils": "^4.0.538",
+    "@types/react": "^19.3.0",
+    "playwright-core": "^1.64.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "remotion": "^4.0.538",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5"
+  }
+}

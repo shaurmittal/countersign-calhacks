@@ -1,2 +1,5 @@
 # The Fetch.ai agents run on Agentverse, not Vercel; Vercel deploys only the Next.js site.
 fetch-agents/
+
+# The demo video (Remotion) builds on its own; Vercel deploys only the Next.js site.
+video/

@@ -1,0 +1,7 @@
+node_modules/
+out/
+# Raw screen captures are large; the encoded clips in assets/footage are kept.
+assets/footage/*/
+# Synthesized by scripts/sound.sh; regenerate instead of committing.
+assets/music/
+assets/sfx/

@@ -251,6 +251,10 @@ Convex is the whole backend: the database, every agent step, the timers and the 
 - **Changes to `shared/types.ts` or `convex/schema.ts`** go in a small PR of their own; tell the team.
 - Work on branches (`p1/...`, `p2/...`, ...) and merge to `main` often. Keep `main` passing `npm run typecheck && npm test`.
 
+## Demo video
+
+`video/` builds the 1:21 demo: Playwright recordings of the real app, a **Cartesia Sonic** voiceover, edited in Remotion and mixed with ffmpeg. See [video/README.md](video/README.md).
+
 ## What's real, what's simulated
 
 | Real | Simulated |
