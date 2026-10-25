@@ -3,6 +3,7 @@
 // replied, and the verdict stamped at the strip's end, with the rules that decided it.
 import type { FunctionReturnType } from "convex/server";
 import { motion, useReducedMotion } from "framer-motion";
+import { ChevronRight } from "lucide-react";
 import type { api } from "../../convex/_generated/api";
 import { formatCents, RAIL_LABEL } from "../../shared/ledger";
 import { RULES } from "../../shared/policy/rules";
@@ -46,19 +47,23 @@ export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | u
     >
       {/* The strip: fixed columns, only the values change. */}
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 border-b border-border px-4 py-4 sm:grid-cols-[88px_150px_minmax(0,1fr)_auto] sm:px-6">
-        <time className="font-mono text-[12.5px] text-muted-foreground" dateTime={new Date(c.createdAt).toISOString()}>
+        <time className="font-mono text-[13px] text-muted-foreground" dateTime={new Date(c.createdAt).toISOString()}>
           {clockTime(c.createdAt)}
         </time>
-        <span className="hidden items-center gap-2 text-[13px] text-foreground/90 sm:flex">
+        <span className="hidden items-center gap-2 text-[14px] text-foreground/90 sm:flex">
           <ChannelIcon channel={c.channel} />
           {channelLabel(c.channel)}
         </span>
         <div className="min-w-0">
-          <p className="truncate text-[15px] font-medium tracking-[-0.01em] text-foreground">
-            {payee ?? "Unknown payee"}
-            {amount != null && <span className="ml-2 font-mono text-[14px] font-normal text-foreground/80">{formatCents(amount)}</span>}
+          <p className="flex flex-wrap items-baseline gap-x-2.5 text-[16px] font-medium leading-snug tracking-[-0.01em] text-foreground">
+            <span className="break-words">{payee ?? "Unknown payee"}</span>
+            {amount != null && <span className="font-mono text-[15px] font-normal text-foreground/85">{formatCents(amount)}</span>}
           </p>
-          <p className="truncate font-mono text-[12px] text-subtle">from {c.fromAddress}</p>
+          <p className="mt-0.5 flex min-w-0 items-center gap-1.5 font-mono text-[13px] text-subtle">
+            <ChannelIcon channel={c.channel} className="size-3.5 sm:hidden" />
+            <span className="sr-only sm:hidden">{channelLabel(c.channel)}</span>
+            <span className="truncate">from {c.fromAddress}</span>
+          </p>
         </div>
         <motion.span
           key={decision ?? c.status}
@@ -68,7 +73,7 @@ export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | u
           role="status"
           aria-live="polite"
         >
-          <Stamp tone={tone} size="lg">
+          <Stamp tone={tone} size="lg" className="max-sm:h-8 max-sm:px-2.5 max-sm:text-[15px]">
             {decision ? verdictWord(decision, request) : `${c.status.replace(/_/g, " ").toLowerCase()}…`}
           </Stamp>
         </motion.span>
@@ -101,8 +106,18 @@ export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | u
                 key={id}
                 title={`${id} ${RULES[id].name}`}
                 className={cn(
-                  "grid h-5 min-w-7 place-items-center rounded px-1 font-mono text-[10px] transition-colors duration-300",
-                  fired.has(id) ? "bg-foreground text-background" : decision ? "bg-white/[0.06] text-subtle" : "bg-white/[0.03] text-white/25",
+                  "grid h-6 min-w-8 place-items-center rounded px-1 font-mono text-[12px] transition-colors duration-300",
+                  !fired.has(id)
+                    ? decision
+                      ? "bg-white/[0.06] text-subtle"
+                      : "bg-white/[0.03] text-white/30"
+                    : id === keyRule && tone === "block"
+                      ? "bg-block text-white"
+                      : id === keyRule && tone === "pay"
+                        ? "bg-pay text-black"
+                        : id === keyRule && tone === "hold"
+                          ? "bg-hold text-black"
+                          : "bg-foreground text-background",
                 )}
               >
                 {id}
@@ -110,8 +125,11 @@ export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | u
             ))}
           </ol>
           {result && result.reasons.length > 0 && (
-            <details className="group mt-4 text-[13px]">
-              <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground">Why, in the engine&apos;s words</summary>
+            <details className="group mt-4 text-[13.5px]">
+              <summary className="flex cursor-pointer list-none items-center gap-1.5 select-none text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+                <ChevronRight className="size-4 transition-transform duration-200 group-open:rotate-90" aria-hidden="true" />
+                Why, in the engine&apos;s words
+              </summary>
               <ul className="mt-2 space-y-1.5 border-l border-border pl-3 text-muted-foreground">
                 {result.reasons.map((reason) => (
                   <li key={reason}>{reason}</li>

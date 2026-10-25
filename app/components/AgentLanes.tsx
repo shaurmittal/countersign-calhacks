@@ -6,7 +6,7 @@
 // EasyUI's AI Agent Activity (MIT: github.com/Surajmaurya1/easyui).
 import type { FunctionReturnType } from "convex/server";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { AlertCircle, Check, ChevronDown, LoaderCircle } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type { api } from "../../convex/_generated/api";
 import type { AgentName, PaymentRequest, PolicyResult, RiskFindings, VendorFindings } from "../../shared/types";
@@ -86,7 +86,7 @@ function Slot(props: { lane: (typeof LANES)[number]; run: Run | undefined; detai
               </span>
             </span>
             <span className={cn("mt-0.5 block text-[12.5px] leading-snug", run?.summary ? "text-muted-foreground" : "text-white/30")}>
-              {run?.error ? `Failed: ${run.error}` : (run?.summary ?? lane.role)}
+              {run?.error ? `Failed: ${run.error}` : run?.summary ? <Summary text={run.summary} /> : lane.role}
             </span>
           </span>
           {body && (
@@ -113,6 +113,18 @@ function Slot(props: { lane: (typeof LANES)[number]; run: Run | undefined; detai
         </AnimatePresence>
       </div>
     </li>
+  );
+}
+
+/** Lane summaries sometimes carry a "⚠"; the board draws its own icon instead of a font glyph. */
+function Summary({ text }: { text: string }) {
+  const glyph = /[\u2600-\u27BF]\uFE0F?/u;
+  if (!glyph.test(text)) return <>{text}</>;
+  return (
+    <span className="inline-flex items-start gap-1.5">
+      <TriangleAlert className="mt-[3px] size-3.5 shrink-0 text-hold-ink" aria-hidden="true" />
+      {text.replace(new RegExp(glyph.source, "gu"), "").replace(/\s{2,}/g, " ").trim()}
+    </span>
   );
 }
 

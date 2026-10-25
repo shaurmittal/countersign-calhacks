@@ -264,7 +264,7 @@ function AttackGrid({ onPick }: { onPick: (text: string) => void }) {
             <span className="flex items-center justify-between gap-2 text-[14px] font-medium">
               {a.title}
               {a.note && (
-                <span className={cn("text-[11.5px] font-normal", a.title === "A real bill" ? "text-pay-ink" : "text-subtle")}>{a.note}</span>
+                <span className="text-[12px] font-normal text-subtle">{a.note}</span>
               )}
             </span>
             <span className="text-[13px] leading-relaxed text-muted-foreground">“{a.text}”</span>

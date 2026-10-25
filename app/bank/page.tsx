@@ -142,7 +142,7 @@ export default function BankPage() {
           </div>
         </section>
 
-        <section aria-labelledby="hijack-title" className="rounded-xl border border-block/25 bg-surface">
+        <section aria-labelledby="hijack-title" className="rounded-xl border border-border bg-surface">
           <div className="border-b border-border px-5 py-5 sm:px-6">
             <h2 id="hijack-title" className="text-[18px] font-medium tracking-[-0.015em]">
               Simulate a hijacked agent
@@ -195,9 +195,9 @@ export default function BankPage() {
             No transfers yet. Pay a real bill on /try: “Pay Northwind #NW-889”.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-border">
-            <table className="w-full min-w-[540px] text-[13px]">
-              <thead>
+          <div className="overflow-hidden rounded-xl border border-border">
+            <table className="w-full text-[13px] max-md:block">
+              <thead className="max-md:hidden">
                 <tr className="border-b border-border text-left text-[12px] text-subtle">
                   <th className="w-10 py-2.5 pl-4 font-normal">
                     <span className="sr-only">Result</span>
@@ -208,7 +208,7 @@ export default function BankPage() {
                   <th className="py-2.5 pr-4 text-right font-normal">Time</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="max-md:block">
                 <AnimatePresence initial={false}>
                   {overview?.transfers.map((t) => (
                     <motion.tr
@@ -217,23 +217,23 @@ export default function BankPage() {
                       initial={{ opacity: 0, y: -6 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={spring.smooth}
-                      className="border-b border-border last:border-0"
+                      className="border-b border-border last:border-0 max-md:grid max-md:grid-cols-[28px_minmax(0,1fr)_auto] max-md:px-3 max-md:py-2.5"
                     >
-                      <td className="py-3 pl-4">
+                      <td className="py-3 pl-4 max-md:row-span-2 max-md:py-0.5 max-md:pl-0">
                         {t.status === "accepted" ? (
                           <Check className="size-4 text-pay-ink" aria-label="Accepted" />
                         ) : (
                           <X className="size-4 text-block-ink" aria-label="Rejected" />
                         )}
                       </td>
-                      <td className="py-3 pr-4">
+                      <td className="py-3 pr-4 max-md:py-0">
                         <span className={cn("font-mono", t.status === "rejected" && "struck text-muted-foreground")}>
                           {t.amountCents != null ? formatCents(t.amountCents) : "—"}
                         </span>{" "}
                         <span className="text-foreground/90">to {t.payeeName}</span>
                         {t.memo && <span className="text-subtle"> · {t.memo}</span>}
                       </td>
-                      <td className="py-3 pr-4">
+                      <td className="py-3 pr-4 max-md:col-start-2 max-md:col-end-4 max-md:row-start-2 max-md:py-0.5">
                         {t.status === "accepted" ? (
                           <span className="text-pay-ink">
                             Countersigned <span className="font-mono text-[12px] text-muted-foreground">sig {t.sig}…</span>
@@ -243,7 +243,7 @@ export default function BankPage() {
                         )}
                       </td>
                       <td className="hidden py-3 pr-4 text-muted-foreground md:table-cell">{t.source === "countersign" ? "Countersign Payer" : "Public endpoint"}</td>
-                      <td className="py-3 pr-4 text-right font-mono text-[12px] text-subtle">
+                      <td className="py-3 pr-4 text-right font-mono text-[12.5px] text-subtle max-md:col-start-3 max-md:row-start-1 max-md:py-0 max-md:pr-0">
                         {new Date(t.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}
                       </td>
                     </motion.tr>

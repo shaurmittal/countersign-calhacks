@@ -23,6 +23,7 @@ type OwnerAction = "approve" | "decline" | "cancel";
 export default function OwnerPage() {
   const pending = useQuery(api.owner.pending);
   const feed = useQuery(api.owner.feed);
+  const changes = useQuery(api.bank.pendingChanges);
 
   return (
     <AppShell
@@ -39,7 +40,9 @@ export default function OwnerPage() {
               <div className="skeleton h-56 rounded-xl" />
             ) : pending.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border-strong px-5 py-8 text-center text-[13.5px] text-muted-foreground">
-                Nothing needs your approval right now. When a payment does, it appears here and in your alerts.
+                {changes && changes.length > 0
+                  ? "No payments need your approval. A bank-detail change is waiting for your code below."
+                  : "Nothing needs your approval right now. When a payment does, it appears here and in your alerts."}
               </p>
             ) : (
               <div className="space-y-4">

@@ -38,9 +38,9 @@ export function Stamp({ tone, children, size = "md", className }: { tone: Tone; 
     <span
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-md border font-mono font-semibold uppercase tracking-[0.08em]",
-        size === "sm" && "h-5 px-1.5 text-[10px]",
+        size === "sm" && "h-6 px-1.5 text-[11.5px]",
         size === "md" && "h-6 px-2 text-[11px]",
-        size === "lg" && "h-10 px-3.5 text-[17px] tracking-[0.1em] sm:h-12 sm:px-4 sm:text-[21px]",
+        size === "lg" && "h-11 px-4 text-[20px] tracking-[0.1em] sm:h-[60px] sm:px-5 sm:text-[30px]",
         STAMP[tone],
         className,
       )}

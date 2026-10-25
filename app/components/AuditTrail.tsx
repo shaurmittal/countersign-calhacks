@@ -33,15 +33,15 @@ export function AuditTrail({ caseId }: { caseId: Id<"cases"> }) {
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={spring.smooth}
-            className="grid grid-cols-[38px_minmax(0,1fr)] gap-2 bg-background px-3 py-2"
+            className="grid grid-cols-[48px_minmax(0,1fr)] gap-2 bg-background px-3 py-2.5"
             title={`${clockTime(e.at)} · prev ${e.prevHash.slice(0, HASH_PREFIX_CHARS)}`}
           >
-            <span className="font-mono text-[11px] leading-5 text-subtle">#{e.seq}</span>
+            <span className="font-mono text-[13px] leading-5 text-subtle">#{e.seq}</span>
             <span className="min-w-0">
-              <span className="block truncate text-[12.5px] leading-5 text-foreground/90">
+              <span className="block truncate text-[13.5px] leading-5 text-foreground/90">
                 <span className="text-muted-foreground">{e.actor}</span> · {e.action}
               </span>
-              <span className="block truncate font-mono text-[10.5px] leading-4 text-subtle">{e.hash.slice(0, HASH_PREFIX_CHARS)}…</span>
+              <span className="block truncate font-mono text-[13px] leading-5 text-subtle">{e.hash.slice(0, HASH_PREFIX_CHARS)}…</span>
             </span>
           </motion.li>
         ))}

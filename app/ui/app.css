@@ -14,7 +14,7 @@
   --color-border: rgb(255 255 255 / 0.09);
   --color-border-strong: rgb(255 255 255 / 0.16);
   --color-muted-foreground: #a3a3a3;
-  --color-subtle: #737373;
+  --color-subtle: #8f8f8f;
 
   --color-pay: #22c55e;
   --color-pay-ink: #4ade80;
@@ -67,8 +67,8 @@
   .hairline { border-color: rgb(255 255 255 / 0.09); }
 
   /* The live dot: a quiet pulse that only means "this updates by itself". */
-  .live-dot { position: relative; width: 6px; height: 6px; border-radius: 999px; background: #22c55e; }
-  .live-dot::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; border: 1px solid #22c55e; opacity: 0; animation: live-ring 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  .live-dot { position: relative; width: 6px; height: 6px; border-radius: 999px; background: #fafafa; }
+  .live-dot::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; border: 1px solid #fafafa; opacity: 0; animation: live-ring 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
   @keyframes live-ring { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(1.8); opacity: 0; } }
 
   /* Skeleton sweep for loading rows (EasyUI skeleton, simplified). */

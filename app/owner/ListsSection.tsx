@@ -5,11 +5,12 @@
 // vendor (R3) and nothing else, so bank changes still need a callback and the owner's approval.
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { OWNER_CODE } from "../../shared/config";
 import { motion } from "framer-motion";
+import { ChevronDown } from "lucide-react";
 import { clockTime } from "../components/format";
 import { cn } from "../ui/cn";
 import { spring } from "../ui/motion";
@@ -128,13 +129,13 @@ export function ListsSection() {
           </div>
           <label className="space-y-1.5 text-[12.5px] text-muted-foreground">
             <span>Match</span>
-            <select className={field} value={match} onChange={(e) => setMatch(e.target.value as Match)}>
+            <Select value={match} onChange={(v) => setMatch(v as Match)}>
               {matches.map((m) => (
                 <option key={m} value={m}>
                   {MATCH_LABELS[m]}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="space-y-1.5 text-[12.5px] text-muted-foreground">
             <span>{MATCH_LABELS[match]}</span>
@@ -143,14 +144,14 @@ export function ListsSection() {
           {kind === "trust" && (
             <label className="space-y-1.5 text-[12.5px] text-muted-foreground sm:col-span-2">
               <span>Vendor</span>
-              <select className={field} value={vendorId} onChange={(e) => setVendorId(e.target.value)} required>
+              <Select value={vendorId} onChange={setVendorId} required>
                 <option value="">Choose a vendor…</option>
                 {(vendors ?? []).map((vendor) => (
                   <option key={vendor.id} value={vendor.id}>
                     {vendor.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           )}
           <label className="space-y-1.5 text-[12.5px] text-muted-foreground">
@@ -201,6 +202,23 @@ export function ListsSection() {
         </div>
       )}
     </section>
+  );
+}
+
+/** A native select themed like the inputs: same height, ink and border, and a drawn chevron. */
+function Select(props: { value: string; onChange: (value: string) => void; required?: boolean; children: ReactNode }) {
+  return (
+    <span className="relative block">
+      <select
+        value={props.value}
+        required={props.required}
+        onChange={(e) => props.onChange(e.target.value)}
+        className="h-10 w-full appearance-none rounded-lg border border-border-strong bg-background pl-3 pr-9 text-[14px] text-foreground outline-none transition-colors focus:border-foreground"
+      >
+        {props.children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+    </span>
   );
 }
 
