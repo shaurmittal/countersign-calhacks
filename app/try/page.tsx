@@ -1,11 +1,13 @@
 "use client";
 // Judge-facing chat (owner: P2). Opened from the QR code on the judge card. Each message runs the full
 // pipeline; the progress, verdict and rules shown here come from the sender's own case rows.
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { ConvexError } from "convex/values";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../../convex/_generated/api";
+import { authBadge } from "../../shared/email/auth";
+import { EMAIL_ATTACKS, emailAttack } from "../../shared/email/attacks";
 import { RULES } from "../../shared/policy/rules";
 import type { RuleId } from "../../shared/types";
 import "../demo/landing.css";
@@ -14,6 +16,8 @@ import "./try.css";
 const STORAGE_KEY = "countersign-sender";
 const PHONE_DISPLAY = "+1 (256) 215-6932";
 const PHONE_TEL = "+12562156932";
+const EMAIL_ADDRESS = process.env.NEXT_PUBLIC_EMAIL_ADDRESS ?? "";
+const ATTACK_PDF = "/demo/email/northwind-invoice-nw-889.pdf";
 
 const ATTACKS: { title: string; text: string; note?: string }[] = [
   {
@@ -38,6 +42,10 @@ const ATTACKS: { title: string; text: string; note?: string }[] = [
 ];
 
 type Message = FunctionReturnType<typeof api.channels.web.mine>[number];
+type Simulation = FunctionReturnType<typeof api.channels.email.mySimulations>[number];
+/** What Progress and Verdict read: shared by chat messages and email attacks. */
+type Outcome = Pick<Message, "status" | "decision" | "vendorName" | "rules" | "createdAt" | "decidedAt">;
+type Entry = { kind: "chat"; m: Message } | { kind: "email"; m: Simulation };
 
 function loadSenderId(): string {
   try {
@@ -57,17 +65,27 @@ export default function TryPage() {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const submit = useMutation(api.channels.web.submit);
+  const simulate = useAction(api.channels.email.simulateAttack);
   const messages = useQuery(api.channels.web.mine, senderId ? { senderId } : "skip");
+  const simulations = useQuery(api.channels.email.mySimulations, senderId ? { senderId } : "skip");
   const input = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLDivElement>(null);
 
   useEffect(() => setSenderId(loadSenderId()), []);
 
+  const entries: Entry[] | undefined =
+    messages && simulations
+      ? [
+          ...messages.map((m) => ({ kind: "chat" as const, m })),
+          ...simulations.map((m) => ({ kind: "email" as const, m })),
+        ].sort((a, b) => a.m.createdAt - b.m.createdAt)
+      : undefined;
+
   // Follow the conversation as replies and verdicts arrive.
-  const last = messages?.[messages.length - 1];
+  const last = entries?.[entries.length - 1]?.m;
   useEffect(() => {
-    if (messages?.length) end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages?.length, last?.status, last?.reply]);
+    if (entries?.length) end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [entries?.length, last?.status, last?.reply]);
 
   async function send(e?: FormEvent) {
     e?.preventDefault();
@@ -84,12 +102,25 @@ export default function TryPage() {
     }
   }
 
+  async function fire(attack: string) {
+    if (!senderId || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      await simulate({ attack, senderId });
+    } catch (err) {
+      setError(err instanceof ConvexError ? String(err.data) : "Couldn't send that one. Check your connection and try again.");
+    } finally {
+      setSending(false);
+    }
+  }
+
   function pick(text: string) {
     setDraft(text);
     input.current?.focus();
   }
 
-  const empty = messages !== undefined && messages.length === 0;
+  const empty = entries !== undefined && entries.length === 0;
 
   return (
     <div className="lp tr">
@@ -110,7 +141,7 @@ export default function TryPage() {
 
       <main className="tr-main">
         <section className="tr-chat" aria-label="Conversation">
-          {(empty || messages === undefined) && (
+          {(empty || entries === undefined) && (
             <div className="tr-intro">
               <p className="lp-kicker">Your turn</p>
               <h1>Try to get money out of it.</h1>
@@ -119,14 +150,26 @@ export default function TryPage() {
                 vendor, the boss, anyone. Every message goes through the same agents and the same lock as a phone call.
               </p>
               <AttackGrid onPick={pick} />
+              <div className="tr-mail-intro">
+                <p className="lp-kicker">Or forge an email</p>
+                <p className="tr-intro-sub">
+                  You can't fake a sender's domain from your own inbox, so these come with the forged headers already
+                  written. They go through the real email parser, the same agents and the same lock.
+                  {EMAIL_ADDRESS && (
+                    <>
+                      {" "}
+                      Or email a real one to <a href={`mailto:${EMAIL_ADDRESS}`}>{EMAIL_ADDRESS}</a>.
+                    </>
+                  )}
+                </p>
+                <MailGrid onFire={fire} disabled={sending || !senderId} />
+              </div>
             </div>
           )}
 
-          {messages && messages.length > 0 && (
+          {entries && entries.length > 0 && (
             <ol className="tr-log" aria-live="polite">
-              {messages.map((m) => (
-                <Turn key={m._id} m={m} />
-              ))}
+              {entries.map((e) => (e.kind === "chat" ? <Turn key={e.m._id} m={e.m} /> : <MailTurn key={e.m._id} m={e.m} />))}
             </ol>
           )}
           <div ref={end} className="tr-end" />
@@ -135,10 +178,17 @@ export default function TryPage() {
         <aside className="tr-side" aria-label="Ideas">
           <p className="tr-side-title">Try one</p>
           <AttackGrid onPick={pick} compact />
+          <p className="tr-side-title">Forge an email</p>
+          <MailGrid onFire={fire} disabled={sending || !senderId} compact />
+          {EMAIL_ADDRESS && (
+            <p className="tr-side-mail">
+              Or email a real one: <a href={`mailto:${EMAIL_ADDRESS}`}>{EMAIL_ADDRESS}</a>
+            </p>
+          )}
           <div className="tr-side-note">
             <p>
-              <b>What you're up against.</b> Six AI agents read, check and talk. Only the Policy Engine, plain code with 16
-              rules, can release a payment. A perfect jailbreak still produces words, never a transfer.
+              <b>What you're up against.</b> Six AI agents read, check and talk. Only the Policy Engine, plain code with{" "}
+              {Object.keys(RULES).length} rules, can release a payment. A perfect jailbreak still produces words, never a transfer.
             </p>
             <a className="lp-btn lp-btn-ghost" href="/" target="_blank" rel="noreferrer">
               Watch it in the War Room
@@ -148,11 +198,16 @@ export default function TryPage() {
       </main>
 
       <form className="tr-compose" onSubmit={send}>
-        {messages && messages.length > 0 && (
+        {entries && entries.length > 0 && (
           <div className="tr-chips" aria-label="Quick attacks">
             {ATTACKS.map((a) => (
               <button key={a.title} type="button" onClick={() => pick(a.text)}>
                 {a.title}
+              </button>
+            ))}
+            {EMAIL_ATTACKS.map((a) => (
+              <button key={a.id} type="button" className="tr-chip-mail" disabled={sending} onClick={() => void fire(a.id)}>
+                <MailIcon /> {a.title}
               </button>
             ))}
           </div>
@@ -188,7 +243,8 @@ export default function TryPage() {
           </p>
         )}
         <p className="tr-fine">
-          Fictional company, sandbox money. We keep only what you type here. {PHONE_DISPLAY} works too.
+          Fictional company, sandbox money. We keep only what you type here. {PHONE_DISPLAY} works too
+          {EMAIL_ADDRESS ? `, and so does ${EMAIL_ADDRESS}` : ""}.
         </p>
       </form>
     </div>
@@ -234,13 +290,15 @@ function Turn({ m }: { m: Message }) {
 }
 
 const STEPS = ["Reading your message", "Checking the vendor book and the risk", "The lock decides"];
+const MAIL_STEPS = ["Reading the email and any attachment", "Checking the sender's domain, the vendor book and the risk", "The lock decides"];
+const KEY_RULES = new Set(["R9", "R10", "R15", "R17"]);
 
-function Progress({ m }: { m: Message }) {
+function Progress({ m, mail }: { m: Outcome; mail?: boolean }) {
   const stage = { RECEIVED: 0, PARSED: 1, VERIFYING: 1, DECIDED: 2, CALLBACK_PENDING: 3, AWAITING_OWNER: 3, CLOSED: 3 }[m.status] ?? 0;
   const calling = m.status === "CALLBACK_PENDING";
   return (
     <ol className="tr-progress" aria-label="Verification progress">
-      {STEPS.map((label, i) => (
+      {(mail ? MAIL_STEPS : STEPS).map((label, i) => (
         <li key={label} data-state={i < stage ? "done" : i === stage ? "active" : "todo"}>
           {label}
         </li>
@@ -262,7 +320,7 @@ const VERDICT_LABEL: Record<string, string> = {
   NO_ACTION: "Nothing to pay",
 };
 
-function Verdict({ m }: { m: Message }) {
+function Verdict({ m }: { m: Outcome }) {
   const seconds = m.decidedAt ? (m.decidedAt - m.createdAt) / 1000 : null;
   const decision = m.decision ?? "HOLD";
   return (
@@ -274,7 +332,7 @@ function Verdict({ m }: { m: Message }) {
       {m.rules.length > 0 && (
         <ul className="tr-rules" aria-label="Rules that fired">
           {m.rules.map((id) => (
-            <li key={id} data-key={id === "R10" || id === "R9" || id === "R15" || undefined}>
+            <li key={id} data-key={KEY_RULES.has(id) || undefined}>
               <b>{id}</b> {RULES[id as RuleId]?.name ?? id}
             </li>
           ))}
@@ -282,6 +340,101 @@ function Verdict({ m }: { m: Message }) {
       )}
       {seconds !== null && <p className="tr-time">Decided by plain code in {seconds.toFixed(1)}s</p>}
     </div>
+  );
+}
+
+function MailGrid({ onFire, disabled, compact }: { onFire: (id: string) => void; disabled: boolean; compact?: boolean }) {
+  return (
+    <ul className={`tr-attacks tr-mails${compact ? " is-compact" : ""}`}>
+      {EMAIL_ATTACKS.map((a) => (
+        <li key={a.id}>
+          <button type="button" disabled={disabled} onClick={() => onFire(a.id)}>
+            <span className="tr-attack-title">
+              <MailIcon /> {a.title}
+            </span>
+            {!compact && (
+              <>
+                <MailFrom shown={a.shownFrom} />
+                <span className="tr-attack-text">{a.trick}</span>
+              </>
+            )}
+            {!compact && a.id === "pdf-bank-change" && <span className="tr-attack-note">Claude reads the PDF</span>}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** One forged email: the envelope as an inbox would show it, what the mail server proved, then the verdict. */
+function MailTurn({ m }: { m: Simulation }) {
+  const attack = emailAttack(m.attack);
+  const settled = SETTLED.has(m.status) && m.decision !== null;
+  const body = m.text.replace(/^Subject: .*\n\n/, "").replace(/\n\n\[Attached: [^\]]+\]$/, "");
+  const auth = m.email?.auth;
+  return (
+    <li className="tr-turn">
+      <div className="tr-you tr-mail">
+        <div className="tr-mail-card">
+          <p className="tr-mail-row">
+            <span>From</span> {attack?.shownFrom ?? m.email?.fromDomain}
+          </p>
+          <p className="tr-mail-row">
+            <span>Subject</span> {m.email?.subject}
+          </p>
+          <p className="tr-mail-body">{body}</p>
+          {m.email?.pdf && (
+            <a className="tr-mail-pdf" href={ATTACK_PDF} target="_blank" rel="noreferrer">
+              📎 {m.email.pdf.name}
+            </a>
+          )}
+        </div>
+        <span>
+          {attack?.title ?? "Email"} · forged headers, real pipeline · {clock(m.createdAt)}
+        </span>
+      </div>
+      {auth && (
+        <p className="tr-mailcheck" data-verdict={auth.verdict}>
+          <b>Mail server:</b>{" "}
+          {auth.verdict === "pass" ? "authenticated as" : auth.verdict === "fail" ? "failed authentication for" : "can't verify"}{" "}
+          <code>{m.email?.fromDomain}</code> <code>{authBadge(auth)}</code>
+          {auth.replyToDomain && <> · replies go to <code>{auth.replyToDomain}</code></>}
+          {auth.displayNameClaims && <> · display name poses as <code>{auth.displayNameClaims}</code></>}
+        </p>
+      )}
+      {!settled && <Progress m={m} mail />}
+      {m.reply && (
+        <div className="tr-cs" data-decision={settled ? m.decision : undefined}>
+          <p className="tr-cs-who">
+            Countersign <span className="tr-draft">draft reply · not sent</span>
+          </p>
+          <p className="tr-cs-text">{m.reply}</p>
+          {settled && <Verdict m={m} />}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** "Northwind Cloud <invoices@…>" as a name line and an address line, so the address never breaks mid-word. */
+function MailFrom({ shown }: { shown: string }) {
+  const m = shown.match(/^(.*?)\s*<([^>]+)>$/);
+  const name = m ? m[1] : null;
+  const address = m ? m[2] : shown;
+  return (
+    <span className="tr-mail-from">
+      {name && <span>{name}</span>}
+      <code>{address}</code>
+    </span>
+  );
+}
+
+function MailIcon() {
+  return (
+    <svg className="tr-mail-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3.5 6.5 8.5 6.5 8.5-6.5" />
+    </svg>
   );
 }
 

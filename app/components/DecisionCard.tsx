@@ -11,7 +11,7 @@ import { ruleInfo, secondsLeft, useNow } from "./format";
 export type CaseRow = FunctionReturnType<typeof api.cases.recent>[number];
 
 /** When several rules fired, the first of these present is the one worth reading first. */
-const KEY_RULE_ORDER: RuleId[] = ["R10", "R16", "R13", "R9", "R8", "R1", "R12"];
+const KEY_RULE_ORDER: RuleId[] = ["R10", "R17", "R16", "R13", "R9", "R8", "R1", "R12"];
 
 export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | undefined }) {
   const now = useNow();
@@ -41,7 +41,7 @@ export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | u
           ))}
         </ul>
       )}
-      <ol className="lp-rules" aria-label="All 16 rules">
+      <ol className="lp-rules" aria-label={`All ${Object.keys(RULES).length} rules`}>
         {(Object.keys(RULES) as RuleId[]).map((id) => (
           <li key={id} data-state={fired.has(id) ? "fired" : decision ? "checked" : "idle"} title={`${id} ${RULES[id].name}`}>
             {id}

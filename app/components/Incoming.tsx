@@ -3,9 +3,11 @@
 // case tabs so two judges can test at once.
 import type { Id } from "../../convex/_generated/dataModel";
 import type { CaseRow } from "./DecisionCard";
+import { authBadge } from "../../shared/email/auth";
 import { channelLabel, clockTime } from "./format";
 
 export function Incoming({ c }: { c: CaseRow }) {
+  const email = c.channel === "email" ? c.emailSignals : null;
   return (
     <div className="lp-caption wr-caption" aria-live="polite">
       <div className="wr-caption-caller">
@@ -15,18 +17,57 @@ export function Incoming({ c }: { c: CaseRow }) {
             from {c.fromAddress} · {clockTime(c.createdAt)}
           </span>
         </p>
-        <p className="lp-caption-text">{c.rawContent}</p>
+        <p className="lp-caption-text">{email ? emailBody(c.rawContent) : c.rawContent}</p>
       </div>
+      {email && <EmailBadges email={email} />}
       {c.replyText && (
         <div key={c.replyText} className="wr-caption-reply wr-rise">
           <p className="lp-caption-who">
-            Countersign <span>reply</span>
+            Countersign{" "}
+            {email ? (
+              <span>
+                draft reply · not sent · Re: {email.subject || "(no subject)"}
+              </span>
+            ) : (
+              <span>reply</span>
+            )}
           </p>
           <p className="lp-caption-text">{c.replyText}</p>
         </div>
       )}
     </div>
   );
+}
+
+type EmailView = NonNullable<CaseRow["emailSignals"]>;
+
+/** "Subject: x\n\nbody" -> "x — body" on one line. */
+function emailBody(raw: string): string {
+  const m = raw.match(/^Subject: (.*)\n\n([\s\S]*)$/);
+  return m ? `${m[1]} — ${m[2].replace(/\s+/g, " ")}` : raw;
+}
+
+/** What the receiving mail server proved about the sender, in one glance. */
+function EmailBadges({ email }: { email: EmailView }) {
+  const a = email.auth;
+  const verdict = a.verdict === "pass" ? "pass" : a.verdict === "fail" ? "fail" : "unknown";
+  const label = verdict === "pass" ? "Authenticated" : verdict === "fail" ? "Failed authentication" : "Unverified sender";
+  return (
+    <span className="wr-email-badges">
+      <b className="wr-auth" data-verdict={verdict} title={authTitle(a)}>
+        {label} · {authBadge(a)}
+      </b>
+      {a.replyToDomain && <b className="wr-auth" data-verdict="fail">Replies → {a.replyToDomain}</b>}
+      {a.displayNameClaims && <b className="wr-auth" data-verdict="fail">Name poses as {a.displayNameClaims}</b>}
+      {email.forwardedBy && <b className="wr-auth">Forwarded by the owner</b>}
+      {email.pdf && <b className="wr-auth">📎 {email.pdf.name}</b>}
+      {email.simulated && <b className="wr-auth" title="Crafted headers from /try, through the real parser and pipeline">Simulated</b>}
+    </span>
+  );
+}
+
+function authTitle(a: EmailView["auth"]): string {
+  return `SPF ${a.spf}, DKIM ${a.dkim}, DMARC ${a.dmarc}, as reported by the receiving mail server`;
 }
 
 export function CaseQueue(props: {

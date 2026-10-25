@@ -218,6 +218,10 @@ function resolve(
   });
 
   if (has("BLOCK")) {
+    // Refused outright, so the callbacks other rules asked for never happen; their reasons must not say they do.
+    for (const h of hits) {
+      if (h.needsCallback) h.reason = `${h.reason.replace(/:\s*calling .*$/i, "")} (no callback: already refused)`;
+    }
     const blocking = hits.filter((h) => h.effect === "BLOCK");
     return out("BLOCK", noNeeds, blocking.every((h) => RULES[h.rule].overridable));
   }

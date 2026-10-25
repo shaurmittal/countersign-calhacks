@@ -34,7 +34,7 @@ export const EMAIL_ATTACKS: EmailAttack[] = [
   {
     id: "forged-vendor",
     title: "The forged vendor",
-    trick: "From: says Northwind's real billing address. The domain's own checks say it never sent it.",
+    trick: "It claims Northwind's real billing address. Northwind's own domain says it never sent it.",
     shownFrom: "Northwind Cloud <invoices@northwindcloud.example>",
     subject: "Invoice NW-889: updated bank details",
     payload: () => ({

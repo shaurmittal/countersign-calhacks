@@ -8,6 +8,8 @@ import { RULES } from "../../../shared/policy/rules";
 import type { RuleId } from "../../../shared/types";
 import { HeroTicker } from "./HeroTicker";
 
+const RULE_COUNT = Object.keys(RULES).length;
+
 export const PHONE_DISPLAY = "+1 (256) 215-6932";
 const PHONE_TEL = "+12562156932";
 
@@ -143,7 +145,7 @@ const CAST: { name: string; tech: string; job: string; reads: boolean; talks: st
   { name: "Risk Analyst", tech: "Rules + Claude", job: "Raises flags like bank change, new sender, lookalike domain and urgency, then explains them in plain words.", reads: true, talks: null, decides: false, money: null, kind: "ai" },
   { name: "Callback Verifier", tech: "Cartesia voice agent", job: "Phones the vendor on the number on file and asks whether they sent the request. The vendor must name the invoice.", reads: false, talks: "the real vendor", decides: false, money: null, kind: "ai" },
   { name: "Owner Concierge", tech: "Authenticator code · ASI:One", job: "Asks Priya to approve what the rules escalate. Only her 6-digit code counts, never a voice or a text.", reads: false, talks: "the owner", decides: false, money: null, kind: "ai" },
-  { name: "Policy Engine", tech: "211 lines of TypeScript", job: "Checks 16 rules and returns PAY, HOLD, ESCALATE or BLOCK. No model, no network, unit-tested.", reads: false, talks: null, decides: true, money: null, kind: "code" },
+  { name: "Policy Engine", tech: "246 lines of TypeScript", job: `Checks ${RULE_COUNT} rules and returns PAY, HOLD, ESCALATE or BLOCK. No model, no network, unit-tested.`, reads: false, talks: null, decides: true, money: null, kind: "code" },
   { name: "Payer", tech: "Increase sandbox · ledger", job: "Sends the payment to the account on file. It only ever runs after the Policy Engine says PAY.", reads: false, talks: null, decides: false, money: "only after PAY", kind: "money" },
 ];
 
@@ -203,18 +205,18 @@ function No() {
   return <span className="lp-no">No</span>;
 }
 
-const ORDER: RuleId[] = ["R8", "R9", "R13", "R10", "R16", "R15", "R14", "R11", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R12"];
+const ORDER: RuleId[] = ["R8", "R9", "R13", "R10", "R16", "R17", "R15", "R14", "R11", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R12"];
 
 export function Lock() {
   return (
     <section className="lp-section lp-locksec" id="lock" aria-labelledby="lock-h">
       <div className="lp-lock-head">
         <p className="lp-kicker lp-kicker-ice">The lock</p>
-        <h2 id="lock-h">16 rules in plain code. The only thing that can say PAY.</h2>
+        <h2 id="lock-h">{RULE_COUNT} rules in plain code. The only thing that can say PAY.</h2>
         <p className="lp-section-lede">
           The Policy Engine is a pure function: the request and the agents' findings go in, and a decision comes out. It never
-          calls a model or the network, so nothing anyone says on a call can change how it decides. 984 tests pass on every
-          commit, and every rule has its own.
+          calls a model or the network, so nothing anyone says on a call or writes in an email can change how it decides. Over
+          1,000 tests pass on every commit, and every rule has its own.
         </p>
         <pre className="lp-code" aria-label="The Policy Engine's signature">
           <code>

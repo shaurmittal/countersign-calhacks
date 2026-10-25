@@ -175,6 +175,7 @@ export const mySimulations = query({
         return {
           _id: c._id,
           attack: r.attack,
+          text: c.rawContent,
           status: c.status,
           decision: c.decision ?? null,
           reply: c.replyText ?? null,
