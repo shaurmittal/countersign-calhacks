@@ -10,12 +10,15 @@ import { authBadge } from "../../shared/email/auth";
 import { EMAIL_ATTACKS, emailAttack } from "../../shared/email/attacks";
 import { RULES } from "../../shared/policy/rules";
 import type { RuleId } from "../../shared/types";
-import "../demo/landing.css";
-import "./try.css";
+import { motion } from "framer-motion";
+import { ArrowUp, Check, LoaderCircle, Mail, MessageSquareText, Paperclip, Phone, RotateCcw } from "lucide-react";
+import { AppShell } from "../ui/AppShell";
+import { cn } from "../ui/cn";
+import { spring } from "../ui/motion";
+import { buttonClass, decisionTone, SectionHead, Stamp, Tag } from "../ui/primitives";
 
 const STORAGE_KEY = "countersign-sender";
 const PHONE_DISPLAY = "+1 (256) 215-6932";
-const PHONE_TEL = "+12562156932";
 const EMAIL_ADDRESS = process.env.NEXT_PUBLIC_EMAIL_ADDRESS ?? "";
 const ATTACK_PDF = "/demo/email/northwind-invoice-nw-889.pdf";
 
@@ -146,42 +149,33 @@ export default function TryPage() {
   const empty = entries !== undefined && entries.length === 0;
 
   return (
-    <div className="lp tr">
-      <header className="tr-top">
-        <a className="lp-logo" href="/demo">
-          <LockMark /> COUNTERSIGN
-        </a>
-        <span className="tr-line">
-          <span className="lp-live-dot" aria-hidden="true" /> Lumen Labs payments line
-        </span>
-        <nav className="tr-links" aria-label="Elsewhere">
-          {entries && entries.length > 0 && (
-            <button type="button" className="tr-new" onClick={startOver}>
-              New conversation
-            </button>
-          )}
-          <a href="/" target="_blank" rel="noreferrer">
-            War Room ↗
-          </a>
-          <a href={`tel:${PHONE_TEL}`}>Call instead</a>
-        </nav>
-      </header>
-
-      <main className="tr-main">
-        <section className="tr-chat" aria-label="Conversation">
+    <AppShell
+      wide
+      icon={<MessageSquareText />}
+      tone="accent"
+      title="Try to scam it"
+      subtitle="You're messaging Countersign, the payments assistant for Lumen Labs, a one-person company. Pretend to be a vendor, the boss, anyone. Every message goes through the same agents and the same lock as a phone call."
+      actions={
+        entries && entries.length > 0 ? (
+          <button type="button" className={buttonClass("ghost")} onClick={startOver}>
+            <RotateCcw className="size-4" aria-hidden="true" />
+            New conversation
+          </button>
+        ) : undefined
+      }
+    >
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section aria-label="Conversation" className="flex min-h-[60vh] min-w-0 flex-col">
           {(empty || entries === undefined) && (
-            <div className="tr-intro">
-              <p className="lp-kicker">Your turn</p>
-              <h1>Try to get money out of it.</h1>
-              <p className="tr-intro-sub">
-                You're messaging Countersign, the payments assistant for Lumen Labs, a one-person company. Pretend to be a
-                vendor, the boss, anyone. Every message goes through the same agents and the same lock as a phone call.
-              </p>
-              <AttackGrid onPick={pick} />
-              <div className="tr-mail-intro">
-                <p className="lp-kicker">Or forge an email</p>
-                <p className="tr-intro-sub">
-                  You can't fake a sender's domain from your own inbox, so these come with the forged headers already
+            <div className="space-y-8">
+              <div>
+                <SectionHead title="Pick an attack, or write your own" />
+                <AttackGrid onPick={pick} />
+              </div>
+              <div>
+                <SectionHead title="Or forge an email" />
+                <p className="mb-3 max-w-[68ch] text-[13px] leading-relaxed text-muted-foreground">
+                  You can&apos;t fake a sender&apos;s domain from your own inbox, so these come with the forged headers already
                   written. They go through the real email parser, the same agents and the same lock.
                   {EMAIL_ADDRESS && (
                     <>
@@ -196,99 +190,110 @@ export default function TryPage() {
           )}
 
           {entries && entries.length > 0 && (
-            <ol className="tr-log" aria-live="polite">
+            <ol className="space-y-8" aria-live="polite">
               {entries.map((e) => (e.kind === "chat" ? <Turn key={e.m._id} m={e.m} /> : <MailTurn key={e.m._id} m={e.m} />))}
             </ol>
           )}
-          <div ref={end} className="tr-end" />
+          <div ref={end} className="h-4" />
+
+          <form className="sticky bottom-0 z-10 mt-auto bg-background pb-4 pt-4" onSubmit={send}>
+            {entries && entries.length > 0 && (
+              <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1" aria-label="Quick attacks">
+                {ATTACKS.map((a) => (
+                  <button
+                    key={a.title}
+                    type="button"
+                    onClick={() => pick(a.text)}
+                    className="h-8 shrink-0 rounded-full border border-border-strong px-3 text-[12.5px] text-muted-foreground hover:text-foreground"
+                  >
+                    {a.title}
+                  </button>
+                ))}
+                {EMAIL_ATTACKS.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    disabled={sending}
+                    onClick={() => void fire(a.id)}
+                    className="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border-strong px-3 text-[12.5px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+                  >
+                    <Mail className="size-3.5" aria-hidden="true" /> {a.title}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex items-end gap-2 rounded-xl border border-border-strong bg-surface p-2 transition-colors focus-within:border-white/40">
+              <label className="sr-only" htmlFor="tr-input">
+                Message to Countersign
+              </label>
+              <textarea
+                id="tr-input"
+                ref={input}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                maxLength={2000}
+                rows={1}
+                placeholder="Message Countersign: a payment request, a question, anything…"
+                className="max-h-40 min-h-10 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-[15px] leading-6 outline-none [field-sizing:content] focus-visible:outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void send();
+                  }
+                }}
+              />
+              <button
+                type="submit"
+                className="grid size-10 shrink-0 place-items-center rounded-lg bg-foreground text-background transition-transform active:scale-95 disabled:bg-white/15 disabled:text-white/40"
+                disabled={sending || !draft.trim() || !senderId}
+                aria-label="Send"
+              >
+                {sending ? <LoaderCircle className="size-[18px] animate-spin" /> : <ArrowUp className="size-[18px] stroke-[2.25]" />}
+              </button>
+            </div>
+            {error && (
+              <p className="mt-2 text-[13px] text-block-ink" role="alert">
+                {error}
+              </p>
+            )}
+            <p className="mt-2 text-[12px] text-subtle">
+              Fictional company, sandbox money. We keep only what you type here. {PHONE_DISPLAY} works too
+              {EMAIL_ADDRESS ? `, and so does ${EMAIL_ADDRESS}` : ""}.
+            </p>
+          </form>
         </section>
 
-        <aside className="tr-side" aria-label="Ideas">
-          <p className="tr-side-title">Try one</p>
-          <AttackGrid onPick={pick} compact />
-          <p className="tr-side-title">Forge an email</p>
-          <MailGrid onFire={fire} disabled={sending || !senderId} compact />
-          {EMAIL_ADDRESS && (
-            <p className="tr-side-mail">
-              Or email a real one: <a href={`mailto:${EMAIL_ADDRESS}`}>{EMAIL_ADDRESS}</a>
-            </p>
-          )}
+        <aside className="space-y-8 xl:sticky xl:top-6 xl:self-start" aria-label="Ideas">
           <VendorBook />
-          <div className="tr-side-note">
-            <p>
-              <b>What you're up against.</b> Six AI agents read, check and talk. Only the Policy Engine, plain code with{" "}
-              {Object.keys(RULES).length} rules, can release a payment. A perfect jailbreak still produces words, never a transfer.
+          <div className="rounded-xl border border-border p-5">
+            <p className="text-[13.5px] font-medium">What you&apos;re up against</p>
+            <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+              Six AI agents read, check and talk. Only the Policy Engine, plain code with {Object.keys(RULES).length} rules, can
+              release a payment. A perfect jailbreak still produces words, never a transfer.
             </p>
-            <a className="lp-btn lp-btn-ghost" href="/" target="_blank" rel="noreferrer">
+            <a href="/" className="mt-4 inline-flex h-9 items-center rounded-lg border border-border-strong px-3.5 text-[13px] hover:bg-white/[0.06]">
               Watch it in the War Room
             </a>
           </div>
         </aside>
-      </main>
-
-      <form className="tr-compose" onSubmit={send}>
-        {entries && entries.length > 0 && (
-          <div className="tr-chips" aria-label="Quick attacks">
-            {ATTACKS.map((a) => (
-              <button key={a.title} type="button" onClick={() => pick(a.text)}>
-                {a.title}
-              </button>
-            ))}
-            {EMAIL_ATTACKS.map((a) => (
-              <button key={a.id} type="button" className="tr-chip-mail" disabled={sending} onClick={() => void fire(a.id)}>
-                <MailIcon /> {a.title}
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="tr-box">
-          <label className="sr-only" htmlFor="tr-input">
-            Message to Countersign
-          </label>
-          <textarea
-            id="tr-input"
-            ref={input}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            maxLength={2000}
-            rows={1}
-            placeholder="Message Countersign: a payment request, a question, anything…"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void send();
-              }
-            }}
-          />
-          <button type="submit" className="tr-send" disabled={sending || !draft.trim() || !senderId} aria-label="Send">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M5 12h13M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
-        {error && (
-          <p className="tr-error" role="alert">
-            {error}
-          </p>
-        )}
-        <p className="tr-fine">
-          Fictional company, sandbox money. We keep only what you type here. {PHONE_DISPLAY} works too
-          {EMAIL_ADDRESS ? `, and so does ${EMAIL_ADDRESS}` : ""}.
-        </p>
-      </form>
-    </div>
+      </div>
+    </AppShell>
   );
 }
 
-function AttackGrid({ onPick, compact }: { onPick: (text: string) => void; compact?: boolean }) {
+function AttackGrid({ onPick }: { onPick: (text: string) => void }) {
   return (
-    <ul className={`tr-attacks${compact ? " is-compact" : ""}`}>
+    <ul className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {ATTACKS.map((a) => (
-        <li key={a.title}>
-          <button type="button" onClick={() => onPick(a.text)} data-real={a.title === "A real bill" || undefined}>
-            <span className="tr-attack-title">{a.title}</span>
-            {!compact && <span className="tr-attack-text">“{a.text}”</span>}
-            {a.note && <span className="tr-attack-note">{a.note}</span>}
+        <li key={a.title} className="bg-background">
+          <button type="button" onClick={() => onPick(a.text)} className="flex h-full w-full flex-col gap-1.5 p-4 text-left transition-colors hover:bg-white/[0.04]">
+            <span className="flex items-center justify-between gap-2 text-[14px] font-medium">
+              {a.title}
+              {a.note && (
+                <span className="text-[12px] font-normal text-subtle">{a.note}</span>
+              )}
+            </span>
+            <span className="text-[13px] leading-relaxed text-muted-foreground">“{a.text}”</span>
           </button>
         </li>
       ))}
@@ -301,20 +306,38 @@ const SETTLED = new Set(["CLOSED", "AWAITING_OWNER"]);
 function Turn({ m }: { m: Message }) {
   const settled = SETTLED.has(m.status) && m.decision !== null;
   return (
-    <li className="tr-turn">
-      <div className="tr-you">
-        <p>{m.text}</p>
-        <span>You · {clock(m.createdAt)}</span>
+    <li className="space-y-3">
+      <div className="ml-auto w-fit max-w-[85%]">
+        <p className="rounded-2xl rounded-br-md bg-white/[0.09] px-4 py-2.5 text-[15px] leading-relaxed">{m.text}</p>
+        <p className="mt-1 text-right font-mono text-[11px] text-subtle">You · {clock(m.createdAt)}</p>
       </div>
       {!settled && <Progress m={m} />}
-      {m.reply && (
-        <div className="tr-cs" data-decision={settled ? m.decision : undefined}>
-          <p className="tr-cs-who">Countersign</p>
-          <p className="tr-cs-text">{m.reply}</p>
-          {settled && <Verdict m={m} triage={m.triage} />}
-        </div>
-      )}
+      {m.reply && <Reply m={m} settled={settled} triage={m.triage} />}
     </li>
+  );
+}
+
+function Reply({ m, settled, triage, draft }: { m: Outcome & { reply?: string | null }; settled: boolean; triage?: string | null; draft?: boolean }) {
+  const tone = settled ? decisionTone(m.decision) : "neutral";
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={spring.smooth}
+      className={cn(
+        "max-w-[92%] overflow-hidden rounded-2xl rounded-bl-md border bg-surface",
+        tone === "pay" ? "border-pay/35" : tone === "block" ? "border-block/35" : "border-border",
+      )}
+    >
+      <div className="px-4 py-3">
+        <p className="mb-1 flex items-center gap-2 text-[12px] text-muted-foreground">
+          Countersign
+          {draft && <span className="text-subtle">· draft reply, not sent</span>}
+        </p>
+        <p className="text-[15px] leading-relaxed text-foreground/95">{m.reply}</p>
+      </div>
+      {settled && <Verdict m={m} triage={triage} />}
+    </motion.div>
   );
 }
 
@@ -326,15 +349,21 @@ function Progress({ m, mail }: { m: Outcome; mail?: boolean }) {
   const stage = { RECEIVED: 0, PARSED: 1, VERIFYING: 1, DECIDED: 2, CALLBACK_PENDING: 3, AWAITING_OWNER: 3, CLOSED: 3 }[m.status] ?? 0;
   const calling = m.status === "CALLBACK_PENDING";
   return (
-    <ol className="tr-progress" aria-label="Verification progress">
-      {(mail ? MAIL_STEPS : STEPS).map((label, i) => (
-        <li key={label} data-state={i < stage ? "done" : i === stage ? "active" : "todo"}>
-          {label}
-        </li>
-      ))}
+    <ol className="space-y-2 rounded-xl border border-border px-4 py-3.5" aria-label="Verification progress">
+      {(mail ? MAIL_STEPS : STEPS).map((label, i) => {
+        const state = i < stage ? "done" : i === stage ? "active" : "todo";
+        return (
+          <li key={label} className={cn("flex items-center gap-2.5 text-[13px]", state === "todo" ? "text-subtle" : state === "active" ? "text-foreground" : "text-muted-foreground")}>
+            <span className="grid size-4 place-items-center" aria-hidden="true">
+              {state === "done" ? <Check className="size-3.5" /> : state === "active" ? <LoaderCircle className="size-3.5 animate-spin text-accent" /> : <span className="size-1 rounded-full bg-white/25" />}
+            </span>
+            {label}
+          </li>
+        );
+      })}
       {calling && (
-        <li data-state="active" className="tr-calling">
-          <PhoneIcon /> Calling {m.vendorName ?? "the vendor"} on the number already on file, never the one in your message
+        <li className="flex items-center gap-2.5 text-[13px] text-hold-ink">
+          <Phone className="size-4 animate-pulse" aria-hidden="true" /> Calling {m.vendorName ?? "the vendor"} on the number already on file, never the one in your message
         </li>
       )}
     </ol>
@@ -360,22 +389,25 @@ function Verdict({ m, triage }: { m: Outcome; triage?: string | null }) {
   const seconds = m.decidedAt ? (m.decidedAt - m.createdAt) / 1000 : null;
   const decision = m.decision ?? "HOLD";
   const [word, label] = decision === "NO_ACTION" ? noActionStamp(triage) : [decision, VERDICT_LABEL[decision]];
+  const tone = decisionTone(decision);
   return (
-    <div className="tr-verdict">
-      <p className="tr-stamp" data-decision={decision}>
-        {word}
-        <span>{label}</span>
+    <div className="space-y-3 border-t border-border px-4 py-3.5">
+      <p className="flex flex-wrap items-center gap-3">
+        <Stamp tone={tone}>{word}</Stamp>
+        <span className="text-[13.5px] text-foreground/90">{label}</span>
+        {seconds !== null && <span className="ml-auto font-mono text-[11.5px] text-subtle">decided by plain code in {seconds.toFixed(1)}s</span>}
       </p>
       {m.rules.length > 0 && (
-        <ul className="tr-rules" aria-label="Rules that fired">
+        <ul className="flex flex-wrap gap-1.5" aria-label="Rules that fired">
           {m.rules.map((id) => (
-            <li key={id} data-key={KEY_RULES.has(id) || undefined}>
-              <b>{id}</b> {RULES[id as RuleId]?.name ?? id}
+            <li key={id}>
+              <Tag tone={KEY_RULES.has(id) ? tone : "neutral"}>
+                <b className="font-mono font-medium">{id}</b> {RULES[id as RuleId]?.name ?? id}
+              </Tag>
             </li>
           ))}
         </ul>
       )}
-      {seconds !== null && <p className="tr-time">Decided by plain code in {seconds.toFixed(1)}s</p>}
     </div>
   );
 }
@@ -385,45 +417,48 @@ function VendorBook() {
   const book = useQuery(api.channels.web.vendorBook, {});
   if (!book?.length) return null;
   return (
-    <section className="tr-book" aria-label="Lumen Labs' vendor book">
-      <p className="tr-side-title">Lumen Labs pays</p>
-      <ul>
+    <section aria-label="Lumen Labs' vendor book">
+      <SectionHead title="Lumen Labs pays" />
+      <ul className="space-y-px overflow-hidden rounded-xl border border-border bg-border">
         {book.map((v) => (
-          <li key={v.name}>
-            <span className="tr-book-name">{v.name}</span>
-            {v.realPhone && <span className="tr-book-real">Rings a real phone</span>}
-            <span className="tr-book-meta">
+          <li key={v.name} className="bg-background px-4 py-3">
+            <p className="flex items-center justify-between gap-2 text-[13.5px] font-medium">
+              {v.name}
+              {v.realPhone && <span className="text-[11.5px] font-normal text-muted-foreground">Rings a real phone</span>}
+            </p>
+            <p className="mt-0.5 font-mono text-[11.5px] text-muted-foreground">
               {v.openInvoices.length > 0
                 ? v.openInvoices.map((i) => `#${i.number} · $${(i.amountCents / 100).toLocaleString("en-US")}`).join(", ")
                 : `usually $${(v.typicalCents[0] / 100).toLocaleString("en-US")}–$${(v.typicalCents[1] / 100).toLocaleString("en-US")}, ${v.cadence}`}
-            </span>
+            </p>
           </li>
         ))}
       </ul>
-      <p className="tr-book-note">
-        Pretend to be any of them, or anyone else. Countersign calls back only the number it already has on file; the
-        others are fictional, so nobody answers and nothing is paid.
+      <p className="mt-3 text-[12px] leading-relaxed text-subtle">
+        Pretend to be any of them, or anyone else. Countersign calls back only the number it already has on file; the others
+        are fictional, so nobody answers and nothing is paid.
       </p>
     </section>
   );
 }
 
-function MailGrid({ onFire, disabled, compact }: { onFire: (id: string) => void; disabled: boolean; compact?: boolean }) {
+function MailGrid({ onFire, disabled }: { onFire: (id: string) => void; disabled: boolean }) {
   return (
-    <ul className={`tr-attacks tr-mails${compact ? " is-compact" : ""}`}>
+    <ul className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {EMAIL_ATTACKS.map((a) => (
-        <li key={a.id}>
-          <button type="button" disabled={disabled} onClick={() => onFire(a.id)}>
-            <span className="tr-attack-title">
-              <MailIcon /> {a.title}
+        <li key={a.id} className="bg-background">
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onFire(a.id)}
+            className="flex h-full w-full flex-col gap-1.5 p-4 text-left transition-colors hover:bg-white/[0.04] disabled:opacity-50"
+          >
+            <span className="flex items-center gap-2 text-[14px] font-medium">
+              <Mail className="size-4 text-muted-foreground" aria-hidden="true" /> {a.title}
             </span>
-            {!compact && (
-              <>
-                <MailFrom shown={a.shownFrom} />
-                <span className="tr-attack-text">{a.trick}</span>
-              </>
-            )}
-            {!compact && a.id === "pdf-bank-change" && <span className="tr-attack-note">Claude reads the PDF</span>}
+            <MailFrom shown={a.shownFrom} />
+            <span className="text-[13px] leading-relaxed text-muted-foreground">{a.trick}</span>
+            {a.id === "pdf-bank-change" && <span className="text-[11.5px] text-subtle">Claude reads the PDF</span>}
           </button>
         </li>
       ))}
@@ -438,45 +473,41 @@ function MailTurn({ m }: { m: Simulation }) {
   const body = m.text.replace(/^Subject: .*\n\n/, "").replace(/\n\n\[Attached: [^\]]+\]$/, "");
   const auth = m.email?.auth;
   return (
-    <li className="tr-turn">
-      <div className="tr-you tr-mail">
-        <div className="tr-mail-card">
-          <p className="tr-mail-row">
-            <span>From</span> {attack?.shownFrom ?? m.email?.fromDomain}
-          </p>
-          <p className="tr-mail-row">
-            <span>Subject</span> {m.email?.subject}
-          </p>
-          <p className="tr-mail-body">{body}</p>
+    <li className="space-y-3">
+      <div className="ml-auto w-full max-w-[85%]">
+        <div className="overflow-hidden rounded-2xl rounded-br-md border border-border-strong bg-white/[0.04]">
+          <div className="space-y-1 border-b border-border px-4 py-3 text-[12.5px]">
+            <p>
+              <span className="inline-block w-16 text-subtle">From</span>
+              <span className="font-mono">{attack?.shownFrom ?? m.email?.fromDomain}</span>
+            </p>
+            <p>
+              <span className="inline-block w-16 text-subtle">Subject</span>
+              {m.email?.subject}
+            </p>
+          </div>
+          <p className="whitespace-pre-line px-4 py-3 text-[14px] leading-relaxed">{body}</p>
           {m.email?.pdf && (
-            <a className="tr-mail-pdf" href={ATTACK_PDF} target="_blank" rel="noreferrer">
-              📎 {m.email.pdf.name}
+            <a className="mx-4 mb-3 inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground hover:text-foreground" href={ATTACK_PDF} target="_blank" rel="noreferrer">
+              <Paperclip className="size-3.5" aria-hidden="true" /> {m.email.pdf.name}
             </a>
           )}
         </div>
-        <span>
+        <p className="mt-1 text-right font-mono text-[11px] text-subtle">
           {attack?.title ?? "Email"} · forged headers, real pipeline · {clock(m.createdAt)}
-        </span>
+        </p>
       </div>
       {auth && (
-        <p className="tr-mailcheck" data-verdict={auth.verdict}>
-          <b>Mail server:</b>{" "}
+        <p className={cn("rounded-lg border px-3 py-2 text-[12.5px] leading-relaxed", auth.verdict === "pass" ? "border-border text-muted-foreground" : "border-block/30 text-block-ink")}>
+          <b className="font-medium text-foreground">Mail server:</b>{" "}
           {auth.verdict === "pass" ? "authenticated as" : auth.verdict === "fail" ? "failed authentication for" : "can't verify"}{" "}
-          <code>{m.email?.fromDomain}</code> <code>{authBadge(auth)}</code>
-          {auth.replyToDomain && <> · replies go to <code>{auth.replyToDomain}</code></>}
-          {auth.displayNameClaims && <> · display name poses as <code>{auth.displayNameClaims}</code></>}
+          <code className="font-mono">{m.email?.fromDomain}</code> <code className="font-mono">{authBadge(auth)}</code>
+          {auth.replyToDomain && <> · replies go to <code className="font-mono">{auth.replyToDomain}</code></>}
+          {auth.displayNameClaims && <> · display name poses as <code className="font-mono">{auth.displayNameClaims}</code></>}
         </p>
       )}
       {!settled && <Progress m={m} mail />}
-      {m.reply && (
-        <div className="tr-cs" data-decision={settled ? m.decision : undefined}>
-          <p className="tr-cs-who">
-            Countersign <span className="tr-draft">draft reply · not sent</span>
-          </p>
-          <p className="tr-cs-text">{m.reply}</p>
-          {settled && <Verdict m={m} />}
-        </div>
-      )}
+      {m.reply && <Reply m={m} settled={settled} draft />}
     </li>
   );
 }
@@ -487,40 +518,13 @@ function MailFrom({ shown }: { shown: string }) {
   const name = m ? m[1] : null;
   const address = m ? m[2] : shown;
   return (
-    <span className="tr-mail-from">
-      {name && <span>{name}</span>}
-      <code>{address}</code>
+    <span className="flex flex-col text-[12px]">
+      {name && <span className="text-foreground/85">{name}</span>}
+      <code className="break-all font-mono text-subtle">{address}</code>
     </span>
-  );
-}
-
-function MailIcon() {
-  return (
-    <svg className="tr-mail-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="m3.5 6.5 8.5 6.5 8.5-6.5" />
-    </svg>
   );
 }
 
 function clock(ms: number) {
   return new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
-
-function LockMark() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M9.5 15.6l1.8 1.8 3.4-3.6" stroke="var(--lp-amber)" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function PhoneIcon() {
-  return (
-    <svg className="tr-phone" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2" />
-    </svg>
-  );
 }

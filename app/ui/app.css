@@ -1,0 +1,107 @@
+/* Countersign app UI: War Room, /owner, /bank, /try. OLED black, white ink at stepped alphas, one-pixel
+   hairlines, and the /demo film's palette with fixed meanings: amber is Countersign at work (live, busy,
+   the brand), ice blue is deterministic code and the lock (the Policy Engine, rules, countersignatures),
+   violet is waiting on the owner, green is money cleared or an approval landed, red is a refusal.
+   Tailwind v4 without preflight, so the /demo film and /judge-card keep their own base styles. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme inline {
+  --color-background: #000000;
+  --color-foreground: #fafafa;
+  --color-surface: #0a0a0a;
+  --color-surface-2: #121212;
+  --color-surface-3: #1a1a1a;
+  --color-border: rgb(255 255 255 / 0.09);
+  --color-border-strong: rgb(255 255 255 / 0.16);
+  --color-muted-foreground: #a3a3a3;
+  --color-subtle: #8f8f8f;
+
+  --color-accent: #f2b04c;
+  --color-accent-ink: #ffd08a;
+  --color-code: #7cc4f5;
+  --color-code-ink: #b5defa;
+  --color-owner: #c3a6ff;
+  --color-owner-ink: #ddd0ff;
+
+  --color-pay: #5bd69b;
+  --color-pay-ink: #86e4b6;
+  --color-block: #ff6b4a;
+  --color-block-ink: #ff9a82;
+  --color-hold: #f2b04c;
+  --color-hold-ink: #ffd08a;
+
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+@layer base {
+  .cs {
+    min-height: 100vh;
+    background: #000;
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.006em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color-scheme: dark;
+    accent-color: #fafafa;
+    caret-color: #fafafa;
+  }
+  /* The slice of a reset these pages need (Tailwind's preflight is off on purpose). */
+  .cs :where(h1, h2, h3, h4, p, ul, ol, dl, dd, figure, blockquote, pre) { margin: 0; }
+  .cs :where(ul, ol) { list-style: none; padding: 0; }
+  .cs :where(button) { background: none; border: 0; color: inherit; padding: 0; font: inherit; cursor: pointer; }
+  .cs :where(button:disabled) { cursor: not-allowed; }
+  .cs :where(input, textarea, select) { font: inherit; color: inherit; }
+  .cs :where(a) { color: inherit; text-decoration: none; }
+  .cs :where(a[href]:not([class])) { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgb(255 255 255 / 0.3); }
+  .cs :where(table) { border-collapse: collapse; }
+  .cs :where(svg) { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+  .cs ::selection { background: #fafafa; color: #000; }
+  .cs :focus-visible { outline: 2px solid #fafafa; outline-offset: 2px; border-radius: 6px; }
+  .cs :where(.font-mono, code, kbd, time) { font-variant-numeric: tabular-nums; }
+  .cs * { scrollbar-width: thin; scrollbar-color: #262626 transparent; }
+  .cs ::-webkit-scrollbar { width: 6px; height: 6px; }
+  .cs ::-webkit-scrollbar-thumb { background: #262626; border-radius: 999px; }
+  .cs ::-webkit-scrollbar-track { background: transparent; }
+  .cs ::placeholder { color: #737373; }
+}
+
+@layer components {
+  /* A one-device-pixel white hairline: the board's only rule weight. */
+  .hairline { border-color: rgb(255 255 255 / 0.09); }
+
+  /* The live dot: an amber pulse that only means "this updates by itself". */
+  .live-dot { position: relative; width: 7px; height: 7px; border-radius: 999px; background: #f2b04c; box-shadow: 0 0 10px rgb(242 176 76 / 0.6); }
+  .live-dot::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; border: 1px solid #f2b04c; opacity: 0; animation: live-ring 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  @keyframes live-ring { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(1.8); opacity: 0; } }
+
+  /* Skeleton sweep for loading rows (EasyUI skeleton, simplified). */
+  .skeleton { position: relative; overflow: hidden; background: #121212; border-radius: 6px; }
+  .skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.05), transparent); animation: sweep 1.6s ease-in-out infinite; }
+  @keyframes sweep { to { transform: translateX(100%); } }
+
+  /* The agent room (AgentRoom.tsx): hairline wires, dashed at rest; a wire turns amber and carries a dot
+     while the agent at its end works, and the Payer's wire turns green only on a real payment. */
+  .room-orbit { fill: none; stroke: rgb(242 176 76 / 0.14); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-dasharray: 2 9; animation: room-orbit 40s linear infinite; }
+  @keyframes room-orbit { to { stroke-dashoffset: -440; } }
+  .room-wire { stroke: rgb(255 255 255 / 0.16); stroke-width: 1.25; vector-effect: non-scaling-stroke; stroke-dasharray: 3 6; transition: stroke 0.3s; }
+  .room-wire.is-hot { stroke: #f2b04c; stroke-width: 2; stroke-dasharray: none; filter: drop-shadow(0 0 6px rgb(242 176 76 / 0.6)); }
+  .room-wire.is-money { stroke: rgb(91 214 155 / 0.22); }
+  .room-wire.is-money.is-paid { stroke: #5bd69b; stroke-width: 2; stroke-dasharray: none; filter: drop-shadow(0 0 6px rgb(91 214 155 / 0.5)); }
+  /* A soft amber glow behind the leader, as in the film. */
+  .room-glow { background: radial-gradient(closest-side, rgb(242 176 76 / 0.12), transparent 72%); }
+  .room-ring { animation: room-ring 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  @keyframes room-ring { 0% { transform: scale(0.92); opacity: 0.8; } 100% { transform: scale(1.25); opacity: 0; } }
+
+  /* Refused strips stay on the board, struck through. */
+  .struck { text-decoration: line-through; text-decoration-color: rgb(255 107 74 / 0.6); text-decoration-thickness: 1px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot::after, .skeleton::after, .room-ring, .room-orbit { animation: none; }
+}

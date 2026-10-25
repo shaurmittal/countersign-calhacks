@@ -1,51 +1,92 @@
 "use client";
-// Agent lanes (spec §7.2, center). Each lane is the latest real agentRuns row for that agent,
-// plus the rows it produced (callbacks, approvals, payments). Agents that have not run yet get no
-// lane (the graph shows them). Nothing here is animated for show: a lane moves only when its row changes.
+// Agent lanes (spec §7.2): one card per agent that has run on this case, in pipeline order. Each card is
+// the latest real agentRuns row for that agent plus the rows it produced (callbacks, approvals, payments).
+// Nothing is animated for show: a card moves only when its row changes. (The room graph shows the agents
+// that haven't run.)
 import type { FunctionReturnType } from "convex/server";
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertCircle, Check, LoaderCircle, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import type { api } from "../../convex/_generated/api";
 import type { AgentName, PaymentRequest, PolicyResult, RiskFindings, VendorFindings } from "../../shared/types";
 import { formatCents, RAIL_LABEL } from "../../shared/ledger";
 import { crsLaneText } from "../../shared/verification/crs";
+import { cn } from "../ui/cn";
+import { spring } from "../ui/motion";
+import { Tag, type Tone } from "../ui/primitives";
 import { clockTime, last4, ruleInfo, secondsLeft, useNow } from "./format";
 
 export type CaseDetail = NonNullable<FunctionReturnType<typeof api.warRoom.caseDetail>>;
 type Run = CaseDetail["runs"][number];
 
-const LANES: { agent: AgentName; title: string }[] = [
-  { agent: "intake", title: "Intake Parser" },
-  { agent: "vendorVerifier", title: "Vendor Verifier" },
-  { agent: "riskAnalyst", title: "Risk Analyst" },
-  { agent: "callback", title: "Callback Verifier" },
-  { agent: "policy", title: "Policy Engine" },
-  { agent: "ownerConcierge", title: "Owner Concierge" },
-  { agent: "payer", title: "Payer" },
+const LANES: { agent: AgentName; title: string; role: string }[] = [
+  { agent: "intake", title: "Intake Parser", role: "Claude reads the request into a strict form" },
+  { agent: "vendorVerifier", title: "Vendor Verifier", role: "Vendor book, sender, bank, invoice, CRS, OFAC" },
+  { agent: "riskAnalyst", title: "Risk Analyst", role: "Red flags and a risk score" },
+  { agent: "callback", title: "Callback Verifier", role: "Calls the vendor on the number on file" },
+  { agent: "policy", title: "Policy Engine", role: "Deterministic rules; the only code that can return PAY" },
+  { agent: "ownerConcierge", title: "Owner Concierge", role: "Asks the owner for her authenticator code" },
+  { agent: "payer", title: "Payer", role: "Signs exactly one transfer, only on PAY" },
 ];
 
+/** One card per agent that has run, in pipeline order, each with its finding and the evidence behind it. */
 export function AgentLanes({ detail }: { detail: CaseDetail }) {
+  const ran = LANES.map((lane) => ({ lane, run: latestRun(detail.runs, lane.agent) })).filter((x) => x.run);
+  if (ran.length === 0) {
+    return <p className="rounded-xl border border-dashed border-border-strong px-5 py-6 text-[14px] text-muted-foreground">The agents haven&apos;t started on this case yet.</p>;
+  }
   return (
-    <div className="lanes">
-      {LANES.map((lane) => {
-        const run = latestRun(detail.runs, lane.agent);
-        if (!run) return null;
-        return (
-          <section
-            key={run._id}
-            className="lp-finding lane wr-rise"
-            data-status={run.status}
-            aria-label={`${lane.title}: ${run.status}`}
-          >
-            <p className="lp-finding-title">
-              {lane.title} <span className="lane-status">{run.status}</span>
-            </p>
-            {run.summary && <div className="lane-summary">{run.summary}</div>}
-            {run.error && <p className="lane-error">Failed: {run.error}</p>}
-            <LaneDetail agent={lane.agent} run={run} detail={detail} />
-          </section>
-        );
-      })}
-    </div>
+    <ol className="space-y-2" aria-label="What each agent found">
+      <AnimatePresence initial={false}>
+        {ran.map(({ lane, run }) => (
+          <LaneCard key={lane.agent} lane={lane} run={run!} detail={detail} />
+        ))}
+      </AnimatePresence>
+    </ol>
+  );
+}
+
+function LaneCard({ lane, run, detail }: { lane: (typeof LANES)[number]; run: Run; detail: CaseDetail }) {
+  const status = run.status;
+  return (
+    <motion.li
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={spring.smooth}
+      className={cn(
+        "rounded-xl border bg-surface px-4 py-3",
+        status === "running" ? "border-accent/50 shadow-[0_0_24px_rgba(242,176,76,0.12)]" : status === "failed" ? "border-block/40" : lane.agent === "policy" ? "border-code/30" : "border-border",
+      )}
+      aria-label={`${lane.title}: ${status}`}
+    >
+      <p className="flex items-center justify-between gap-3 font-mono text-[12px] uppercase tracking-[0.12em]">
+        <span className={lane.agent === "policy" ? "text-code-ink" : "text-accent"}>{lane.title}</span>
+        <span className={cn("flex items-center gap-1.5", status === "failed" ? "text-block-ink" : status === "running" ? "text-accent-ink" : "text-muted-foreground")}>
+          {status === "running" ? <LoaderCircle className="size-3.5 animate-spin" /> : status === "failed" ? <AlertCircle className="size-3.5" /> : <Check className="size-3.5 stroke-[2.5]" />}
+          {status === "running" ? "Working" : status === "failed" ? "Failed" : "Done"}
+          {run.endedAt ? <span className="text-subtle normal-case">· {((run.endedAt - run.startedAt) / 1000).toFixed(1)}s</span> : null}
+        </span>
+      </p>
+      <p className="mt-1.5 text-[14.5px] font-medium leading-snug text-foreground">
+        {run.error ? `Failed: ${run.error}` : run.summary ? <Summary text={run.summary} /> : lane.role}
+      </p>
+      <div className="mt-2">
+        <LaneDetail agent={lane.agent} run={run} detail={detail} />
+      </div>
+    </motion.li>
+  );
+}
+
+/** Lane summaries sometimes carry a "⚠"; the board draws its own icon instead of a font glyph. */
+function Summary({ text }: { text: string }) {
+  const glyph = /[\u2600-\u27BF]\uFE0F?/u;
+  if (!glyph.test(text)) return <>{text}</>;
+  return (
+    <span className="inline-flex items-start gap-1.5">
+      <TriangleAlert className="mt-[3px] size-3.5 shrink-0 text-foreground" aria-hidden="true" />
+      {text.replace(new RegExp(glyph.source, "gu"), "").replace(/\s{2,}/g, " ").trim()}
+    </span>
   );
 }
 
@@ -73,24 +114,34 @@ function LaneDetail({ agent, run, detail }: { agent: AgentName; run: Run; detail
 }
 
 function Chips({ children }: { children: ReactNode }) {
-  return <div className="lane-body">{children}</div>;
+  return <div className="flex flex-wrap gap-1.5">{children}</div>;
+}
+
+/** A lane fact. Old "ok/warn/bad/info" tones map onto the board's palette; "ok" stays white, green is for money. */
+function Chip({ tone, children, title, className }: { tone?: string; children: ReactNode; title?: string; className?: string }) {
+  const map: Record<string, Tone> = { ok: "neutral", warn: "hold", bad: "block", info: "owner", money: "pay", approved: "pay", "": "quiet" };
+  return (
+    <Tag tone={tone === undefined ? "neutral" : (map[tone] ?? "quiet")} title={title} className={className}>
+      {children}
+    </Tag>
+  );
 }
 
 function IntakeDetail({ request: r }: { request: PaymentRequest }) {
   return (
     <Chips>
-      <span className="chip">Action: {r.requestedAction}</span>
-      {r.claimedVendorName && <span className="chip">Payee claimed: {r.claimedVendorName}</span>}
-      {r.amountCents != null && <span className="chip">{formatCents(r.amountCents)}</span>}
-      {r.invoiceNumber && <span className="chip">Invoice #{r.invoiceNumber}</span>}
-      <span className="chip">Sender says: {r.claimedSenderRole}</span>
-      {r.newBankDetails && <span className="chip warn">New bank {last4(r.newBankDetails.account)}</span>}
+      <Chip>Action: {r.requestedAction}</Chip>
+      {r.claimedVendorName && <Chip>Payee claimed: {r.claimedVendorName}</Chip>}
+      {r.amountCents != null && <Chip>{formatCents(r.amountCents)}</Chip>}
+      {r.invoiceNumber && <Chip>Invoice #{r.invoiceNumber}</Chip>}
+      <Chip>Sender says: {r.claimedSenderRole}</Chip>
+      {r.newBankDetails && <Chip tone="warn">New bank {last4(r.newBankDetails.account)}</Chip>}
       {r.urgencyClaims?.map((u) => (
-        <span key={u} className="chip warn">
+        <Chip key={u} tone="warn">
           Urgency: “{u}”
-        </span>
+        </Chip>
       ))}
-      {r.injectionAttempt && <span className="chip bad">Injection attempt</span>}
+      {r.injectionAttempt && <Chip tone="bad">Injection attempt</Chip>}
     </Chips>
   );
 }
@@ -100,24 +151,24 @@ function VendorDetail({ findings: f, detail }: { findings: VendorFindings; detai
   return (
     <Chips>
       {matched ? (
-        <span className="chip ok">
+        <Chip tone="ok">
           Match: {detail.summary.vendorName} ({Math.round(f.matchConfidence * 100)}%)
-        </span>
+        </Chip>
       ) : (
-        <span className="chip bad">No vendor-book match</span>
+        <Chip tone="bad">No vendor-book match</Chip>
       )}
-      <span className={`chip ${f.senderOnFile ? "ok" : "warn"}`}>Sender {f.senderOnFile ? "on file" : "not on file"}</span>
+      <Chip tone={f.senderOnFile ? "ok" : "warn"}>Sender {f.senderOnFile ? "on file" : "not on file"}</Chip>
       {f.bankMatches != null && (
-        <span className={`chip ${f.bankMatches ? "ok" : "bad"}`}>Bank {f.bankMatches ? "matches file" : "differs from file"}</span>
+        <Chip tone={f.bankMatches ? "ok" : "bad"}>Bank {f.bankMatches ? "matches file" : "differs from file"}</Chip>
       )}
-      <span className={`chip ${crsTone(f)}`}>{crsLaneText(f.crs) ?? "CRS: not checked"}</span>
-      <span className={`chip ${f.ofacHit ? "bad" : "ok"}`}>OFAC: {f.ofacHit ? "HIT" : "clear"}</span>
+      <Chip tone={crsTone(f)}>{crsLaneText(f.crs) ?? "CRS: not checked"}</Chip>
+      <Chip tone={f.ofacHit ? "bad" : "ok"}>OFAC: {f.ofacHit ? "HIT" : "clear"}</Chip>
       {f.alreadyPaidAt != null ? (
-        <span className="chip bad">Invoice already paid</span>
+        <Chip tone="bad">Invoice already paid</Chip>
       ) : (
-        <span className={`chip ${f.matchingInvoiceId ? "ok" : "warn"}`}>
+        <Chip tone={f.matchingInvoiceId ? "ok" : "warn"}>
           {f.matchingInvoiceId ? `Open invoice #${detail.summary.invoiceNumber ?? "?"}` : "No matching invoice"}
-        </span>
+        </Chip>
       )}
     </Chips>
   );
@@ -133,27 +184,29 @@ function RiskDetail({ risk }: { risk: RiskFindings }) {
   return (
     <>
       <Chips>
-        <span className="chip">Risk {score}/100</span>
+        <Chip>Risk {score}/100</Chip>
         {risk.flags?.map((flag) => (
-          <span key={flag} className="chip warn">
+          <Chip key={flag} tone="warn">
             {flag.replace(/_/g, " ")}
-          </span>
+          </Chip>
         ))}
-        <div className="meter" role="img" aria-label={`Risk score ${score} of 100`}>
-          <span style={{ transform: `scaleX(${score / 100})` }} />
-        </div>
+        <span className="flex h-[22px] w-28 items-center" role="img" aria-label={`Risk score ${score} of 100`}>
+          <span className="h-1 w-full overflow-hidden rounded-full bg-white/10">
+            <span
+              className={cn("block h-full origin-left rounded-full transition-transform duration-500", "bg-white/70")}
+              style={{ transform: `scaleX(${score / 100})` }}
+            />
+          </span>
+        </span>
       </Chips>
       {risk.explanation && (
-        <details className="wr-more">
-          <summary>Why</summary>
-          <p>{risk.explanation}</p>
-        </details>
+        <p className="mt-2.5 text-[12.5px] leading-relaxed text-muted-foreground">{risk.explanation}</p>
       )}
     </>
   );
 }
 
-const OUTCOME_TONE: Record<string, string> = { confirmed: "ok", denied: "bad", no_answer: "warn", unclear: "warn" };
+const OUTCOME_TONE: Record<string, string> = { confirmed: "approved", denied: "bad", no_answer: "warn", unclear: "warn" };
 
 function CallbackDetail({ detail }: { detail: CaseDetail }) {
   const latest = [...detail.callbacks].sort((a, b) => b.startedAt - a.startedAt)[0];
@@ -161,21 +214,20 @@ function CallbackDetail({ detail }: { detail: CaseDetail }) {
   return (
     <>
       <Chips>
-        <span className="chip">
+        <Chip>
           Dialed {latest.numberDialed} · on file
           {latest.attempt > 1 && ` · attempt ${latest.attempt}`}
-        </span>
+        </Chip>
         {latest.outcome ? (
-          <span className={`chip ${OUTCOME_TONE[latest.outcome] ?? ""}`}>Vendor said: {latest.outcome.replace("_", " ")}</span>
+          <Chip tone={OUTCOME_TONE[latest.outcome] ?? ""}>Vendor said: {latest.outcome.replace("_", " ")}</Chip>
         ) : (
-          <span className="chip info">Calling…</span>
+          <Chip tone="info">Calling…</Chip>
         )}
       </Chips>
       {latest.transcript && (
-        <details className="wr-more">
-          <summary>Transcript</summary>
-          <pre className="transcript">{latest.transcript}</pre>
-        </details>
+        <pre className="mt-2.5 max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-white/[0.02] p-3 font-mono text-[11.5px] leading-relaxed text-muted-foreground">
+          {latest.transcript}
+        </pre>
       )}
     </>
   );
@@ -185,13 +237,13 @@ function PolicyDetail({ result }: { result: PolicyResult }) {
   return (
     <Chips>
       {result.firedRules.map((id) => (
-        <span key={id} className="chip" title={ruleInfo(id)?.description}>
+        <Chip key={id} title={ruleInfo(id)?.description}>
           {id} {ruleInfo(id)?.name}
-        </span>
+        </Chip>
       ))}
-      {result.needs.callback && <span className="chip info">Needs callback</span>}
-      {result.needs.ownerOtp && <span className="chip info">Needs owner code</span>}
-      {!result.overridable && <span className="chip bad">Not overridable</span>}
+      {result.needs.callback && <Chip tone="info">Needs callback</Chip>}
+      {result.needs.ownerOtp && <Chip tone="info">Needs owner code</Chip>}
+      {!result.overridable && <Chip tone="bad">Not overridable</Chip>}
     </Chips>
   );
 }
@@ -204,18 +256,18 @@ function OwnerDetail({ detail }: { detail: CaseDetail }) {
   let state: ReactNode;
   if (approval.cancelledAt) {
     const verb = approval.approvedAt ? "Cancelled during cooling-off" : "Declined";
-    state = <span className="chip bad">{verb} by owner via {via}</span>;
+    state = <Chip tone="bad">{verb} by owner via {via}</Chip>;
   } else if (approval.approvedAt && approval.coolingOffUntil && approval.coolingOffUntil > now) {
-    state = <span className="chip warn">Approved · cooling-off {secondsLeft(approval.coolingOffUntil, now)}s</span>;
-  } else if (approval.approvedAt) state = <span className="chip ok">Approved by owner via {via}</span>;
-  else state = <span className="chip info">Waiting for the owner&apos;s code since {clockTime(approval.requestedAt)}</span>;
+    state = <Chip tone="warn">Approved · cooling-off {secondsLeft(approval.coolingOffUntil, now)}s</Chip>;
+  } else if (approval.approvedAt) state = <Chip tone="approved">Approved by owner via {via}</Chip>;
+  else state = <Chip tone="info">Waiting for the owner&apos;s code since {clockTime(approval.requestedAt)}</Chip>;
 
   const locked = approval.lockedUntil && approval.lockedUntil > now;
   return (
     <Chips>
       {state}
-      {locked && <span className="chip bad">Locked after wrong codes · {secondsLeft(approval.lockedUntil!, now)}s</span>}
-      {!locked && (approval.attempts ?? 0) > 0 && <span className="chip warn">{approval.attempts} wrong code(s)</span>}
+      {locked && <Chip tone="bad">Locked after wrong codes · {secondsLeft(approval.lockedUntil!, now)}s</Chip>}
+      {!locked && (approval.attempts ?? 0) > 0 && <Chip tone="warn">{approval.attempts} wrong code(s)</Chip>}
     </Chips>
   );
 }
@@ -223,32 +275,32 @@ function OwnerDetail({ detail }: { detail: CaseDetail }) {
 function PayerDetail({ detail }: { detail: CaseDetail }) {
   const payment = [...detail.payments].sort((a, b) => b.createdAt - a.createdAt)[0];
   if (!payment) return null;
-  const tone = payment.status === "sent" ? "ok" : payment.status === "failed" ? "bad" : "info";
+  const tone = payment.status === "sent" ? "money" : payment.status === "failed" ? "bad" : "info";
   return (
     <>
       <Chips>
-        <span className="chip">{RAIL_LABEL[payment.rail]}</span>
-        <span className={`chip ${tone}`}>
+        <Chip>{RAIL_LABEL[payment.rail]}</Chip>
+        <Chip tone={tone}>
           {formatCents(payment.amountCents)} · {payment.status}
-        </span>
-        {payment.externalId && <span className="chip mono">{payment.externalId}</span>}
+        </Chip>
+        {payment.externalId && <Chip className="font-mono">{payment.externalId}</Chip>}
       </Chips>
       {payment.status === "sent" && (
-        <table className="journal">
+        <table className="mt-2.5 w-full max-w-md text-[12px]">
           <caption className="sr-only">Journal entry</caption>
           <thead>
-            <tr>
-              <th>Account</th>
-              <th className="amt">Debit</th>
-              <th className="amt">Credit</th>
+            <tr className="border-b border-border text-left text-subtle">
+              <th className="py-1.5 font-normal">Account</th>
+              <th className="py-1.5 text-right font-normal">Debit</th>
+              <th className="py-1.5 text-right font-normal">Credit</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="font-mono text-muted-foreground">
             {payment.journal.map((line) => (
-              <tr key={line.account}>
-                <td>{line.account}</td>
-                <td className="amt">{line.debitCents ? formatCents(line.debitCents) : ""}</td>
-                <td className="amt">{line.creditCents ? formatCents(line.creditCents) : ""}</td>
+              <tr key={line.account} className="border-b border-border last:border-0">
+                <td className="py-1.5 font-sans">{line.account}</td>
+                <td className="py-1.5 text-right">{line.debitCents ? formatCents(line.debitCents) : ""}</td>
+                <td className="py-1.5 text-right">{line.creditCents ? formatCents(line.creditCents) : ""}</td>
               </tr>
             ))}
           </tbody>

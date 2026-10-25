@@ -86,8 +86,8 @@ function Vault({ turn }: { turn: number }) {
   const bolts = [0, 45, 90, 135, 180, 225, 270, 315];
   return (
     <svg className="lp-vault" viewBox="0 0 420 420" aria-hidden="true">
-      <circle cx="210" cy="210" r="196" fill="#0a141d" stroke="#7cc4f5" strokeWidth="6" />
-      <circle cx="210" cy="210" r="168" fill="none" stroke="#2c5470" strokeWidth="2" />
+      <circle cx="210" cy="210" r="196" fill="#0b1824" stroke="#7cc4f5" strokeWidth="6" />
+      <circle cx="210" cy="210" r="168" fill="none" stroke="rgba(124, 196, 245, 0.4)" strokeWidth="2" />
       {bolts.map((a) => (
         <rect key={a} x="204" y="20" width="12" height="22" rx="3" fill="#7cc4f5" transform={`rotate(${a} 210 210)`} />
       ))}
@@ -95,7 +95,7 @@ function Vault({ turn }: { turn: number }) {
         <circle cx="210" cy="210" r="86" strokeWidth="5" />
         <path d="M210 112 L210 308 M112 210 L308 210 M141 141 L279 279 M279 141 L141 279" />
       </g>
-      <circle cx="210" cy="210" r="30" fill="#0a141d" stroke="#b5defa" strokeWidth="5" />
+      <circle cx="210" cy="210" r="30" fill="#0b1824" stroke="#b5defa" strokeWidth="5" />
       <circle cx="210" cy="210" r="9" fill="#b5defa" />
     </svg>
   );

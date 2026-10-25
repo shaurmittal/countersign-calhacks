@@ -6,7 +6,7 @@ import type { AgentId } from "../demo/film/story";
 import type { CaseDetail } from "./AgentLanes";
 import type { CaseRow } from "./DecisionCard";
 import { secondsLeft } from "./format";
-import type { NodeChip, NodeState } from "./RoomGraph";
+import type { NodeChip, NodeState } from "./AgentRoom";
 
 type Run = CaseDetail["runs"][number];
 type Callback = CaseDetail["callbacks"][number];

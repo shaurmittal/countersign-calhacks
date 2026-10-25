@@ -18,7 +18,7 @@ export function Nav() {
   return (
     <nav className="lp-nav" aria-label="Page">
       <a className="lp-logo" href="#top">
-        <LogoMark /> COUNTERSIGN
+        <LogoMark /> Countersign
       </a>
       <ul>
         <li>
@@ -34,6 +34,9 @@ export function Nav() {
           <a href="#break-it">Try to break it</a>
         </li>
       </ul>
+      <a className="lp-nav-room" href="/">
+        War Room
+      </a>
       <a className="lp-nav-cta" href="#your-turn">
         Call it
       </a>
@@ -173,7 +176,7 @@ export function Cast() {
           </thead>
           <tbody>
             {CAST.map((c) => (
-              <tr key={c.name} data-kind={c.kind}>
+              <tr key={c.name} data-kind={c.kind} data-owner={c.name === "Owner Concierge" || undefined}>
                 <th scope="row">
                   <span className="lp-cast-name">{c.name}</span>
                   <span className="lp-cast-tech">{c.tech}</span>
@@ -208,6 +211,28 @@ function No() {
 
 const ORDER: RuleId[] = ["R8", "R9", "R13", "R10", "R16", "R17", "R15", "R14", "R11", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R12"];
 
+/** What each rule makes the Policy Engine say (README "Policy rules"). ESCALATE means Priya decides with her code. */
+const RULE_OUTCOME: Record<RuleId, "PAY" | "HOLD" | "ESCALATE" | "BLOCK"> = {
+  R1: "BLOCK",
+  R2: "HOLD",
+  R3: "HOLD",
+  R4: "ESCALATE",
+  R5: "HOLD",
+  R6: "ESCALATE",
+  R7: "ESCALATE",
+  R8: "BLOCK",
+  R9: "BLOCK",
+  R10: "BLOCK",
+  R11: "ESCALATE",
+  R12: "PAY",
+  R13: "BLOCK",
+  R14: "HOLD",
+  R15: "ESCALATE",
+  R16: "BLOCK",
+  R17: "BLOCK",
+  R18: "BLOCK",
+};
+
 export function Lock() {
   return (
     <section className="lp-section lp-locksec" id="lock" aria-labelledby="lock-h">
@@ -232,6 +257,9 @@ export function Lock() {
             <span className="lp-rule-id">{id}</span>
             <span className="lp-rule-name">{RULES[id].name}</span>
             <span className="lp-rule-desc">{RULES[id].description}</span>
+            <span className="lp-rule-out" data-decision={RULE_OUTCOME[id]}>
+              {RULE_OUTCOME[id]}
+            </span>
             {!RULES[id].overridable && <span className="lp-rule-hard">Not even the owner can override</span>}
           </li>
         ))}
@@ -246,7 +274,7 @@ export function YourTurn() {
   useEffect(() => {
     const url = `${window.location.origin}/try`;
     setTryUrl(url);
-    QRCode.toString(url, { type: "svg", margin: 0, errorCorrectionLevel: "M", color: { dark: "#ECEEF1", light: "#00000000" } })
+    QRCode.toString(url, { type: "svg", margin: 0, errorCorrectionLevel: "M", color: { dark: "#FAFAFA", light: "#00000000" } })
       .then(setQr)
       .catch(() => setQr(null));
   }, []);
