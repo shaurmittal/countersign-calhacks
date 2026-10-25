@@ -14,6 +14,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { appendAudit } from "./audit";
 import { openCase } from "./cases";
 import type { PaymentRequest } from "../shared/types";
+import { checkTotp, describeRejection } from "../shared/totp";
 import { jwkFromEnv, parsePayload, sha256Hex } from "../shared/bank/payload";
 import { evaluateTransfer } from "../shared/bank/verify";
 
@@ -21,6 +22,8 @@ export const OPENING_BALANCE_CENTS = 250_000_00;
 const ACCOUNT_NAME = "Lumen Labs · Operating";
 /** The public door records at most this many rejected attempts a minute, so nobody can flood the ledger. */
 const PUBLIC_REJECTS_PER_MINUTE = 30;
+/** Payee notes that start with this are an owner-approved change (green on /bank); others are warnings. */
+const CHANGED_NOTE = "Changed:";
 
 const source = v.union(v.literal("countersign"), v.literal("unsigned_api"));
 
@@ -206,6 +209,7 @@ export const overview = query({
           accountLast4: p.accountLast4,
           status: p.status,
           note: p.note ?? null,
+          noteOk: !!p.note?.startsWith(CHANGED_NOTE), // an approved change, shown in green
           pendingLast4: p.pendingChange?.accountLast4 ?? null,
         })),
       transfers: transfers.map((t) => ({
@@ -243,7 +247,8 @@ export const replaySample = query({
 // /bank's "Change bank details" freezes the payee and opens a Countersign case with the request already
 // filled in (no LLM intake). R2/R3 make the pipeline call the vendor back on the number on file. When the
 // case closes, onCaseSettled applies the outcome: denied -> the change is refused and the payee is active
-// again on its old details; confirmed -> it stays frozen until Priya approves; anything else -> frozen.
+// again on its old details; confirmed -> it stays frozen until Priya approves or declines on /owner with
+// her authenticator code (decideBankChange); anything else -> frozen.
 // The engine can't return PAY here (no amount, no invoice), and nothing moves money.
 
 export const BANK_SENDER = "bank:lumen";
@@ -335,15 +340,140 @@ export const onCaseSettled = internalMutation({
       await appendAudit(ctx, { caseId, actor: "bank", action: "bank.payee.change_refused", payload: { payee: payee.name, keptLast4: payee.accountLast4 } });
       return;
     }
-    const note =
-      outcome === "confirmed"
-        ? "Vendor confirmed by phone; Priya must approve on /owner"
-        : `Couldn't confirm with ${payee.name}; the change stays frozen`;
-    await ctx.db.patch(payee._id, { note, updatedAt: now });
+    const confirmed = outcome === "confirmed";
+    const note = confirmed
+      ? "Vendor confirmed by phone; Priya must approve on /owner"
+      : `Couldn't confirm with ${payee.name}; the change stays frozen`;
+    await ctx.db.patch(payee._id, {
+      note,
+      ...(confirmed && payee.pendingChange && { pendingChange: { ...payee.pendingChange, confirmedAt: now } }),
+      updatedAt: now,
+    });
     await appendAudit(ctx, { caseId, actor: "bank", action: "bank.payee.change_held", payload: { payee: payee.name, outcome } });
+    if (confirmed) {
+      await appendAudit(ctx, {
+        caseId,
+        actor: "ownerConcierge",
+        action: "owner.notified",
+        payload: {
+          text: `Approval needed: ${payee.name} confirmed by phone a new payout account ending ${payee.pendingChange?.accountLast4}. Approve or decline it on /owner.`,
+        },
+      });
+    }
   },
 });
 
+// ---- Owner approval of a confirmed change (/owner) ----
+// The callback confirmed it; Priya's authenticator code is the second signer. Same TOTP check and replay
+// guard as payment approvals (agents/ownerConcierge.ts), with a lockout per change after too many wrong
+// codes. Approving updates the vendor book and the bank payee together; declining keeps the old account.
+// Neither moves money: the next invoice still goes through the Policy Engine to be paid.
+
+const MAX_WRONG_CODES = 5;
+const LOCKOUT_MS = 60_000;
+
+/** Confirmed changes waiting for Priya, oldest first. Shows only the last 4 of the new account. */
+export const pendingChanges = query({
+  args: {},
+  handler: async (ctx) => {
+    const payees = await ctx.db.query("bankPayees").collect();
+    return payees
+      .filter((p) => p.status === "frozen" && p.pendingChange?.confirmedAt)
+      .map((p) => ({
+        payeeId: p._id,
+        name: p.name,
+        fromLast4: p.accountLast4,
+        toLast4: p.pendingChange!.accountLast4,
+        toRouting: p.pendingChange!.routing,
+        requestedAt: p.pendingChange!.requestedAt,
+        confirmedAt: p.pendingChange!.confirmedAt!,
+        lockedUntil: p.pendingChange!.lockedUntil ?? null,
+      }))
+      .sort((a, b) => a.confirmedAt - b.confirmedAt);
+  },
+});
+
+/** Returned, not thrown: a throw would roll back the wrong-code counter and defeat the lockout. */
+export type BankChangeResult = { ok: true; message: string } | { ok: false; error: string };
+
+export const decideBankChange = mutation({
+  args: { payeeId: v.id("bankPayees"), code: v.string(), action: v.union(v.literal("approve"), v.literal("decline")) },
+  handler: async (ctx, { payeeId, code, action }): Promise<BankChangeResult> => {
+    const now = Date.now();
+    const payee = await ctx.db.get(payeeId);
+    const change = payee?.pendingChange;
+    if (!payee || payee.status !== "frozen" || !change?.confirmedAt || !change.caseId) {
+      return fail("This payee has no confirmed change waiting for you.");
+    }
+    // The vendor's "yes" on the callback is the first signer; check it again rather than trust the flag.
+    const callback = await ctx.db
+      .query("callbacks")
+      .withIndex("by_case", (q) => q.eq("caseId", change.caseId!))
+      .order("desc")
+      .first();
+    if (callback?.outcome !== "confirmed") return fail("The vendor never confirmed this change by phone.");
+    if (change.lockedUntil && change.lockedUntil > now) {
+      return fail(`Too many wrong codes. Try again in ${Math.ceil((change.lockedUntil - now) / 1000)}s.`);
+    }
+
+    const secret = process.env.OWNER_TOTP_SECRET;
+    if (!secret) return fail("Owner codes are not set up on this deployment (OWNER_TOTP_SECRET).");
+    const owner = await ctx.db.query("owner").first();
+    if (!owner) return fail("The owner is not set up on this deployment (run npm run seed).");
+    const check = checkTotp({ secretBase32: secret, code, now, lastCounter: owner.lastTotpCounter });
+    if (!check.ok) {
+      if (check.reason !== "malformed") {
+        const wrongCodes = (change.wrongCodes ?? 0) + 1;
+        const locked = wrongCodes >= MAX_WRONG_CODES;
+        await ctx.db.patch(payeeId, {
+          pendingChange: { ...change, wrongCodes: locked ? 0 : wrongCodes, lockedUntil: locked ? now + LOCKOUT_MS : change.lockedUntil },
+        });
+        await appendAudit(ctx, {
+          caseId: change.caseId,
+          actor: "ownerConcierge",
+          action: "bank.payee.code_rejected",
+          payload: { payee: payee.name, reason: check.reason, attempts: wrongCodes, lockedForSeconds: locked ? LOCKOUT_MS / 1000 : 0 },
+        });
+      }
+      return fail(describeRejection(check.reason));
+    }
+    await ctx.db.patch(owner._id, { lastTotpCounter: check.counter });
+
+    if (action === "decline") {
+      await ctx.db.patch(payeeId, {
+        status: "active",
+        pendingChange: undefined,
+        note: `Change declined by ${owner.name}; payouts stay on …${payee.accountLast4}`,
+        updatedAt: now,
+      });
+      await appendAudit(ctx, { caseId: change.caseId, actor: "owner", action: "bank.payee.change_declined", payload: { payee: payee.name, keptLast4: payee.accountLast4 } });
+      return { ok: true, message: `Declined. ${payee.name} stays on the account ending ${payee.accountLast4}.` };
+    }
+
+    const vendor = await ctx.db.get(payee.vendorId);
+    if (!vendor) return fail("That payee's vendor is no longer in the vendor book.");
+    await ctx.db.patch(vendor._id, { bankRouting: change.routing, bankLast4: change.accountLast4 });
+    await ctx.db.patch(payeeId, {
+      status: "active",
+      routing: change.routing,
+      accountLast4: change.accountLast4,
+      pendingChange: undefined,
+      note: `${CHANGED_NOTE} vendor confirmed by phone, ${owner.name} approved`,
+      updatedAt: now,
+    });
+    await appendAudit(ctx, {
+      caseId: change.caseId,
+      actor: "owner",
+      action: "vendor.bank_updated",
+      payload: { vendorId: vendor._id, fromLast4: payee.accountLast4, toLast4: change.accountLast4, via: "bank_change_approval" },
+    });
+    return { ok: true, message: `Approved. ${payee.name} is now paid to the account ending ${change.accountLast4}.` };
+  },
+});
+
+function fail(error: string): BankChangeResult {
+  return { ok: false, error };
+}
 
 /**
  * Operator reset for a frozen payee: back to active on the details already on file, pending change dropped.

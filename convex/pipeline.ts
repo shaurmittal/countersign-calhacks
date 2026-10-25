@@ -163,6 +163,9 @@ export const advance = internalAction({
         riskFindings ??
           safely(() => withAgentRun(ctx, caseId, "riskAnalyst", () => runRiskAnalyst(ctx, c, req), summarizeRisk)),
       ]);
+      // A Lumen Bank detail change asks to pay nothing, so it never picks up the vendor's open invoice
+      // (matchInvoice falls back to "the only open one"). With no invoice and no amount it can't reach PAY.
+      if (c.channel === "bank" && vendorFindings) vendorFindings = { ...vendorFindings, matchingInvoiceId: null };
       await ctx.runMutation(internal.cases.update, {
         caseId,
         vendorFindings: vendorFindings ?? undefined,

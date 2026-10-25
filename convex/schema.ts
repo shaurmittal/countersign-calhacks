@@ -196,7 +196,15 @@ export default defineSchema({
     accountLast4: v.string(),
     status: v.union(v.literal("active"), v.literal("frozen")),
     pendingChange: v.optional(
-      v.object({ routing: v.string(), accountLast4: v.string(), requestedAt: v.number(), caseId: v.optional(v.id("cases")) }),
+      v.object({
+        routing: v.string(),
+        accountLast4: v.string(),
+        requestedAt: v.number(),
+        caseId: v.optional(v.id("cases")),
+        confirmedAt: v.optional(v.number()), // the vendor confirmed on the callback; now waits for Priya on /owner
+        wrongCodes: v.optional(v.number()), // wrong owner codes on this change since the last lockout
+        lockedUntil: v.optional(v.number()),
+      }),
     ),
     note: v.optional(v.string()), // shown on /bank, e.g. "Frozen: Countersign is calling Pixel & Pine"
     updatedAt: v.number(),

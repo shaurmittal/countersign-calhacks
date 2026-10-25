@@ -255,7 +255,7 @@ function Payee({ p }: { p: PayeeRow }) {
     }
   }
 
-  const refused = p.status === "active" && p.note;
+  const refused = p.status === "active" && p.note && !p.noteOk;
   return (
     <li data-status={p.status}>
       <span className="bk-payee-name">{p.name}</span>
@@ -263,7 +263,7 @@ function Payee({ p }: { p: PayeeRow }) {
       {p.status === "frozen" ? (
         <span className="bk-frozen">{p.note ?? `Frozen: Countersign is calling ${p.name}`}</span>
       ) : (
-        <span className={refused ? "bk-refused" : "bk-active"}>{refused ? p.note : "Active"}</span>
+        <span className={refused ? "bk-refused" : "bk-active"}>{p.note ?? "Active"}</span>
       )}
       {p.status === "active" && !open && (
         <button type="button" className="bk-change" onClick={() => setOpen(true)}>
