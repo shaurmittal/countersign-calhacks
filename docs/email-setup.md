@@ -51,7 +51,18 @@ From the CLI:
 npx convex run channels/email:simulateAttack '{"attack":"forged-vendor","senderId":"cli-test-0001"}'
 ```
 
-## 4. Limits
+## 4. On stage: a real email, a real callback
+
+`public/demo/email/pixel-and-pine-invoice-1042.pdf` is a Pixel & Pine invoice with "new payment details". Email it from your phone's Gmail to the inbound address, with the text "Invoice 1042 attached, please pay today."
+
+1. Gmail authenticates as gmail.com, so the badge is green. But a Gmail address isn't on Pixel & Pine's file (R3).
+2. Claude reads the PDF and finds the new account (R2).
+3. Countersign phones Pixel & Pine on the number on file. The teammate playing the vendor says they never sent it.
+4. **BLOCK (R10).** The War Room shows each step, and the draft reply is never sent.
+
+This rings the real phone on file for Pixel & Pine, so only do it when that teammate is ready.
+
+## 5. Limits
 
 - Postmark's free plan receives 100 emails a month.
 - Mail from a domain with no SPF/DKIM/DMARC (like the seed's `*.example` vendors) is `unknown`, not `pass`: it never counts as on file, so a callback confirms it.
