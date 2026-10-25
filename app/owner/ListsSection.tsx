@@ -94,7 +94,7 @@ export function ListsSection() {
   const field = "h-10 w-full rounded-lg border border-border-strong bg-background px-3 text-[14px] text-foreground outline-none transition-colors focus:border-foreground";
   return (
     <section aria-labelledby="lists-title">
-      <SectionHead title={<span id="lists-title">Block and trust lists</span>} />
+      <h3 id="lists-title" className="sr-only">Block and trust lists</h3>
       <p className="mb-4 max-w-[68ch] text-[13px] leading-relaxed text-muted-foreground">
         Block refuses anything from or to an entry. Trust only says a sender belongs to a vendor: bank changes still
         need a callback and your approval.

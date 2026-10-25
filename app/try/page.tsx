@@ -11,11 +11,11 @@ import { EMAIL_ATTACKS, emailAttack } from "../../shared/email/attacks";
 import { RULES } from "../../shared/policy/rules";
 import type { RuleId } from "../../shared/types";
 import { motion } from "framer-motion";
-import { ArrowUp, Check, LoaderCircle, Mail, MessageSquareText, Paperclip, Phone } from "lucide-react";
+import { ArrowUp, Check, LoaderCircle, Mail, MessageSquareText, Paperclip, Phone, RotateCcw } from "lucide-react";
 import { AppShell } from "../ui/AppShell";
 import { cn } from "../ui/cn";
 import { spring } from "../ui/motion";
-import { decisionTone, SectionHead, Stamp, Tag } from "../ui/primitives";
+import { buttonClass, decisionTone, SectionHead, Stamp, Tag } from "../ui/primitives";
 
 const STORAGE_KEY = "countersign-sender";
 const PHONE_DISPLAY = "+1 (256) 215-6932";
@@ -50,16 +50,32 @@ type Simulation = FunctionReturnType<typeof api.channels.email.mySimulations>[nu
 type Outcome = Pick<Message, "status" | "decision" | "vendorName" | "rules" | "createdAt" | "decidedAt">;
 type Entry = { kind: "chat"; m: Message } | { kind: "email"; m: Simulation };
 
+/**
+ * This browser's conversation id. It's kept so a reply that lands later (after a callback, say) still shows
+ * after a reload. `?new` in the URL, or the New conversation button, starts a fresh one.
+ */
 function loadSenderId(): string {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return saved;
-    const id = crypto.randomUUID();
-    localStorage.setItem(STORAGE_KEY, id);
-    return id;
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("new")) {
+      url.searchParams.delete("new");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+      return freshSenderId();
+    }
+    return localStorage.getItem(STORAGE_KEY) ?? freshSenderId();
   } catch {
     return crypto.randomUUID();
   }
+}
+
+function freshSenderId(): string {
+  const id = crypto.randomUUID();
+  try {
+    localStorage.setItem(STORAGE_KEY, id);
+  } catch {
+    // Private mode: the conversation lasts as long as the tab.
+  }
+  return id;
 }
 
 export default function TryPage() {
@@ -118,6 +134,13 @@ export default function TryPage() {
     }
   }
 
+  function startOver() {
+    setSenderId(freshSenderId());
+    setDraft("");
+    setError(null);
+    window.scrollTo({ top: 0 });
+  }
+
   function pick(text: string) {
     setDraft(text);
     input.current?.focus();
@@ -132,6 +155,14 @@ export default function TryPage() {
       tone="accent"
       title="Try to scam it"
       subtitle="You're messaging Countersign, the payments assistant for Lumen Labs, a one-person company. Pretend to be a vendor, the boss, anyone. Every message goes through the same agents and the same lock as a phone call."
+      actions={
+        entries && entries.length > 0 ? (
+          <button type="button" className={buttonClass("ghost")} onClick={startOver}>
+            <RotateCcw className="size-4" aria-hidden="true" />
+            New conversation
+          </button>
+        ) : undefined
+      }
     >
       <div className="grid grid-cols-[minmax(0,1fr)] gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
         <section aria-label="Conversation" className="flex min-h-[60vh] min-w-0 flex-col">
@@ -312,7 +343,7 @@ function Reply({ m, settled, triage, draft }: { m: Outcome & { reply?: string | 
 
 const STEPS = ["Reading your message", "Checking the vendor book and the risk", "The lock decides"];
 const MAIL_STEPS = ["Reading the email and any attachment", "Checking the sender's domain, the vendor book and the risk", "The lock decides"];
-const KEY_RULES = new Set(["R9", "R10", "R15", "R17"]);
+const KEY_RULES = new Set(["R9", "R10", "R15", "R17", "R18"]);
 
 function Progress({ m, mail }: { m: Outcome; mail?: boolean }) {
   const stage = { RECEIVED: 0, PARSED: 1, VERIFYING: 1, DECIDED: 2, CALLBACK_PENDING: 3, AWAITING_OWNER: 3, CLOSED: 3 }[m.status] ?? 0;

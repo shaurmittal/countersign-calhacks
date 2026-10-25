@@ -32,12 +32,12 @@ const CRYPTO = /\b(bitcoin|btc|crypto(currency)?|usdt|usdc|tether|ethereum|eth|w
 // Asks for things a business never sends to a requester: an asking verb shortly before the thing asked for.
 const ASK = String.raw`\b(send|share|give|provide|forward|reply with|text|email|tell|confirm|read (?:me )?out|what(?:'s| is))\b.{0,60}?`;
 const SENSITIVE: [RegExp, string][] = [
-  [new RegExp(`${ASK}\\b(passwords?|passcodes?|pins?|log-?in (?:details|info|credentials)|credentials|sign-?in details)\\b`, "i"), "login credentials"],
+  [new RegExp(`${ASK}\\b(passwords?|passcodes?|log-?in (?:details|info|credentials)|credentials|sign-?in details)\\b`, "i"), "login credentials"],
   [new RegExp(`${ASK}\\b(2fa|mfa|one[- ]time (?:pass)?codes?|verification codes?|security codes?|otp|authenticator codes?|auth codes?)\\b`, "i"), "a verification code"],
   [new RegExp(`${ASK}\\b(ssns?|social security(?: numbers?)?)\\b`, "i"), "social security numbers"],
   [new RegExp(`${ASK}\\b(w-?2s?|w2 forms?|tax forms?|tax returns?)\\b`, "i"), "tax forms"],
   [new RegExp(`${ASK}\\b(employee|payroll|staff) (?:list|records|data|details|information)\\b`, "i"), "employee data"],
-  [new RegExp(`${ASK}\\b(card numbers?|cvv|cvc|full (?:bank )?account numbers?|bank log-?in)\\b`, "i"), "card or bank login details"],
+  [new RegExp(`${ASK}\\b(card numbers?|card pins?|pins?|cvv|cvc|full (?:bank )?account numbers?|bank log-?in)\\b`, "i"), "card or bank login details"],
 ];
 // "Verify your account at https://..." : a link plus a log-in or verify ask is a credential-phishing attempt.
 const LINK = /\b(?:https?:\/\/|www\.)\S+/i;

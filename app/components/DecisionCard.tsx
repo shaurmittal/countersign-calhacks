@@ -16,7 +16,7 @@ import { ruleInfo, secondsLeft, useNow } from "./format";
 export type CaseRow = FunctionReturnType<typeof api.cases.recent>[number];
 
 /** When several rules fired, the first of these present is the one worth reading first. */
-const KEY_RULE_ORDER: RuleId[] = ["R10", "R17", "R16", "R13", "R9", "R8", "R1", "R12"];
+const KEY_RULE_ORDER: RuleId[] = ["R10", "R18", "R17", "R16", "R13", "R9", "R8", "R1", "R12"];
 
 const STAMP: Record<Tone, string> = {
   pay: "border-pay text-pay-ink bg-pay/10",

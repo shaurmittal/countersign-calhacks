@@ -93,7 +93,7 @@ function BankChangeCard({ item, onDone }: { item: Change; onDone: (message: stri
           <p className="text-[12.5px] text-muted-foreground" id={`bank-help-${item.payeeId}`}>
             {lockedFor > 0
               ? `Locked after too many wrong codes. Try again in ${lockedFor}s.`
-              : `${OWNER_CODE.digits} digits from the Countersign entry. Codes change every ${OWNER_CODE.periodSeconds} seconds.`}
+              : `${OWNER_CODE.digits} digits from the Countersign entry in your authenticator app. Each code works once.`}
           </p>
           <div className="grid grid-cols-2 gap-2.5">
             <button type="button" className={buttonClass("danger", "h-11")} disabled={!ready} onClick={() => act("decline")}>

@@ -2,9 +2,11 @@
 // Owner approvals (owner: P4). Spec §6.5. The owner opens this on their phone. Approve, decline
 // or cancel each need a code from the Countersign entry in their authenticator app; the code is
 // checked server-side (convex/agents/ownerConcierge.ts). This page holds no secrets.
+// Features from the /owner redesign on main (code-rollover ring, cooling-off bar, reasons by rule, labelled
+// alerts with show-all, lists under Advanced) carried into the app's design system.
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { Clock, ShieldCheck } from "lucide-react";
+import { ChevronRight, ShieldCheck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { api } from "../../convex/_generated/api";
 import { OWNER_CODE } from "../../shared/config";
@@ -12,9 +14,10 @@ import { formatCents } from "../../shared/ledger";
 import { AppShell } from "../ui/AppShell";
 import { cn } from "../ui/cn";
 import { OtpInput } from "../ui/OtpInput";
-import { buttonClass, SectionHead, Stamp, Tag } from "../ui/primitives";
+import { buttonClass, SectionHead, Stamp, Tag, type Tone } from "../ui/primitives";
 import { channelLabel, clockTime, ruleInfo, secondsLeft, useNow } from "../components/format";
 import { BankChangesSection } from "./BankChangesSection";
+import { CodeClock } from "./CodeClock";
 import { ListsSection } from "./ListsSection";
 
 type Pending = FunctionReturnType<typeof api.owner.pending>[number];
@@ -24,13 +27,16 @@ export default function OwnerPage() {
   const pending = useQuery(api.owner.pending);
   const feed = useQuery(api.owner.feed);
   const changes = useQuery(api.bank.pendingChanges);
+  const [allAlerts, setAllAlerts] = useState(false);
+  const alerts = feed && (allAlerts ? feed : feed.slice(0, ALERTS_SHOWN));
 
   return (
     <AppShell
       icon={<ShieldCheck />}
       tone="owner"
-      title="Approvals"
-      subtitle="Known bills are paid on their own. Anything new or unusual waits here for Priya's authenticator code. A voice, a text or an email never counts."
+      title="Only you can release it"
+      subtitle="Known bills pay themselves. Anything new or unusual waits here for a code from Priya's authenticator app. A voice on the phone, however familiar, is never enough."
+      actions={<CodeClock />}
     >
       <div className="grid grid-cols-[minmax(0,1fr)] gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
         <div className="min-w-0 space-y-10">
@@ -56,14 +62,22 @@ export default function OwnerPage() {
           </section>
 
           <BankChangesSection />
-          <ListsSection />
+          <details className="group rounded-xl border border-border px-5 py-4">
+            <summary className="flex cursor-pointer list-none items-center gap-2 font-mono text-[12px] font-medium uppercase tracking-[0.12em] text-owner-ink select-none [&::-webkit-details-marker]:hidden">
+              <ChevronRight className="size-4 transition-transform duration-200 group-open:rotate-90" aria-hidden="true" />
+              Advanced · block and trust lists
+            </summary>
+            <div className="mt-5">
+              <ListsSection />
+            </div>
+          </details>
         </div>
 
         <aside aria-labelledby="alerts-title" className="lg:sticky lg:top-6 lg:self-start">
           <SectionHead title={<span id="alerts-title">Alerts</span>} />
-          {feed && feed.length > 0 ? (
-            <ol className="max-h-[72vh] space-y-px overflow-y-auto rounded-xl border border-border bg-border">
-              {feed.map((f) => (
+          {alerts && alerts.length > 0 ? (
+            <ol className="space-y-px overflow-hidden rounded-xl border border-border bg-border">
+              {alerts.map((f) => (
                 <li key={f._id} className="bg-background px-4 py-3">
                   <p className="mb-1 font-mono text-[11.5px] text-subtle">
                     <time dateTime={new Date(f.at).toISOString()}>{clockTime(f.at)}</time>
@@ -78,6 +92,11 @@ export default function OwnerPage() {
           ) : (
             <p className="text-[13px] text-muted-foreground">{feed === undefined ? "Loading…" : "No alerts yet."}</p>
           )}
+          {feed && feed.length > ALERTS_SHOWN && (
+            <button type="button" className={buttonClass("ghost", "mt-3 h-8 w-full")} onClick={() => setAllAlerts((v) => !v)}>
+              {allAlerts ? "Show fewer" : `Show all ${feed.length}`}
+            </button>
+          )}
           <p className="mt-6 text-[12px] leading-relaxed text-subtle">
             Countersign will never ask for your code by phone, text or email. Enter it only on this page or in your own ASI:One
             chat with Countersign.
@@ -88,19 +107,48 @@ export default function OwnerPage() {
   );
 }
 
-/** "BLOCK (R1): …" -> a stamp and the sentence. */
+const ALERTS_SHOWN = 6;
+
+const ALERT_KINDS: Record<string, { label: string; tone: Tone }> = {
+  PAY: { label: "Paid", tone: "pay" },
+  BLOCK: { label: "Blocked", tone: "block" },
+  HOLD: { label: "Held", tone: "hold" },
+  ESCALATE: { label: "Needs you", tone: "owner" },
+  NO_ACTION: { label: "Message", tone: "quiet" },
+};
+
+/** "BLOCK (R10, R2): R10 Callback denied: …" -> a labelled stamp plus the readable rest. */
+function parseAlert(text: string): { label: string; tone: Tone; rest: string } {
+  const decision = text.match(/^(PAY|BLOCK|HOLD|ESCALATE|NO_ACTION)\s*(?:\(([^)]*)\))?:\s*/);
+  if (decision) {
+    const kind = ALERT_KINDS[decision[1]];
+    const rest = text.slice(decision[0].length).replace(/\bR\d+ ([^:;]+): /g, "");
+    return { label: decision[2] ? `${kind.label} · ${decision[2]}` : kind.label, tone: kind.tone, rest };
+  }
+  if (/^Approval needed/i.test(text)) return { label: "Needs you", tone: "owner", rest: text.replace(/^Approval needed:\s*/i, "") };
+  if (/^Approved\b/i.test(text)) return { label: "Approved", tone: "pay", rest: text };
+  if (/^(Declined|Cancelled)\b/i.test(text)) return { label: text.split(/\W/)[0], tone: "block", rest: text };
+  const message = text.match(/^Message \(([^)]*)\):\s*/);
+  if (message) return { label: `Message · ${message[1]}`, tone: "quiet", rest: text.slice(message[0].length) };
+  return { label: "Note", tone: "quiet", rest: text };
+}
+
 function AlertText({ text }: { text: string }) {
-  const m = text.match(/^(PAY|BLOCK|HOLD|ESCALATE)\s*(\([^)]*\))?:\s*([\s\S]*)$/);
-  if (!m) return <>{text}</>;
-  const tone = m[1] === "PAY" ? "pay" : m[1] === "BLOCK" ? "block" : m[1] === "HOLD" ? "hold" : "owner";
+  const { label, tone, rest } = parseAlert(text);
   return (
     <>
-      <Stamp tone={tone} size="sm" className="mr-2 align-[1px]">
-        {m[1]}
+      <Stamp tone={tone} size="sm" className="mb-1.5 mr-2">
+        {label}
       </Stamp>
-      {m[3]}
+      <span className="block">{rest}</span>
     </>
   );
+}
+
+/** "R6 Over auto-pay limit: $4,800.00 is over…" -> the rule id, its name and the reason. */
+function splitReason(reason: string): { id: string | null; name: string | null; text: string } {
+  const m = reason.match(/^(R\d+) ([^:]+):\s*(.*)$/);
+  return m ? { id: m[1], name: m[2], text: m[3] } : { id: null, name: null, text: reason };
 }
 
 function ApprovalCard({ item }: { item: Pending }) {
@@ -131,6 +179,8 @@ function ApprovalCard({ item }: { item: Pending }) {
   }
 
   const ready = code.length === OWNER_CODE.digits && !busy && lockedFor === 0 && !!approval;
+  const coolLeft = cooling ? secondsLeft(approval!.coolingOffUntil!, now) : 0;
+  const coolTotal = cooling && approval?.approvedAt ? Math.max(1, (approval.coolingOffUntil! - approval.approvedAt) / 1000) : 1;
   return (
     <article
       className={cn("overflow-hidden rounded-xl border bg-surface", cooling ? "border-hold/40" : "border-border-strong")}
@@ -154,30 +204,36 @@ function ApprovalCard({ item }: { item: Pending }) {
       </div>
 
       <div className="space-y-4 px-5 py-5 sm:px-6">
-        {item.firedRules.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {item.firedRules.map((id) => (
-              <Tag key={id} title={ruleInfo(id)?.description}>
-                <b className="font-mono font-medium">{id}</b> {ruleInfo(id)?.name ?? "rule"}
-              </Tag>
-            ))}
+        {item.reasons.length > 0 && (
+          <div>
+            <p className="mb-2 font-mono text-[11.5px] font-medium uppercase tracking-[0.12em] text-owner-ink">Why it&apos;s waiting</p>
+            <ul className="space-y-2 text-[13.5px] leading-relaxed text-muted-foreground">
+              {item.reasons.map((r) => {
+                const { id, name, text } = splitReason(r);
+                return (
+                  <li key={r} className="flex items-start gap-2.5">
+                    {id && (
+                      <Tag tone="code" title={ruleInfo(id)?.description} className="mt-px shrink-0 font-mono text-[11.5px]">
+                        {id}
+                      </Tag>
+                    )}
+                    <span>
+                      {name && <b className="font-medium text-foreground">{name}. </b>}
+                      {text}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
-        {item.reasons.length > 0 && (
-          <ul className="space-y-1.5 text-[13.5px] leading-relaxed text-muted-foreground">
-            {item.reasons.map((r) => (
-              <li key={r} className="flex gap-2">
-                <span className="mt-[9px] size-1 shrink-0 rounded-full bg-white/30" aria-hidden="true" />
-                {r}
-              </li>
-            ))}
-          </ul>
-        )}
         {cooling && (
-          <p className="flex items-center gap-2 font-mono text-[14px] text-hold-ink" role="timer">
-            <Clock className="size-4" aria-hidden="true" />
-            Approved. Releases in {secondsLeft(approval!.coolingOffUntil!, now)}s. You can still cancel.
-          </p>
+          <div role="timer">
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+              <span className="block h-full rounded-full bg-hold transition-[width] duration-1000 ease-linear" style={{ width: `${Math.max(0, Math.min(100, (coolLeft / coolTotal) * 100))}%` }} />
+            </div>
+            <p className="mt-2 font-mono text-[13px] text-hold-ink">Releases in {coolLeft}s. You can still cancel with a fresh code.</p>
+          </div>
         )}
 
         <form className="space-y-3 border-t border-border pt-5" onSubmit={(e) => act(cooling ? "cancel" : "approve", e)}>
@@ -190,7 +246,7 @@ function ApprovalCard({ item }: { item: Pending }) {
               ? `Locked after too many wrong codes. Try again in ${lockedFor}s.`
               : !approval
                 ? "Preparing the approval request…"
-                : `${OWNER_CODE.digits} digits from the Countersign entry. Codes change every ${OWNER_CODE.periodSeconds} seconds.`}
+                : `${OWNER_CODE.digits} digits from the Countersign entry in your authenticator app. Each code works once.`}
           </p>
           {cooling ? (
             <button type="submit" className={buttonClass("danger", "h-11 w-full")} disabled={!ready}>
@@ -202,7 +258,7 @@ function ApprovalCard({ item }: { item: Pending }) {
                 Decline
               </button>
               <button type="submit" className={buttonClass("approve", "h-11")} disabled={!ready}>
-                Approve payment
+                Approve {item.amountCents != null ? formatCents(item.amountCents) : "payment"}
               </button>
             </div>
           )}
