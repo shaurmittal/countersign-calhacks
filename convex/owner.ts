@@ -11,9 +11,11 @@ const FEED_LENGTH = 20;
 export async function listPending(ctx: { db: QueryCtx["db"] }) {
   const recent = await ctx.db.query("cases").withIndex("by_createdAt").order("desc").take(RECENT_CASES_SCANNED);
   const waiting = recent.filter((c) => c.status === "AWAITING_OWNER");
-  return Promise.all(
+  const items = await Promise.all(
     waiting.map(async (c) => {
       const approval = await latestApproval(ctx, c._id);
+      // Declined or cancelled: the case closes once the pipeline re-runs; nothing is left to decide.
+      if (approval?.cancelledAt) return null;
       return {
         caseId: c._id,
         ref: caseRef(c._id),
@@ -25,6 +27,7 @@ export async function listPending(ctx: { db: QueryCtx["db"] }) {
       };
     }),
   );
+  return items.filter((item) => item !== null);
 }
 
 export const pending = query({

@@ -3,6 +3,7 @@ import { httpRouter } from "convex/server";
 import { getCaseStatus, lookupPolicy, recordCallbackOutcome, submitPaymentRequest } from "./channels/voice";
 import { caseStatus, inboundMessage, ownerApproval, pendingApprovals } from "./channels/agentBridge";
 import { receiveWebhook, verifyWebhook } from "./channels/whatsapp";
+import { transferHttp, transferOptions } from "./bank";
 import { inbound as emailInbound } from "./channels/email";
 
 const http = httpRouter();
@@ -25,5 +26,9 @@ http.route({ path: "/agent/message", method: "POST", handler: inboundMessage });
 http.route({ path: "/agent/case", method: "GET", handler: caseStatus });
 http.route({ path: "/agent/pending", method: "GET", handler: pendingApprovals });
 http.route({ path: "/agent/approval", method: "POST", handler: ownerApproval });
+
+// P1: Lumen Bank's public door (a hijacked agent's only way in; same checks as the Payer's)
+http.route({ path: "/bank/transfers", method: "POST", handler: transferHttp });
+http.route({ path: "/bank/transfers", method: "OPTIONS", handler: transferOptions });
 
 export default http;

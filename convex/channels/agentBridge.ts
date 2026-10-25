@@ -40,7 +40,8 @@ export const inboundMessage = httpAction(async (ctx, request) => {
     channel: "agent",
     fromAddress: sender,
     rawContent: text,
-    externalId: `agent:${msgId}`,
+    // Scoped to the sender: msgIds are visible to relays, and a reused one must not return another sender's case.
+    externalId: `agent:${sender}:${msgId}`,
   });
   return json({ caseId, ref: caseRef(caseId) });
 });

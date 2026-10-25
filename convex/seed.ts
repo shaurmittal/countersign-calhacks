@@ -17,6 +17,7 @@ import {
   type SeedVendorKey,
 } from "../shared/seedWorld";
 import { appendAudit } from "./audit";
+import { ensureBankSeeded } from "./bank";
 
 const TABLES = ["owner", "vendors", "invoices", "cases", "agentRuns", "callbacks", "approvals", "payments"] as const;
 
@@ -61,6 +62,9 @@ export const run = internalMutation({
     // alongside it. Both are no-ops when Moss isn't set up.
     await ctx.scheduler.runAfter(0, internal.agents.moss.syncVendorIndex, {});
     await ctx.scheduler.runAfter(0, internal.agents.moss.syncPolicyIndex, {});
+
+    // Lumen Bank: add payees for the new vendor ids (and the account if missing). Never wipes bank tables.
+    await ensureBankSeeded(ctx);
 
     await appendAudit(ctx, { actor: "system", action: "seed.loaded" });
   },

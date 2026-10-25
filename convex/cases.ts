@@ -7,6 +7,8 @@ import { caseStatus, channel, decision } from "./schema";
 import { appendAudit } from "./audit";
 import { LIMITS } from "../shared/config";
 import type { Channel, PaymentRequest, PolicyResult } from "../shared/types";
+import { isOwnerAddress, senderMatchesVendor } from "../shared/verification/vendorMatch";
+import { latestApproval } from "./lib/caseView";
 import { publicEmailSignals, type EmailSignals } from "../shared/email/inbound";
 
 type OpenArgs = {
@@ -88,6 +90,9 @@ export const claimPayment = internalMutation({
   handler: async (ctx, { caseId }) => {
     const c = await ctx.db.get(caseId);
     if (!c || c.payStartedAt || c.status === "CLOSED") return false;
+    // The run that reached PAY decided on an approval it loaded earlier; a cancel that landed since then
+    // wins. Checked inside the lock's own transaction, so there is no window between them.
+    if ((await latestApproval(ctx, caseId))?.cancelledAt) return false;
     await ctx.db.patch(caseId, { payStartedAt: Date.now(), updatedAt: Date.now() });
     await appendAudit(ctx, { caseId, actor: "policy", action: "payment.claimed" });
     return true;
@@ -114,6 +119,18 @@ export const applyConfirmedBankChange = internalMutation({
       ...(bank.account && { bankLast4: bank.account.slice(-4) }),
     };
     await ctx.db.patch(vendor._id, patch);
+    // Lumen Bank pays only to its own payee record, so the owner-approved change goes there too.
+    const payee = await ctx.db.query("bankPayees").withIndex("by_vendor", (q) => q.eq("vendorId", vendor._id)).first();
+    if (payee) {
+      await ctx.db.patch(payee._id, {
+        routing: patch.bankRouting ?? payee.routing,
+        accountLast4: patch.bankLast4 ?? payee.accountLast4,
+        status: "active",
+        pendingChange: undefined,
+        note: undefined,
+        updatedAt: Date.now(),
+      });
+    }
     await appendAudit(ctx, {
       caseId,
       actor: "owner",
@@ -131,6 +148,10 @@ export const markSenderKnownBad = internalMutation({
     if (!c?.vendorId) return;
     const vendor = await ctx.db.get(c.vendorId);
     if (!vendor) return;
+    // A denied request "from" the vendor's own number or the owner's address was spoofed (spec §8.2).
+    // Listing that address would make every later message from the real vendor read as known-bad.
+    const owner = await ctx.db.query("owner").first();
+    if (senderMatchesVendor(c.fromAddress, vendor) || isOwnerAddress(c.fromAddress, owner)) return;
     const known = vendor.knownBadSenders ?? [];
     if (known.includes(c.fromAddress)) return;
     await ctx.db.patch(vendor._id, { knownBadSenders: [...known, c.fromAddress] });

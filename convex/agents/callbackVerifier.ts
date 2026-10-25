@@ -38,6 +38,10 @@ export const start = internalAction({
     // Rehearsal only (scripts/live-scenarios.ts): leave the call "ringing" without dialing anyone, so
     // the script can record the vendor's answer with recordOutcome. Never set this on the demo deployment.
     if (process.env.CALLBACK_DIAL === "off") return;
+    // Armed before the dial, so a request that hangs instead of failing still ends as no_answer.
+    await ctx.scheduler.runAfter(CALL_DEADLINE_MS, internal.agents.callbackVerifier.expire, {
+      callbackId: prep.callbackId,
+    });
     try {
       const callSid = await placeOutboundCall({
         toNumber: prep.toNumber,
@@ -45,9 +49,6 @@ export const start = internalAction({
         ringingTimeoutSeconds: LIMITS.callbackAnswerTimeoutSeconds,
       });
       await ctx.runMutation(internal.agents.callbackVerifier.markDialed, { callbackId: prep.callbackId, callSid });
-      await ctx.scheduler.runAfter(CALL_DEADLINE_MS, internal.agents.callbackVerifier.expire, {
-        callbackId: prep.callbackId,
-      });
     } catch (err) {
       await ctx.runMutation(internal.agents.callbackVerifier.recordOutcome, {
         callbackId: prep.callbackId,

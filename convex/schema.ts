@@ -172,7 +172,7 @@ export default defineSchema({
     vendorId: v.id("vendors"),
     invoiceId: v.optional(v.id("invoices")),
     amountCents: v.number(),
-    rail: v.union(v.literal("ach_sandbox"), v.literal("mock")),
+    rail: v.union(v.literal("ach_sandbox"), v.literal("mock"), v.literal("lumen_bank")),
     idempotencyKey: v.string(), // `${vendorId}:${invoiceNumber}`
     externalId: v.optional(v.string()),
     status: v.union(v.literal("pending"), v.literal("sent"), v.literal("failed")),
@@ -180,6 +180,48 @@ export default defineSchema({
   })
     .index("by_case", ["caseId"])
     .index("by_idempotencyKey", ["idempotencyKey"]),
+
+  // ---- Lumen Bank (owner: P1): a sandbox bank that only moves money on a countersigned release ----
+  // Not in seed:run's wipe list; bank:ensureSeeded creates what's missing and never deletes.
+  bankAccounts: defineTable({
+    name: v.string(),
+    balanceCents: v.number(),
+  }),
+
+  bankPayees: defineTable({
+    vendorId: v.id("vendors"),
+    name: v.string(),
+    routing: v.string(),
+    accountLast4: v.string(),
+    status: v.union(v.literal("active"), v.literal("frozen")),
+    pendingChange: v.optional(v.object({ routing: v.string(), accountLast4: v.string(), requestedAt: v.number() })),
+    note: v.optional(v.string()), // shown on /bank, e.g. "Frozen: Countersign is calling Pixel & Pine"
+    updatedAt: v.number(),
+  }).index("by_vendor", ["vendorId"]),
+
+  bankTransfers: defineTable({
+    payeeId: v.optional(v.id("bankPayees")),
+    payeeName: v.string(),
+    amountCents: v.optional(v.number()),
+    memo: v.optional(v.string()),
+    status: v.union(v.literal("accepted"), v.literal("rejected")),
+    rejectCode: v.optional(v.string()),
+    rejectReason: v.optional(v.string()),
+    signatureHash: v.optional(v.string()), // sha256 of the countersignature, for display
+    payload: v.optional(v.any()), // the signed instruction as presented (accepted ones are public by design: replaying fails)
+    signature: v.optional(v.string()),
+    caseId: v.optional(v.id("cases")),
+    source: v.union(v.literal("countersign"), v.literal("unsigned_api")),
+    createdAt: v.number(),
+  })
+    .index("by_createdAt", ["createdAt"])
+    .index("by_status", ["status", "createdAt"])
+    .index("by_source", ["source", "createdAt"]),
+
+  bankNonces: defineTable({
+    nonce: v.string(),
+    usedAt: v.number(),
+  }).index("by_nonce", ["nonce"]),
 
   // Email attacks fired from /try (convex/channels/email.ts): the per-visitor rate limit and the visitor's list.
   emailSimulations: defineTable({

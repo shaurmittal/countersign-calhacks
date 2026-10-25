@@ -1,7 +1,7 @@
 // Double-entry journal for a payment (owner: P4). Spec §3.2: the mock ledger shows journal lines.
 // Pure: the Payer writes these into the audit log and the War Room renders them from the payment row.
 
-export type PaymentRail = "ach_sandbox" | "mock";
+export type PaymentRail = "ach_sandbox" | "mock" | "lumen_bank";
 
 export type JournalLine = {
   account: string;
@@ -12,6 +12,7 @@ export type JournalLine = {
 export const RAIL_LABEL: Record<PaymentRail, string> = {
   ach_sandbox: "ACH · Increase sandbox",
   mock: "Mock ledger",
+  lumen_bank: "Lumen Bank · countersigned",
 };
 
 export function formatCents(cents: number): string {

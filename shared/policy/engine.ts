@@ -193,8 +193,8 @@ export function decide(input: PolicyInput): PolicyResult {
       if (escalations.some((h) => h.rule === "R7")) {
         if (approval.coolingOffUntil == null) hit("R7", "HOLD", "Cooling-off has not started");
         else if (now < approval.coolingOffUntil) {
-          const secs = Math.ceil((approval.coolingOffUntil - now) / 1000);
-          hit("R7", "HOLD", `Cooling-off: ${secs}s left; the owner can still cancel`);
+          // No seconds in the text: the result is stored, and the War Room shows a live countdown beside it.
+          hit("R7", "HOLD", "Cooling-off running; the owner can still cancel");
         }
       }
     }
