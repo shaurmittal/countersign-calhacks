@@ -1,5 +1,6 @@
+"use client";
 // Small building blocks shared by the app pages: the verdict stamp, tags, section headings, buttons.
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { cn } from "./cn";
 
 export type Tone = "pay" | "block" | "hold" | "owner" | "code" | "neutral" | "quiet";
@@ -70,11 +71,17 @@ export function Tag({ tone = "neutral", children, title, className }: { tone?: T
   );
 }
 
-/** A section heading with an optional right-hand slot. */
+/** The page's colour (violet Approvals, ice Lumen Bank, amber Try), set by AppShell, read by its section labels. */
+export type PageTone = "accent" | "code" | "owner";
+export const PageToneContext = createContext<PageTone>("accent");
+const SECTION_INK: Record<PageTone, string> = { accent: "text-accent", code: "text-code-ink", owner: "text-owner-ink" };
+
+/** A section label in the War Room's voice: mono capitals, letter-spaced, in the page's colour. */
 export function SectionHead({ title, children, className }: { title: ReactNode; children?: ReactNode; className?: string }) {
+  const tone = useContext(PageToneContext);
   return (
     <div className={cn("mb-3 flex items-center justify-between gap-3", className)}>
-      <h2 className="text-[13px] font-medium text-foreground">{title}</h2>
+      <h2 className={cn("font-mono text-[12px] font-medium uppercase tracking-[0.12em]", SECTION_INK[tone])}>{title}</h2>
       {children && <div className="flex items-center gap-2 text-right text-[12px] text-muted-foreground max-sm:[&>span:not(.font-mono)]:hidden">{children}</div>}
     </div>
   );

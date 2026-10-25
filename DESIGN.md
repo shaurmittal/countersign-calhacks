@@ -372,6 +372,7 @@ Quiet, compact, and decisive only when the action moves money.
 ### Navigation
 - **Top bar (every page):** a sticky 56px bar, 85% black with a backdrop blur: the logo (amber check) and wordmark, then War Room, Approvals, Lumen Bank, Try to scam it and The film as 32px items with 15px line icons. The active page sits in an 8% white pill with a 10% ring that glides between items on a shared-layout spring. The approvals count is a violet badge. At the right, an amber "Call" pill with the line in mono.
 - **Mobile:** the same bar, then a scrolling row of 32px fully rounded pills; active is a 10% white wash.
+- **Section labels (every page, and the landing's kickers):** the War Room's voice: Geist Mono 12px medium capitals at 0.12em, in the page's colour (violet on Approvals, ice on Lumen Bank, amber on Try, amber or ice on the landing). Headlines everywhere are Geist 600 at -0.035 to -0.04em; nothing on the app or the landing is heavier than 600 except verdict stamps.
 - **Page header (Approvals, Lumen Bank, Try):** a 44px icon tile in the page's colour (violet, ice, amber) beside a 32px title and a 14.5px subtitle; content is centred at 1240px (1480px for /try). The War Room has no header: the stage is the page.
 
 ### War Room composition

@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 import { api } from "../../convex/_generated/api";
 import { cn } from "./cn";
 import { spring } from "./motion";
+import { PageToneContext } from "./primitives";
 import "./app.css";
 
 const LINE = "+1 (256) 215-6932";
@@ -50,7 +51,7 @@ export function AppShell(props: {
           </div>
           {props.actions && <div className="flex shrink-0 items-center gap-2">{props.actions}</div>}
         </header>
-        {props.children}
+        <PageToneContext.Provider value={props.tone ?? "accent"}>{props.children}</PageToneContext.Provider>
       </div>
     </Frame>
   );
