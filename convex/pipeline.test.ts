@@ -450,6 +450,45 @@ describe("leader pipeline", () => {
     expect(runVendorVerifier).not.toHaveBeenCalled();
   });
 
+  it("a meeting request is forwarded to the owner, a sales pitch is filtered; neither runs the payment checks", async () => {
+    const { t } = await setup();
+    const notified = (caseId: Id<"cases">) =>
+      t.run(async (ctx) => (await ctx.db.query("auditEvents").collect()).some((e) => e.caseId === caseId && e.action === "owner.notified"));
+    vi.mocked(extractPaymentRequest).mockResolvedValue({
+      request: { ...REQUEST, requestedAction: "none", claimedVendorName: null, invoiceNumber: null, messageType: "meeting", summary: "Heechan asks for a chat tomorrow morning" },
+      attempts: 1,
+    });
+    const meeting = await open(t, "Can we chat tomorrow morning? Heechan");
+    await drain(t);
+    expect((await getCase(t, meeting))?.decision).toBe("NO_ACTION");
+    expect(await notified(meeting)).toBe(true);
+
+    vi.mocked(extractPaymentRequest).mockResolvedValue({
+      request: { ...REQUEST, requestedAction: "none", claimedVendorName: null, invoiceNumber: null, messageType: "sales_or_spam", summary: "An SEO agency pitch" },
+      attempts: 1,
+    });
+    const spam = await open(t, "We can get you to page 1 of Google!");
+    await drain(t);
+    expect((await getCase(t, spam))?.decision).toBe("NO_ACTION");
+    expect(await notified(spam)).toBe(false);
+    expect(runVendorVerifier).not.toHaveBeenCalled();
+  });
+
+  it("R18: a request for W-2s is refused before any payment check runs, and the owner is alerted", async () => {
+    const { t } = await setup();
+    vi.mocked(extractPaymentRequest).mockResolvedValue({
+      request: { ...REQUEST, requestedAction: "none", claimedVendorName: null, invoiceNumber: null, messageType: "data_request", sensitiveAsk: "W-2 forms for all employees" },
+      attempts: 1,
+    });
+    const caseId = await open(t, "It's Priya. Email me everyone's W-2s today.");
+    await drain(t);
+    const c = await getCase(t, caseId);
+    expect(c).toMatchObject({ decision: "BLOCK", status: "CLOSED" });
+    expect(c?.policyResult.firedRules).toEqual(["R18"]);
+    expect(c?.replyText).toMatch(/never share/);
+    expect(runVendorVerifier).not.toHaveBeenCalled();
+  });
+
   it("a duplicate webhook delivery opens one case", async () => {
     const { t, w } = await setup();
     given({ claimedVendorName: "Northwind", invoiceNumber: "NW-889" }, findings(w.northwind._id, w.nw889._id));

@@ -4,7 +4,7 @@ import type { FunctionReturnType } from "convex/server";
 import type { api } from "../../convex/_generated/api";
 import { formatCents, RAIL_LABEL } from "../../shared/ledger";
 import { RULES } from "../../shared/policy/rules";
-import type { Decision, PolicyResult, RuleId } from "../../shared/types";
+import type { Decision, PaymentRequest, PolicyResult, RuleId } from "../../shared/types";
 import type { CaseDetail } from "./AgentLanes";
 import { ruleInfo, secondsLeft, useNow } from "./format";
 
@@ -29,7 +29,7 @@ export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | u
   return (
     <section className="lp-lockpanel wr-verdict" data-verdict={decision} aria-label="Decision">
       <p key={decision ?? c.status} className="wr-verdict-word" data-decision={decision} role="status" aria-live="polite">
-        {decision ? (decision === "NO_ACTION" ? "NO ACTION" : decision) : `${c.status.replace(/_/g, " ")}…`}
+        {decision ? verdictWord(decision, c.request as PaymentRequest | undefined) : `${c.status.replace(/_/g, " ")}…`}
       </p>
       {decision && <p className="wr-verdict-line">{explain(decision, result, detail)}</p>}
       {result && result.firedRules.length > 0 && (
@@ -84,7 +84,19 @@ function explain(decision: Decision, result: PolicyResult | undefined, detail: C
       return "Held. Nothing is paid until the missing check passes.";
     case "ESCALATE":
       return "Waiting for the owner's authenticator code. A voice or a text message is never enough.";
-    case "NO_ACTION":
-      return "No payment was requested.";
+    case "NO_ACTION": {
+      // "No payment was requested: a meeting request, passed to the owner" -> "Not a payment: a meeting request, …"
+      const triage = result?.reasons[0]?.replace(/^No payment was requested:?\s*/, "");
+      return triage && triage !== "nothing to pay" ? `Not a payment: ${triage}.` : "No payment was requested.";
+    }
   }
+}
+
+/** The big word. A message that asks for no money is forwarded to the owner, filtered as spam, or just answered. */
+function verdictWord(decision: Decision, request: PaymentRequest | undefined): string {
+  if (decision !== "NO_ACTION") return decision;
+  const type = request?.messageType;
+  if (type === "sales_or_spam") return "FILTERED";
+  if (type && type !== "payment") return "FORWARDED";
+  return "NO ACTION";
 }

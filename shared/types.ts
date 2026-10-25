@@ -38,7 +38,25 @@ export type PaymentRequest = {
   parseFailed?: boolean;
   /** The message asks for more than one payment. Each must arrive as its own request; forces HOLD. */
   multipleRequests?: boolean;
+  /** What kind of message it is, payment or not (Intake Parser). Absent on requests parsed before triage. */
+  messageType?: MessageType;
+  /** One line on what the sender wants, for the owner's summary and the War Room. */
+  summary?: string;
+  /** Something sensitive the message asks for (passwords, codes, W-2s, a login link). R18 refuses it. */
+  sensitiveAsk?: string | null;
 };
+
+/** How a message is triaged. Only "payment" can lead to money; the rest is forwarded, answered or filtered. */
+export type MessageType =
+  | "payment"
+  | "meeting"
+  | "question"
+  | "vendor_update"
+  | "invoice_dispute"
+  | "sales_or_spam"
+  | "phishing"
+  | "data_request"
+  | "other";
 
 export type CaseStatus =
   | "RECEIVED"
@@ -188,7 +206,8 @@ export type RuleId =
   | "R14"
   | "R15"
   | "R16"
-  | "R17";
+  | "R17"
+  | "R18";
 
 export type PolicyInput = {
   request: PaymentRequest;

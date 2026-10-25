@@ -47,6 +47,13 @@ export async function runIntake(
 
 export function summarizeIntake(r: PaymentRequest): string {
   if (r.parseFailed) return "Could not parse: HOLD";
+  // Not a payment: what it is and what they want ("meeting · Heechan asks for a chat tomorrow morning").
+  if (r.requestedAction === "none" && r.messageType && r.messageType !== "payment") {
+    const parts = [r.messageType.replace("_", " ")];
+    if (r.summary) parts.push(r.summary);
+    if (r.sensitiveAsk) parts.push(`⚠ asks for ${r.sensitiveAsk}`);
+    return parts.join(" · ");
+  }
   const parts: string[] = [r.requestedAction];
   if (r.claimedVendorName) parts.push(r.claimedVendorName);
   if (r.amountCents != null) parts.push(`$${(r.amountCents / 100).toFixed(2)}`);
@@ -54,5 +61,6 @@ export function summarizeIntake(r: PaymentRequest): string {
   if (r.newBankDetails) parts.push(`new bank …${(r.newBankDetails.account ?? r.newBankDetails.routing ?? "").slice(-4)}`);
   if (r.claimedSenderRole !== "unknown") parts.push(`claims: ${r.claimedSenderRole}`);
   if (r.injectionAttempt) parts.push("⚠ injection");
+  if (r.sensitiveAsk) parts.push(`⚠ asks for ${r.sensitiveAsk}`);
   return parts.join(" · ");
 }

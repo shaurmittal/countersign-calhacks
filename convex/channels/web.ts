@@ -3,7 +3,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import { LIMITS } from "../../shared/config";
-import type { PolicyResult } from "../../shared/types";
+import type { PaymentRequest, PolicyResult } from "../../shared/types";
 import { openCase } from "../cases";
 import { senderOverLimit } from "../lib/rateLimit";
 
@@ -52,6 +52,7 @@ export const mine = query({
           reply: c.replyText ?? null,
           vendorName: vendor?.name ?? null,
           rules: policy?.firedRules ?? [],
+          triage: (c.request as PaymentRequest | undefined)?.messageType ?? null,
           createdAt: c.createdAt,
           decidedAt: settled && c.decision ? c.updatedAt : null,
         };
@@ -59,3 +60,27 @@ export const mine = query({
     );
   },
 });
+
+/**
+ * Who Lumen Labs pays, for /try's "vendor book" panel, so a visitor can invent attacks against real names.
+ * Names, open invoices and typical amounts only: never a phone number or bank detail. `realPhone` says whether
+ * the number on file rings a person (a teammate) or is a fictional 555 number nobody answers.
+ */
+export const vendorBook = query({
+  args: {},
+  handler: async (ctx) => {
+    const [vendors, invoices] = await Promise.all([ctx.db.query("vendors").collect(), ctx.db.query("invoices").collect()]);
+    return vendors
+      .map((v) => ({
+        name: v.name,
+        typicalCents: v.typicalAmountRange,
+        cadence: v.cadence,
+        realPhone: !/^\+?1?555/.test(v.phoneOnFile.replace(/[^\d+]/g, "")),
+        openInvoices: invoices
+          .filter((i) => i.vendorId === v._id && i.status === "open")
+          .map((i) => ({ number: i.number, amountCents: i.amountCents })),
+      }))
+      .sort((a, b) => Number(b.realPhone) - Number(a.realPhone) || a.name.localeCompare(b.name));
+  },
+});
+

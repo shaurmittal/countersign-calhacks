@@ -110,10 +110,14 @@ export async function composeReply(args: {
   result: PolicyResult;
   biz: BusinessContext;
   ctx: ReplyContext;
+  /** The Intake Parser's one-line summary of what the sender wants. */
+  summary?: string;
 }): Promise<{ text: string; source: "claude" | "template" }> {
   const fallback = { text: templateReply(args.result, args.ctx), source: "template" as const };
-  // Fixed text where there is nothing to explain, and for the callback line the demo relies on.
-  if (args.result.decision === "NO_ACTION" || args.result.decision === "PAY" || args.ctx.callbackInProgress) return fallback;
+  // Fixed text for a payment and for the callback line the demo relies on. A message that asks for no money
+  // gets a written reply (a meeting request deserves a real answer), unless it's a bare greeting or spam.
+  const fixedNoAction = args.result.decision === "NO_ACTION" && (!args.ctx.messageType || args.ctx.messageType === "payment" || args.ctx.messageType === "sales_or_spam");
+  if (fixedNoAction || args.result.decision === "PAY" || args.ctx.callbackInProgress) return fallback;
   try {
     const response = await withinBudget(anthropic().beta.messages.create({
       model: MODEL,
@@ -132,6 +136,8 @@ export async function composeReply(args: {
             vendorName: args.ctx.vendorName,
             paymentSent: args.ctx.paymentSent,
             callbackInProgress: args.ctx.callbackInProgress,
+            messageType: args.ctx.messageType,
+            summary: args.summary,
           }),
         },
       ],

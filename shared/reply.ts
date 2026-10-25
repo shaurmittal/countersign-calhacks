@@ -1,6 +1,6 @@
 // Requester-facing replies. Claude writes them (convex/lib/claude.ts); these templates are the
 // fallback, and isSafeReply() rejects any model reply that over-promises or leaks numbers.
-import type { PolicyResult } from "./types";
+import type { MessageType, PolicyResult } from "./types";
 
 export type ReplyContext = {
   company: string;
@@ -8,7 +8,26 @@ export type ReplyContext = {
   invoiceNumber: string | null;
   paymentSent: boolean;
   callbackInProgress: boolean;
+  /** How the Intake Parser triaged the message; shapes the reply when nothing is paid. */
+  messageType?: MessageType;
 };
+
+/** Replies to messages that ask for no money, by what they are. */
+function triageReply(type: MessageType | undefined, company: string): string {
+  switch (type) {
+    case "meeting":
+      return `Thanks for reaching out. I've passed your request to the owner of ${company}, who will reply to you directly.`;
+    case "question":
+    case "vendor_update":
+    case "invoice_dispute":
+    case "other":
+      return `Thanks for your message. I've passed it to the owner of ${company}, who will get back to you directly.`;
+    case "sales_or_spam":
+      return `Thanks, but ${company} isn't looking for this right now.`;
+    default:
+      return `Hi! This is Countersign, the payments assistant for ${company}. Every payment request sent here is verified before any money moves.`;
+  }
+}
 
 export function templateReply(result: PolicyResult, ctx: ReplyContext): string {
   const vendor = ctx.vendorName ?? "the vendor";
@@ -17,12 +36,15 @@ export function templateReply(result: PolicyResult, ctx: ReplyContext): string {
 
   switch (result.decision) {
     case "NO_ACTION":
-      return `Hi! This is Countersign, the payments assistant for ${ctx.company}. Every payment request sent here is verified before any money moves.`;
+      return triageReply(ctx.messageType, ctx.company);
     case "PAY":
       return ctx.paymentSent
         ? `Thanks. ${ctx.invoiceNumber ? `Invoice ${ctx.invoiceNumber}` : "The invoice"} from ${vendor} has been paid to the account on file.`
         : "We've received your request and are verifying it before any payment is made.";
     case "BLOCK": {
+      if (fired.has("R18")) {
+        return "We never share passwords, codes, tax or personal data, and we don't log in through links we're sent. The business owner has been notified.";
+      }
       let why = "";
       if (fired.has("R9")) why = " Countersign never pays with gift cards, crypto or wires to personal accounts.";
       else if (fired.has("R8")) why = " The payee failed a sanctions check.";
@@ -61,8 +83,12 @@ function overPromises(text: string): boolean {
   return text.split(/(?<=[.!?])\s+/).some((sentence) => !HEDGED.test(sentence) && OVER_PROMISE.test(sentence));
 }
 
+// Countersign can pass a message on; it can't accept a meeting or answer for the owner.
+const COMMITS_OWNER = /\b(is|has been|are) (scheduled|booked|confirmed)\b|\bsee you (at|on|tomorrow|then)\b|\b(works|is fine|sounds good) for (her|him|them|the owner)\b|\bwill (meet|call) you (at|on|tomorrow)\b/i;
+
 export function isSafeReply(text: string, result: PolicyResult, paymentSent: boolean): boolean {
   if (!text.trim() || text.length > 480) return false;
+  if (result.decision === "NO_ACTION" && COMMITS_OWNER.test(text)) return false;
   if (LONG_NUMBER.test(text)) return false;
   const mayClaimPayment = result.decision === "PAY" && paymentSent;
   // "will be released after cooling-off" is the one legitimate future-tense promise.
