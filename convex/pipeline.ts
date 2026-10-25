@@ -32,6 +32,8 @@ import { composeReply } from "./lib/claude";
 import { EMPTY_REQUEST, runIntake, summarizeIntake } from "./agents/intake";
 import { runVendorVerifier } from "./agents/vendorVerifier";
 import { crsLaneText } from "../shared/verification/crs";
+import { authBadge } from "../shared/email/auth";
+import type { EmailSignals } from "../shared/email/inbound";
 import { runRiskAnalyst } from "./agents/riskAnalyst";
 import { runPayer } from "./agents/payer";
 
@@ -82,14 +84,33 @@ function toApproval(a: Doc<"approvals"> | null): ApprovalState | null {
 /** One line for the Vendor Verifier's War Room lane, e.g. "Vendor matched (0.95) · sender not on file · new bank ≠ file · invoice found". */
 function summarizeVendor(f: VendorFindings): string {
   const crs = crsLaneText(f.crs);
-  if (!f.vendorId) return ["No vendor match in the vendor book", crs].filter(Boolean).join(" · ");
+  if (!f.vendorId) return ["No vendor match in the vendor book", emailLaneText(f.emailAuth), crs].filter(Boolean).join(" · ");
   const parts = [`Vendor matched (${f.matchConfidence.toFixed(2)})`];
+  const email = emailLaneText(f.emailAuth);
+  if (email) parts.push(email);
   parts.push(f.senderOnFile ? "sender on file" : "sender not on file");
   if (f.bankMatches === false) parts.push("new bank ≠ file");
   else if (f.bankMatches === true) parts.push("bank matches file");
   parts.push(f.alreadyPaidAt != null ? "invoice already paid" : f.matchingInvoiceId ? "invoice found" : "no matching invoice");
   if (f.ofacHit) parts.push("OFAC HIT");
   if (crs) parts.push(crs);
+  return parts.join(" · ");
+}
+
+/** "email authenticated", "FORGED sender: failed DMARC", "replies go to x.example": what R17 will read. */
+function emailLaneText(a: VendorFindings["emailAuth"]): string | null {
+  if (!a) return null;
+  const parts = [
+    a.spoofsOnFile
+      ? `FORGED sender (${authBadge(a)})`
+      : a.verdict === "pass"
+        ? "email authenticated"
+        : a.verdict === "fail"
+          ? `email failed authentication (${authBadge(a)})`
+          : "email sender unverified",
+  ];
+  if (a.replyToDomain) parts.push(`replies go to ${a.replyToDomain}`);
+  if (a.displayNameClaims) parts.push(`display name poses as ${a.displayNameClaims}`);
   return parts.join(" · ");
 }
 
@@ -121,7 +142,11 @@ export const advance = internalAction({
     let request = c.request as PaymentRequest | undefined;
     if (!request) {
       request =
-        (await safely(() => withAgentRun(ctx, caseId, "intake", () => runIntake(ctx, c, owner), summarizeIntake))) ??
+        (await safely(() =>
+          withAgentRun(ctx, caseId, "intake", () => runIntake(ctx, c, owner), (r) =>
+            (c.emailSignals as EmailSignals | undefined)?.pdf ? `${summarizeIntake(r)} · read the attached PDF` : summarizeIntake(r),
+          ),
+        )) ??
         EMPTY_REQUEST;
       await ctx.runMutation(internal.cases.update, { caseId, request, status: "PARSED", actor: "intake" });
     }

@@ -7,8 +7,10 @@ Full spec: [docs/spec.md](docs/spec.md).
 **Telephony is Cartesia only (no Twilio, no SMS).** Judges call the Countersign line or type at
 `/try`. Agent prompts, tool configs and numbers: [docs/cartesia-setup.md](docs/cartesia-setup.md).
 
-**WhatsApp** (Meta Cloud API) is a second text channel. Its free test number reaches only 5
-registered phones. Setup: [docs/whatsapp-setup.md](docs/whatsapp-setup.md).
+**Email** (Postmark Inbound) is the third channel: forward an invoice or write to the Countersign
+address. A forged sender can't count as a vendor or the owner (rule R17), and Claude reads attached
+PDF invoices. Countersign never sends email; its reply shows as an unsent draft. Setup:
+[docs/email-setup.md](docs/email-setup.md).
 
 ## Setup (everyone)
 
@@ -20,8 +22,8 @@ npm run seed            # loads the fictional Lumen Labs world
 npm run dev             # War Room at http://localhost:3000 (second terminal)
 npm test                # Policy Engine, intake, audit chain + 30-scenario answer key
 npm run scenarios       # prints the answer-key table and the pitch line (no API calls)
-npm run eval:intake     # same 30 scenarios through real Claude intake (needs ANTHROPIC_API_KEY locally)
-npm run rehearse        # same 30 scenarios through a DEPLOYED dev pipeline (wipes it; setup in scripts/live-scenarios.ts)
+npm run eval:intake     # same 39 scenarios through real Claude intake (needs ANTHROPIC_API_KEY locally)
+npm run rehearse        # same 39 scenarios through a DEPLOYED dev pipeline (wipes it; setup in scripts/live-scenarios.ts)
 npm run typecheck
 ```
 
@@ -136,6 +138,14 @@ ESCALATE only; it never lifts a BLOCK or HOLD. PAY requires R12's positive check
 | R14 | Parse failure, several payments in one message, verifier/risk didn't run, non-USD (HOLD); CRS unavailable, or a high email-risk score for a sender not on file (ESCALATE) | HOLD / ESCALATE |
 | R15 | Injection attempt (model OR regex prescan) | ESCALATE: never auto-paid |
 | R16 | The sender's phone, email or domain, a domain in the message, or the bank account is on the owner's deny list | BLOCK (the owner removes the entry to allow it) |
+| R17 | Email only. The From address is a vendor's or the owner's but failed authentication (forged) | BLOCK |
+| R17 | Email failed authentication for its own domain, or its display name poses as another address | ESCALATE |
+| R17 | Replies go to a different domain than the sender's | HOLD + callback → confirmed: OK, no_answer: ESCALATE |
+
+An email address counts as on file (R3) only when the receiving mail server says its domain sent it:
+DMARC pass, or DKIM/SPF pass aligned with the From domain. Only the topmost authentication headers
+count, because anything further down travelled with the message and the sender could have written it.
+This is checked in the Vendor Verifier and again inside `decide()`.
 
 ### Owner block and trust lists
 
@@ -247,11 +257,13 @@ Convex is the whole backend: the database, every agent step, the timers and the 
 | --- | --- |
 | Phone calls: the Countersign line and the vendor callback are real Cartesia calls | The company (Lumen Labs), its owner and its vendors are fictional |
 | Claude parses every request and writes every reply | Teammates play the owner and the vendor on their own phones |
-| The Policy Engine, rules R1-R15 and the 30-scenario answer key | Money: the mock ledger, or the Increase **sandbox** (no real funds) |
+| The Policy Engine, rules R1-R17 and the 39-scenario answer key | Money: the mock ledger, or the Increase **sandbox** (no real funds) |
 | Owner step-up: real TOTP codes from an authenticator app, checked server-side | Vendor bank accounts store only routing + last 4; the sandbox uses a stand-in account number ending in those 4 digits |
 | Hash-chained audit log, recomputed live in the War Room | No KYB or OFAC screening: the team's CRS account has neither product, so R8 never fires live |
 | CRS sandbox: AtData Fraud Finder scores the email of any sender not in the vendor book; a high score escalates (R14) | Seed and scenario addresses use reserved `*.example` domains, which AtData always scores 100, so senders on file are not screened |
 | Fetch.ai agents on Agentverse speaking the Chat Protocol; the owner flow in ASI:One | The vendor billing agent is ours, playing a compromised vendor |
+| Email: real mail to the Postmark inbound address, its real SPF/DKIM/DMARC results, attached PDFs read by Claude | The five email attacks on /try are crafted webhook payloads (forged headers can't be sent from a judge's inbox); they run through the same parser and pipeline and are labelled "Simulated" |
+| | Replies to email are drafts shown in the War Room; nothing is ever sent |
 
 Every lane in the War Room is a real database row written by the agent that did the work.
 The rail used for each payment (mock ledger or Increase sandbox) is shown on the payment.

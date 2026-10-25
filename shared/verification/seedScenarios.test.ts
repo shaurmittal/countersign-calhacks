@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_REQUEST, SCENARIOS, summaryLine, type Scenario } from "../../scenarios/run";
 import { DEMO_POLICY } from "../config";
 import { decide } from "../policy/engine";
+import { AUTHENTICATED } from "../../scenarios/world";
 import { buildSeedBook } from "../seedWorld";
 import type { PaymentRequest, PolicyResult, RiskFindings, RiskFlag, VendorFindings } from "../types";
 import { assessRisk } from "./assessRisk";
@@ -40,10 +41,17 @@ function bookFor(s: Scenario): VerificationBook {
   return book;
 }
 
-function findingsAndRisk(m: Message, request: PaymentRequest, book: VerificationBook, receivedAt = RECEIVED_AT) {
+function findingsAndRisk(
+  m: Message & Pick<Scenario, "world">,
+  request: PaymentRequest,
+  book: VerificationBook,
+  receivedAt = RECEIVED_AT,
+) {
   const caseInfo: CaseInfo = { channel: m.channel, fromAddress: m.from, rawContent: m.text, receivedAt };
+  // What the receiving mail server reported (convex/channels/email.ts); email scenarios default to authenticated.
+  const emailAuth = m.channel === "email" ? { ...AUTHENTICATED, ...m.world?.emailAuth } : undefined;
   return {
-    findings: verifyVendor({ request, fromAddress: m.from, book }),
+    findings: verifyVendor({ request, fromAddress: m.from, book, emailAuth }),
     risk: assessRisk({ request, caseInfo, book }),
   };
 }
@@ -148,7 +156,10 @@ describe("safety properties over the answer key", () => {
         findings.senderOnFile &&
         findings.bankMatches !== false &&
         !!findings.matchingInvoiceId &&
-        risk?.flags.length === 0;
+        risk?.flags.length === 0 &&
+        // Email scams can be caught by the headers alone: a diverted Reply-To or a display name posing as someone.
+        !findings.emailAuth?.replyToDomain &&
+        !findings.emailAuth?.displayNameClaims;
       expect(looksClean, s.id).toBe(false);
     }
   });
@@ -189,7 +200,12 @@ describe("CRS screening on the answer key", () => {
   );
 
   it("screens only strangers' emails (sender or message), never the owner or a vendor's address on file", () => {
-    expect(screened.map((s) => s.id).sort()).toEqual(["google-workspace-lookalike", "northwind-lookalike-invoice", "ofac-hit"]);
+    expect(screened.map((s) => s.id).sort()).toEqual([
+      "email-display-name-spoof",
+      "google-workspace-lookalike",
+      "northwind-lookalike-invoice",
+      "ofac-hit",
+    ]);
   });
 
   it("an unknown email written into a legitimate request escalates it instead of paying", () => {

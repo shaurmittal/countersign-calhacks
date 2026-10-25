@@ -1,9 +1,9 @@
 import type { RuleId } from "../types";
 
 /**
- * Rule catalogue from spec §5 (R1-R12), three rules for spec §8 edge cases (R13-R15) and R16 for
- * the owner's deny list. The UI and the audit log show these descriptions. `overridable: false`
- * means even the owner's step-up approval cannot release the payment.
+ * Rule catalogue from spec §5 (R1-R12), three rules for spec §8 edge cases (R13-R15), R16 for the
+ * owner's deny list and R17 for email authentication. The UI and the audit log show these
+ * descriptions. `overridable: false` means even the owner's step-up approval cannot release the payment.
  */
 export const RULES: Record<RuleId, { name: string; description: string; overridable: boolean }> = {
   R1: { name: "Unknown vendor", description: "No vendor-book match", overridable: true },
@@ -22,4 +22,5 @@ export const RULES: Record<RuleId, { name: string; description: string; overrida
   R14: { name: "Cannot verify", description: "Missing or unavailable data (parse failure, CRS outage, non-USD)", overridable: true },
   R15: { name: "Injection attempt", description: "Message tries to instruct the system; never auto-paid", overridable: true },
   R16: { name: "Owner deny list", description: "Sender, a domain in the message or the bank account is on the owner's deny list", overridable: true },
+  R17: { name: "Email not authenticated", description: "Forged or unverifiable sender, replies diverted, or a display name posing as someone else", overridable: true },
 };

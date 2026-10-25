@@ -66,6 +66,8 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   color: var(--jc-muted); border: 1px dashed var(--jc-line); border-radius: 8px; padding: 8px; }
 .jc-url { font-size: 11px; margin-top: 6px; word-break: break-all; max-width: 112px; }
 .jc-muted { color: var(--jc-muted); font-size: 13px; margin: 6px 0 0; }
+.jc-card h2.jc-or { margin-top: 16px; }
+.jc-email { display: block; font-size: 15px; font-weight: 600; color: var(--jc-ink); text-decoration: none; overflow-wrap: anywhere; }
 .jc-scams { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; }
 .jc-scams li { line-height: 1.4; }
 .jc-scams strong { display: block; }

@@ -49,6 +49,11 @@ body:has(.wr-root) { overflow: hidden; }
 .wr-root .wr-caption-caller .lp-caption-who { color: var(--lp-red); }
 .wr-root .wr-caption-caller .lp-caption-text { font-size: clamp(15px, 1vw, 18px); color: var(--lp-soft); display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; min-height: 0; }
 .wr-root .wr-caption-reply { padding-top: 8px; border-top: 1px solid var(--lp-line); }
+.wr-root .wr-email-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.wr-root .wr-auth { font: 600 10.5px/1 var(--lp-font-mono); letter-spacing: .04em; text-transform: none; padding: 4px 7px; border-radius: 6px; border: 1px solid var(--lp-line); color: var(--lp-soft); background: transparent; }
+.wr-root .wr-auth[data-verdict="pass"] { color: var(--lp-green); border-color: color-mix(in srgb, var(--lp-green) 45%, transparent); }
+.wr-root .wr-auth[data-verdict="fail"] { color: var(--lp-red); border-color: color-mix(in srgb, var(--lp-red) 55%, transparent); }
+.wr-root .wr-auth[data-verdict="unknown"] { color: var(--lp-amber); border-color: color-mix(in srgb, var(--lp-amber) 50%, transparent); }
 .wr-root .wr-caption-reply .lp-caption-text { font-size: clamp(18px, 1.3vw, 25px); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 0; }
 
 /* Laptop screens: the 1000x620 room gets squashed, so drop the tech lines and shrink the orbs. */

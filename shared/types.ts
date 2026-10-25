@@ -83,6 +83,28 @@ export type VendorFindings = {
   denyListHits?: DenyListHit[];
   /** senderOnFile is true only because the owner's trust list ties this sender to the vendor. It satisfies R3, nothing else. */
   trustedByOwner?: boolean;
+  /** Email cases only: did the From domain really send it (shared/email/auth.ts). R17 reads it. */
+  emailAuth?: EmailAuthFinding;
+};
+
+export type AuthResult = "pass" | "fail" | "softfail" | "none" | "unknown";
+
+/** Email authentication as the receiving server reported it (topmost headers only). */
+export type EmailAuth = {
+  spf: AuthResult;
+  dkim: AuthResult;
+  dmarc: AuthResult;
+  /** pass: DMARC pass, or DKIM/SPF pass aligned with the From domain. fail: the domain's checks failed. */
+  verdict: "pass" | "fail" | "unknown";
+  /** Domain replies would go to, only when it isn't the From domain. */
+  replyToDomain: string | null;
+  /** An address or domain written in the display name that isn't the real From domain. */
+  displayNameClaims: string | null;
+};
+
+export type EmailAuthFinding = EmailAuth & {
+  /** The From address is on file (a vendor's or the owner's) but authentication failed: a forgery. */
+  spoofsOnFile: boolean;
 };
 
 /** The owner's allow and block lists (convex/senderLists.ts). Deny only tightens; trust only satisfies R3. */
@@ -165,7 +187,8 @@ export type RuleId =
   | "R13"
   | "R14"
   | "R15"
-  | "R16";
+  | "R16"
+  | "R17";
 
 export type PolicyInput = {
   request: PaymentRequest;

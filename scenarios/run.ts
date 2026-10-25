@@ -35,7 +35,7 @@ export const DEFAULT_REQUEST: PaymentRequest = {
 export const SCENARIOS = data.scenarios as Scenario[];
 
 export function runScenario(s: Scenario, request: PaymentRequest = { ...DEFAULT_REQUEST, ...s.request }): PolicyResult {
-  const { vendor, findings, invoice } = referenceFindings(request, s.from, s.world);
+  const { vendor, findings, invoice } = referenceFindings(request, s.from, s.world, s.channel);
   return decide({
     request,
     vendor,

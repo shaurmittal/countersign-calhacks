@@ -17,7 +17,7 @@ import { promisify } from "node:util";
 import { Secret, TOTP } from "otpauth";
 import { OWNER_CODE } from "../shared/config";
 import { SCENARIOS, type Scenario } from "../scenarios/run";
-import { OWNER_PHONE } from "../scenarios/world";
+import { AUTHENTICATED, OWNER_PHONE } from "../scenarios/world";
 
 const run = promisify(execFile);
 const CASE_TIMEOUT_MS = 120_000;
@@ -158,7 +158,26 @@ async function main() {
       await drive(caseId, {}, totpSecret!);
     }
 
-    const { caseId } = await convex<{ caseId: string }>("cases:open", { channel: s.channel, fromAddress: s.from, rawContent: s.text });
+    // Email scenarios carry what the receiving mail server reported (R17 reads it); the default is authenticated.
+    const emailSignals =
+      s.channel === "email"
+        ? {
+            subject: "",
+            fromDomain: s.from.split("@")[1] ?? "",
+            fromName: null,
+            messageId: null,
+            auth: { ...AUTHENTICATED, ...s.world?.emailAuth },
+            forwardedBy: null,
+            attachments: [],
+            simulated: true,
+          }
+        : undefined;
+    const { caseId } = await convex<{ caseId: string }>("cases:open", {
+      channel: s.channel,
+      fromAddress: s.from,
+      rawContent: s.text,
+      ...(emailSignals ? { emailSignals } : {}),
+    });
     const { c, note } = await drive(caseId, s, totpSecret!);
     const decision = c.decision ?? c.policyResult?.decision ?? "?";
     const fired = c.policyResult?.firedRules ?? [];

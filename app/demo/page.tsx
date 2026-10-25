@@ -2,6 +2,7 @@
 // Policy Engine in the browser; the numbers in the hero are live from Convex.
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, JetBrains_Mono } from "next/font/google";
+import { SCENARIOS } from "../../scenarios/run";
 import { Film } from "./film/Film";
 import { BreakIt } from "./sections/BreakIt";
 import { Cast, Footer, Hero, Lock, Nav, Problem, Stack, YourTurn } from "./sections/Sections";
@@ -33,7 +34,7 @@ export default function Landing() {
         <Lock />
         <section className="lp-section" id="break-it" aria-labelledby="break-h">
           <p className="lp-kicker">Try to break it</p>
-          <h2 id="break-h">30 attacks and real bills, run through the real Policy Engine in your browser.</h2>
+          <h2 id="break-h">{SCENARIOS.length} attacks and real bills, run through the real Policy Engine in your browser.</h2>
           <p className="lp-section-lede">
             Pick one. The same <code>decide()</code> that guards the money in production runs here, on the same answer key our
             tests use.

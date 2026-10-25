@@ -5,7 +5,9 @@
 // product); decide() must not read it as a pass.
 // The owner's lists (shared/verification/lists.ts): deny hits go to decide(), which blocks on R16; a trust
 // entry only makes senderOnFile true, so it satisfies R3 and nothing else.
-import type { PaymentRequest, VendorFindings } from "../types";
+// Email (shared/email/auth.ts): an address counts as on file only when the email is authenticated. A known
+// address (any vendor's or the owner's) that fails authentication is a forgery, and decide() blocks it (R17).
+import type { EmailAuth, PaymentRequest, VendorFindings } from "../types";
 import { compareBank } from "./bank";
 import { matchInvoice } from "./invoices";
 import { denyListHits } from "./lists";
@@ -20,6 +22,8 @@ export function verifyVendor(args: {
   searchHits?: readonly SearchHit[];
   /** The message itself, so a deny-listed domain written in it (a payment link, say) is caught. */
   rawContent?: string;
+  /** Email cases only: what the receiving server said about the sender's domain. */
+  emailAuth?: EmailAuth;
 }): VendorFindings {
   const { request, fromAddress, book } = args;
   const lists = book.lists ?? [];
@@ -36,9 +40,11 @@ export function verifyVendor(args: {
   });
   // The owner's registered phone or email counts as on file: calling the vendor back can't confirm
   // a request the owner sent. A sender on any known-bad list, or hitting the deny list, never counts.
-  const onRecord = sender.onMatchedVendorFile || sender.isOwner;
+  const auth = args.emailAuth;
+  const authenticated = !auth || auth.verdict === "pass";
+  const onRecord = (sender.onMatchedVendorFile || sender.isOwner) && authenticated;
   const eligible = vendor !== null && !sender.knownBad && denyHits.length === 0;
-  const trustedOnly = eligible && !onRecord && sender.trustedByOwner === true;
+  const trustedOnly = eligible && authenticated && !onRecord && sender.trustedByOwner === true;
   return {
     vendorId: vendor?.id ?? null,
     matchConfidence: vendor ? match.confidence : 0,
@@ -51,5 +57,8 @@ export function verifyVendor(args: {
     // Only present when they say something, so findings from a book with no lists are unchanged.
     ...(denyHits.length > 0 ? { denyListHits: denyHits } : {}),
     ...(trustedOnly ? { trustedByOwner: true } : {}),
+    ...(auth
+      ? { emailAuth: { ...auth, spoofsOnFile: auth.verdict === "fail" && (sender.onAnyVendorFile || sender.isOwner) } }
+      : {}),
   };
 }
