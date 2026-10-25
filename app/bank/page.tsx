@@ -8,8 +8,13 @@ import { useState, type FormEvent } from "react";
 import { api } from "../../convex/_generated/api";
 import { generateCountersignKeys, signPayload, type ReleasePayload } from "../../shared/bank/payload";
 import { formatCents } from "../../shared/ledger";
-import "../demo/landing.css";
-import "./bank.css";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, LoaderCircle, Send, X } from "lucide-react";
+import { AnimatedNumber } from "../ui/AnimatedNumber";
+import { AppShell } from "../ui/AppShell";
+import { cn } from "../ui/cn";
+import { spring } from "../ui/motion";
+import { buttonClass, SectionHead, Stamp } from "../ui/primitives";
 
 /** The deployment's HTTP actions host (…convex.site), where POST /bank/transfers lives. */
 function siteUrl(): string {
@@ -104,128 +109,172 @@ export default function BankPage() {
   }
 
   const account = overview?.account;
+  const doneCount = states.filter((x) => x.status === "rejected" || x.status === "accepted").length;
 
   return (
-    <div className="lp bk">
-      <header className="bk-top">
-        <a className="lp-logo" href="/demo">
-          <BankMark /> LUMEN BANK
-        </a>
-        <span className="bk-tag">Sandbox bank for Lumen Labs</span>
-        <nav className="bk-links" aria-label="Elsewhere">
-          <a href="/" target="_blank" rel="noreferrer">War Room ↗</a>
-          <a href="/try" target="_blank" rel="noreferrer">Try it ↗</a>
-        </nav>
-      </header>
-
-      <main className="bk-main">
-        <section className="bk-hero">
-          <p className="lp-kicker">The second lock</p>
-          <h1>
-            This bank only moves money <span>Countersign signed.</span>
-          </h1>
-          <p className="bk-sub">
-            When the Policy Engine says PAY, Countersign signs that exact transfer: who, how much, which invoice, once. The
-            bank checks the signature against its own key and its own payee list. A request without a valid countersignature
-            is refused at the door, however convincing it looks.
-          </p>
-        </section>
-
-        <div className="bk-grid">
-          <section className="bk-card bk-account" aria-label="Account">
-            <p className="bk-label">{account?.name ?? "Operating account"}</p>
-            <p className="bk-balance">{account ? formatCents(account.balanceCents) : overview === undefined ? "…" : "Not set up"}</p>
-            <p className="bk-label">Payees on file</p>
-            <ul className="bk-payees">
+    <AppShell
+      title="Lumen Bank"
+      subtitle="A sandbox bank that only moves money Countersign signed. When the Policy Engine says PAY, the Payer signs that exact transfer: who, how much, which invoice, once. Anything without a valid countersignature is refused at the door."
+    >
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+        <section aria-label="Account" className="rounded-xl border border-border bg-surface">
+          <div className="border-b border-border px-5 py-5 sm:px-6">
+            <p className="text-[12.5px] text-muted-foreground">{account?.name ?? "Operating account"}</p>
+            <p className="mt-2 text-[34px] font-medium leading-none tracking-[-0.03em] sm:text-[40px]">
+              {account ? (
+                <AnimatedNumber value={formatCents(account.balanceCents)} className="font-sans" />
+              ) : overview === undefined ? (
+                <span className="skeleton inline-block h-10 w-56" />
+              ) : (
+                "Not set up"
+              )}
+            </p>
+          </div>
+          <div className="px-5 py-5 sm:px-6">
+            <SectionHead title="Payees on file">
+              <span>routing and last 4 only</span>
+            </SectionHead>
+            <ul className="space-y-px overflow-hidden rounded-lg border border-border bg-border">
               {overview?.payees.map((p) => (
                 <Payee key={p._id} p={p} />
               ))}
             </ul>
-          </section>
-
-          <section className="bk-card bk-hijack" aria-label="Simulate a hijacked agent">
-            <p className="lp-kicker bk-kicker-red">Simulate a hijacked agent</p>
-            <h2>Skip Countersign. Talk to the bank directly.</h2>
-            <p className="bk-hijack-sub">
-              Suppose an attacker controls an AI agent with network access. These are four real requests to the bank's
-              public transfer endpoint, sent from this page.
-            </p>
-            <ol className="bk-attempts">
-              {ATTEMPTS.map((a, i) => (
-                <li key={a.title} data-state={states[i].status}>
-                  <div className="bk-attempt-head">
-                    <span className="bk-attempt-n">{i + 1}</span>
-                    <span className="bk-attempt-title">{a.title}</span>
-                    <Verdict s={states[i]} />
-                  </div>
-                  <p className="bk-attempt-what">{a.what}</p>
-                  {states[i].reason && <p className="bk-attempt-reason">{states[i].reason}</p>}
-                </li>
-              ))}
-            </ol>
-            <button type="button" className="lp-btn lp-btn-primary bk-run" onClick={simulate} disabled={running || overview === undefined}>
-              {running ? "Sending…" : "Send the four requests"}
-            </button>
-            <p className="bk-fine">POST {siteUrl().replace(/^https?:\/\//, "")}/bank/transfers</p>
-          </section>
-        </div>
-
-        <section className="bk-card bk-ledger" aria-label="Transfer ledger">
-          <div className="bk-ledger-head">
-            <p className="bk-label">Transfer ledger</p>
-            <span className="bk-live">
-              <span className="lp-live-dot" aria-hidden="true" /> Live
-            </span>
           </div>
-          {overview && overview.transfers.length === 0 && <p className="bk-empty">No transfers yet. Pay a real bill on /try: “Pay Northwind #NW-889”.</p>}
-          <ol className="bk-rows">
-            {overview?.transfers.map((t) => (
-              <li key={t._id} data-status={t.status}>
-                <span className="bk-mark">{t.status === "accepted" ? "✓" : "✕"}</span>
-                <span className="bk-row-main">
-                  <b>{t.amountCents != null ? formatCents(t.amountCents) : "—"}</b> to {t.payeeName}
-                  {t.memo && <span className="bk-muted"> · {t.memo}</span>}
-                </span>
-                <span className="bk-row-why">
-                  {t.status === "accepted" ? (
-                    <>Countersigned <span className="bk-mono">sig {t.sig}…</span></>
-                  ) : (
-                    t.reason
+        </section>
+
+        <section aria-labelledby="hijack-title" className="rounded-xl border border-block/25 bg-surface">
+          <div className="border-b border-border px-5 py-5 sm:px-6">
+            <h2 id="hijack-title" className="text-[18px] font-medium tracking-[-0.015em]">
+              Simulate a hijacked agent
+            </h2>
+            <p className="mt-1.5 max-w-[60ch] text-[13.5px] leading-relaxed text-muted-foreground">
+              Suppose an attacker controls an AI agent with network access and skips Countersign to talk to the bank directly.
+              These are four real requests to the bank&apos;s public transfer endpoint, sent from this page.
+            </p>
+          </div>
+          <ol className="divide-y divide-border">
+            {ATTEMPTS.map((a, i) => (
+              <li key={a.title} className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-start gap-x-3 px-5 py-4 sm:px-6">
+                <span className="grid size-6 place-items-center rounded-md border border-border-strong font-mono text-[11.5px] text-muted-foreground">{i + 1}</span>
+                <div className="min-w-0">
+                  <p className="text-[14px] font-medium">{a.title}</p>
+                  <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">{a.what}</p>
+                  {states[i].reason && (
+                    <motion.p
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={spring.smooth}
+                      className={cn("mt-1.5 font-mono text-[12.5px]", states[i].status === "accepted" ? "text-pay-ink" : states[i].status === "rejected" ? "text-block-ink" : "text-hold-ink")}
+                    >
+                      Bank: “{states[i].reason}”
+                    </motion.p>
                   )}
-                </span>
-                <span className="bk-row-src">{t.source === "countersign" ? "Countersign Payer" : "Public endpoint"}</span>
-                <span className="bk-mono bk-row-time">{new Date(t.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span>
+                </div>
+                <Verdict s={states[i]} />
               </li>
             ))}
           </ol>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border px-5 py-4 sm:px-6">
+            <button type="button" className={buttonClass("primary")} onClick={simulate} disabled={running || overview === undefined}>
+              <Send className="size-4" aria-hidden="true" />
+              {running ? `Sending ${Math.min(doneCount + 1, ATTEMPTS.length)} of ${ATTEMPTS.length}…` : "Send the four requests"}
+            </button>
+            <p className="min-w-0 truncate font-mono text-[11.5px] text-subtle">POST {siteUrl().replace(/^https?:\/\//, "")}/bank/transfers</p>
+          </div>
         </section>
+      </div>
 
-        <p className="bk-honest">
-          Sandbox bank, fictional company, no real money. In this demo the bank and the signer run in one backend, and the
-          bank only ever reads the public key. In production the bank holds only the public key and the signer runs in its own
-          isolated service.
-        </p>
-      </main>
-    </div>
+      <section aria-label="Transfer ledger" className="mt-6">
+        <SectionHead title="Transfer ledger">
+          <span className="flex items-center gap-2">
+            <span className="live-dot" aria-hidden="true" /> Live
+          </span>
+        </SectionHead>
+        {overview && overview.transfers.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-border-strong px-5 py-8 text-center text-[13.5px] text-muted-foreground">
+            No transfers yet. Pay a real bill on /try: “Pay Northwind #NW-889”.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full min-w-[540px] text-[13px]">
+              <thead>
+                <tr className="border-b border-border text-left text-[12px] text-subtle">
+                  <th className="w-10 py-2.5 pl-4 font-normal">
+                    <span className="sr-only">Result</span>
+                  </th>
+                  <th className="py-2.5 font-normal">Transfer</th>
+                  <th className="py-2.5 font-normal">Bank&apos;s answer</th>
+                  <th className="hidden py-2.5 font-normal md:table-cell">Door</th>
+                  <th className="py-2.5 pr-4 text-right font-normal">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                <AnimatePresence initial={false}>
+                  {overview?.transfers.map((t) => (
+                    <motion.tr
+                      key={t._id}
+                      layout
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={spring.smooth}
+                      className="border-b border-border last:border-0"
+                    >
+                      <td className="py-3 pl-4">
+                        {t.status === "accepted" ? (
+                          <Check className="size-4 text-pay-ink" aria-label="Accepted" />
+                        ) : (
+                          <X className="size-4 text-block-ink" aria-label="Rejected" />
+                        )}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <span className={cn("font-mono", t.status === "rejected" && "struck text-muted-foreground")}>
+                          {t.amountCents != null ? formatCents(t.amountCents) : "—"}
+                        </span>{" "}
+                        <span className="text-foreground/90">to {t.payeeName}</span>
+                        {t.memo && <span className="text-subtle"> · {t.memo}</span>}
+                      </td>
+                      <td className="py-3 pr-4">
+                        {t.status === "accepted" ? (
+                          <span className="text-pay-ink">
+                            Countersigned <span className="font-mono text-[12px] text-muted-foreground">sig {t.sig}…</span>
+                          </span>
+                        ) : (
+                          <span className="text-block-ink">{t.reason}</span>
+                        )}
+                      </td>
+                      <td className="hidden py-3 pr-4 text-muted-foreground md:table-cell">{t.source === "countersign" ? "Countersign Payer" : "Public endpoint"}</td>
+                      <td className="py-3 pr-4 text-right font-mono text-[12px] text-subtle">
+                        {new Date(t.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}
+                      </td>
+                    </motion.tr>
+                  ))}
+                </AnimatePresence>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <p className="mt-8 max-w-[72ch] text-[12.5px] leading-relaxed text-subtle">
+        Sandbox bank, fictional company, no real money. In this demo the bank and the signer run in one backend, and the bank
+        only ever reads the public key. In production the bank holds only the public key and the signer runs in its own isolated
+        service.
+      </p>
+    </AppShell>
   );
 }
 
 function Verdict({ s }: { s: AttemptState }) {
-  if (s.status === "idle") return <span className="bk-verdict">Not sent</span>;
-  if (s.status === "sending") return <span className="bk-verdict is-sending">Sending…</span>;
-  if (s.status === "rejected") return <span className="bk-verdict is-rejected">✕ Rejected</span>;
-  if (s.status === "accepted") return <span className="bk-verdict is-accepted">✓ Accepted</span>;
-  return <span className="bk-verdict">Skipped</span>;
-}
-
-function BankMark() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M3 9.5 12 4l9 5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3.5 20h17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="12" cy="7.6" r="1.2" fill="var(--lp-amber)" />
-    </svg>
-  );
+  if (s.status === "idle") return <Stamp tone="quiet" size="sm">Not sent</Stamp>;
+  if (s.status === "sending")
+    return (
+      <span className="flex h-5 items-center gap-1.5 text-[12px] text-muted-foreground">
+        <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> Sending
+      </span>
+    );
+  if (s.status === "rejected") return <Stamp tone="block" size="sm">Rejected</Stamp>;
+  if (s.status === "accepted") return <Stamp tone="pay" size="sm">Accepted</Stamp>;
+  return <Stamp tone="hold" size="sm">Skipped</Stamp>;
 }
 
 type PayeeRow = NonNullable<ReturnType<typeof useQuery<typeof api.bank.overview>>>["payees"][number];
@@ -255,38 +304,61 @@ function Payee({ p }: { p: PayeeRow }) {
     }
   }
 
+  const frozen = p.status === "frozen";
   const refused = p.status === "active" && p.note && !p.noteOk;
+  const field = "h-9 w-full rounded-lg border border-border-strong bg-background px-3 font-mono text-[13px] outline-none focus:border-foreground";
   return (
-    <li data-status={p.status}>
-      <span className="bk-payee-name">{p.name}</span>
-      <span className="bk-mono">…{p.accountLast4}{p.pendingLast4 && <span className="bk-pending"> → …{p.pendingLast4}?</span>}</span>
-      {p.status === "frozen" ? (
-        <span className="bk-frozen">{p.note ?? `Frozen: Countersign is calling ${p.name}`}</span>
-      ) : (
-        <span className={refused ? "bk-refused" : "bk-active"}>{p.note ?? "Active"}</span>
-      )}
-      {p.status === "active" && !open && (
-        <button type="button" className="bk-change" onClick={() => setOpen(true)}>
-          Change bank details
-        </button>
-      )}
-      {open && (
-        <form className="bk-change-form" onSubmit={submit}>
-          <input inputMode="numeric" placeholder="New routing (9 digits)" value={routing} onChange={(e) => setRouting(e.target.value)} aria-label="New routing number" />
-          <input inputMode="numeric" placeholder="New account number" value={account} onChange={(e) => setAccount(e.target.value)} aria-label="New account number" />
-          <div className="bk-change-actions">
-            <button type="submit" className="lp-btn lp-btn-primary" disabled={busy || !routing || !account}>
-              {busy ? "Sending…" : "Ask the bank to change it"}
-            </button>
-            <button type="button" className="bk-cancel" onClick={() => setOpen(false)}>
-              Cancel
-            </button>
-          </div>
-          <p className="bk-change-note">The bank freezes this payee and Countersign phones {p.name} on the number already on file before anything changes.</p>
-          {error && <p className="bk-change-error" role="alert">{error}</p>}
-        </form>
-      )}
+    <li className={cn("bg-background px-4 py-3.5", frozen && "bg-hold/[0.05]")}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="min-w-0 truncate text-[14px] font-medium">{p.name}</p>
+        <p className="shrink-0 font-mono text-[13px] text-muted-foreground">
+          …{p.accountLast4}
+          {p.pendingLast4 && <span className="text-hold-ink"> → …{p.pendingLast4}?</span>}
+        </p>
+      </div>
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+        <p className={cn("text-[12.5px]", frozen ? "text-hold-ink" : refused ? "text-block-ink" : p.noteOk ? "text-pay-ink" : "text-muted-foreground")}>
+          {frozen ? (p.note ?? `Frozen: Countersign is calling ${p.name}`) : (p.note ?? "Active")}
+        </p>
+        {p.status === "active" && !open && (
+          <button type="button" className="text-[12.5px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" onClick={() => setOpen(true)}>
+            Change bank details
+          </button>
+        )}
+      </div>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.form
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={spring.smooth}
+            className="overflow-hidden"
+            onSubmit={submit}
+          >
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <input className={field} inputMode="numeric" placeholder="New routing (9 digits)" value={routing} onChange={(e) => setRouting(e.target.value)} aria-label="New routing number" />
+              <input className={field} inputMode="numeric" placeholder="New account number" value={account} onChange={(e) => setAccount(e.target.value)} aria-label="New account number" />
+            </div>
+            <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
+              The bank freezes this payee, and Countersign phones {p.name} on the number already on file before anything changes.
+            </p>
+            {error && (
+              <p className="mt-2 text-[12.5px] text-block-ink" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="mt-3 flex items-center gap-2">
+              <button type="submit" className={buttonClass("primary", "h-8 px-3")} disabled={busy || !routing || !account}>
+                {busy ? "Sending…" : "Ask the bank to change it"}
+              </button>
+              <button type="button" className={buttonClass("ghost", "h-8 px-3")} onClick={() => setOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </motion.form>
+        )}
+      </AnimatePresence>
     </li>
   );
 }
-

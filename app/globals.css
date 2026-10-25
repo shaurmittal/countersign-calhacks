@@ -1,47 +1,39 @@
 /* Design tokens and base styles shared by every page. Page styles live next to their pages. */
+@layer theme, base, components, utilities;
+
+/* Shared tokens, now on the app's OLED palette (app/ui/app.css holds the full app system). */
 :root {
-  --bg: #020617;
-  --panel: #0f172a;
-  --surface-2: #1e293b;
-  --border: #334155;
-  --text: #f8fafc;
-  --muted: #94a3b8;
+  --bg: #000000;
+  --panel: #0a0a0a;
+  --surface-2: #121212;
+  --border: #262626;
+  --text: #fafafa;
+  --muted: #a3a3a3;
   --pay: #22c55e;
   --hold: #f59e0b;
-  --escalate: #38bdf8;
+  --escalate: #e5e5e5;
   --block: #ef4444;
-  --running: #38bdf8;
-  --focus: #7dd3fc;
+  --running: #e5e5e5;
+  --focus: #fafafa;
   --radius: 10px;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-sans); line-height: 1.5; }
-:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-button { font: inherit; cursor: pointer; touch-action: manipulation; }
-button:disabled { cursor: not-allowed; opacity: 0.5; }
-.muted { color: var(--muted); }
-.mono { font-family: var(--font-mono); font-size: 13px; }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-/* Chips: color always paired with text, never color alone. */
-.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); white-space: nowrap; }
-.chip.ok { border-color: color-mix(in srgb, var(--pay) 60%, transparent); color: #bbf7d0; background: color-mix(in srgb, var(--pay) 14%, transparent); }
-.chip.warn { border-color: color-mix(in srgb, var(--hold) 60%, transparent); color: #fde68a; background: color-mix(in srgb, var(--hold) 14%, transparent); }
-.chip.bad { border-color: color-mix(in srgb, var(--block) 60%, transparent); color: #fecaca; background: color-mix(in srgb, var(--block) 16%, transparent); }
-.chip.info { border-color: color-mix(in srgb, var(--escalate) 60%, transparent); color: #bae6fd; background: color-mix(in srgb, var(--escalate) 14%, transparent); }
-
-/* Decision colors, used by the War Room and the judge chat. */
-[data-decision="PAY"] { --decision: var(--pay); }
-[data-decision="HOLD"] { --decision: var(--hold); }
-[data-decision="ESCALATE"] { --decision: var(--escalate); }
-[data-decision="BLOCK"] { --decision: var(--block); }
-[data-decision="NO_ACTION"] { --decision: var(--muted); }
+/* Layered so the app's Tailwind utilities win over these defaults. */
+@layer base {
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-sans); line-height: 1.5; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  button { font: inherit; cursor: pointer; touch-action: manipulation; }
+  .muted { color: var(--muted); }
+  .mono { font-family: var(--font-mono); font-size: 13px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
 .small { font-size: 12px; }

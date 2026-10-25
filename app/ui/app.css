@@ -1,0 +1,85 @@
+/* Countersign app UI: War Room, /owner, /bank, /try. OLED black, white ink at stepped alphas, one-pixel
+   hairlines; green only when money is cleared or an approval lands, red only for refusals, amber kept small.
+   Tailwind v4 without preflight, so the /demo film and /judge-card keep their own base styles. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme inline {
+  --color-background: #000000;
+  --color-foreground: #fafafa;
+  --color-surface: #0a0a0a;
+  --color-surface-2: #121212;
+  --color-surface-3: #1a1a1a;
+  --color-border: rgb(255 255 255 / 0.09);
+  --color-border-strong: rgb(255 255 255 / 0.16);
+  --color-muted-foreground: #a3a3a3;
+  --color-subtle: #737373;
+
+  --color-pay: #22c55e;
+  --color-pay-ink: #4ade80;
+  --color-block: #ef4444;
+  --color-block-ink: #f87171;
+  --color-hold: #f59e0b;
+  --color-hold-ink: #fbbf24;
+
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+@layer base {
+  .cs {
+    min-height: 100vh;
+    background: #000;
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.006em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color-scheme: dark;
+    accent-color: #fafafa;
+    caret-color: #fafafa;
+  }
+  /* The slice of a reset these pages need (Tailwind's preflight is off on purpose). */
+  .cs :where(h1, h2, h3, h4, p, ul, ol, dl, dd, figure, blockquote, pre) { margin: 0; }
+  .cs :where(ul, ol) { list-style: none; padding: 0; }
+  .cs :where(button) { background: none; border: 0; color: inherit; padding: 0; font: inherit; cursor: pointer; }
+  .cs :where(button:disabled) { cursor: not-allowed; }
+  .cs :where(input, textarea, select) { font: inherit; color: inherit; }
+  .cs :where(a) { color: inherit; text-decoration: none; }
+  .cs :where(a[href]:not([class])) { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgb(255 255 255 / 0.3); }
+  .cs :where(table) { border-collapse: collapse; }
+  .cs :where(svg) { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+  .cs ::selection { background: #fafafa; color: #000; }
+  .cs :focus-visible { outline: 2px solid #fafafa; outline-offset: 2px; border-radius: 6px; }
+  .cs :where(.font-mono, code, kbd, time) { font-variant-numeric: tabular-nums; }
+  .cs * { scrollbar-width: thin; scrollbar-color: #262626 transparent; }
+  .cs ::-webkit-scrollbar { width: 6px; height: 6px; }
+  .cs ::-webkit-scrollbar-thumb { background: #262626; border-radius: 999px; }
+  .cs ::-webkit-scrollbar-track { background: transparent; }
+  .cs ::placeholder { color: #737373; }
+}
+
+@layer components {
+  /* A one-device-pixel white hairline: the board's only rule weight. */
+  .hairline { border-color: rgb(255 255 255 / 0.09); }
+
+  /* The live dot: a quiet pulse that only means "this updates by itself". */
+  .live-dot { position: relative; width: 6px; height: 6px; border-radius: 999px; background: #22c55e; }
+  .live-dot::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; border: 1px solid #22c55e; opacity: 0; animation: live-ring 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  @keyframes live-ring { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(1.8); opacity: 0; } }
+
+  /* Skeleton sweep for loading rows (EasyUI skeleton, simplified). */
+  .skeleton { position: relative; overflow: hidden; background: #121212; border-radius: 6px; }
+  .skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.05), transparent); animation: sweep 1.6s ease-in-out infinite; }
+  @keyframes sweep { to { transform: translateX(100%); } }
+
+  /* Refused strips stay on the board, struck through. */
+  .struck { text-decoration: line-through; text-decoration-color: rgb(248 113 113 / 0.55); text-decoration-thickness: 1px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot::after, .skeleton::after { animation: none; }
+}

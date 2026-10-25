@@ -1,51 +1,118 @@
 "use client";
-// Agent lanes (spec §7.2, center). Each lane is the latest real agentRuns row for that agent,
-// plus the rows it produced (callbacks, approvals, payments). Agents that have not run yet get no
-// lane (the graph shows them). Nothing here is animated for show: a lane moves only when its row changes.
+// The agent roster (spec §7.2). Seven agents in seven fixed slots, always in the same order, so a room
+// learns the board once. Each slot is the latest real agentRuns row for that agent plus the rows it
+// produced (callbacks, approvals, payments); an agent that hasn't run shows as not needed or not yet.
+// Nothing is animated for show: a slot moves only when its row changes. Timeline styling adapted from
+// EasyUI's AI Agent Activity (MIT: github.com/Surajmaurya1/easyui).
 import type { FunctionReturnType } from "convex/server";
-import type { ReactNode } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AlertCircle, Check, ChevronDown, LoaderCircle } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import type { api } from "../../convex/_generated/api";
 import type { AgentName, PaymentRequest, PolicyResult, RiskFindings, VendorFindings } from "../../shared/types";
 import { formatCents, RAIL_LABEL } from "../../shared/ledger";
 import { crsLaneText } from "../../shared/verification/crs";
+import { cn } from "../ui/cn";
+import { spring } from "../ui/motion";
+import { Tag, type Tone } from "../ui/primitives";
 import { clockTime, last4, ruleInfo, secondsLeft, useNow } from "./format";
 
 export type CaseDetail = NonNullable<FunctionReturnType<typeof api.warRoom.caseDetail>>;
 type Run = CaseDetail["runs"][number];
 
-const LANES: { agent: AgentName; title: string }[] = [
-  { agent: "intake", title: "Intake Parser" },
-  { agent: "vendorVerifier", title: "Vendor Verifier" },
-  { agent: "riskAnalyst", title: "Risk Analyst" },
-  { agent: "callback", title: "Callback Verifier" },
-  { agent: "policy", title: "Policy Engine" },
-  { agent: "ownerConcierge", title: "Owner Concierge" },
-  { agent: "payer", title: "Payer" },
+const LANES: { agent: AgentName; title: string; role: string }[] = [
+  { agent: "intake", title: "Intake Parser", role: "Claude reads the request into a strict form" },
+  { agent: "vendorVerifier", title: "Vendor Verifier", role: "Vendor book, sender, bank, invoice, CRS, OFAC" },
+  { agent: "riskAnalyst", title: "Risk Analyst", role: "Red flags and a risk score" },
+  { agent: "callback", title: "Callback Verifier", role: "Calls the vendor on the number on file" },
+  { agent: "policy", title: "Policy Engine", role: "Deterministic rules; the only code that can return PAY" },
+  { agent: "ownerConcierge", title: "Owner Concierge", role: "Asks the owner for her authenticator code" },
+  { agent: "payer", title: "Payer", role: "Signs exactly one transfer, only on PAY" },
 ];
 
-export function AgentLanes({ detail }: { detail: CaseDetail }) {
+export function AgentLanes({ detail, closed }: { detail: CaseDetail; closed: boolean }) {
   return (
-    <div className="lanes">
-      {LANES.map((lane) => {
+    <ol className="relative" aria-label="Agents, in order">
+      {LANES.map((lane, i) => {
         const run = latestRun(detail.runs, lane.agent);
-        if (!run) return null;
-        return (
-          <section
-            key={run._id}
-            className="lp-finding lane wr-rise"
-            data-status={run.status}
-            aria-label={`${lane.title}: ${run.status}`}
-          >
-            <p className="lp-finding-title">
-              {lane.title} <span className="lane-status">{run.status}</span>
-            </p>
-            {run.summary && <div className="lane-summary">{run.summary}</div>}
-            {run.error && <p className="lane-error">Failed: {run.error}</p>}
-            <LaneDetail agent={lane.agent} run={run} detail={detail} />
-          </section>
-        );
+        return <Slot key={lane.agent} lane={lane} run={run} detail={detail} closed={closed} last={i === LANES.length - 1} />;
       })}
-    </div>
+    </ol>
+  );
+}
+
+function Slot(props: { lane: (typeof LANES)[number]; run: Run | undefined; detail: CaseDetail; closed: boolean; last: boolean }) {
+  const { lane, run, detail } = props;
+  const reduce = useReducedMotion();
+  const [open, setOpen] = useState(false);
+  const status = run?.status ?? (props.closed ? "skipped" : "pending");
+  const body = run ? <LaneDetail agent={lane.agent} run={run} detail={detail} /> : null;
+  return (
+    <li className="relative flex gap-3.5">
+      {!props.last && <span aria-hidden="true" className="absolute bottom-0 left-[11px] top-7 w-px bg-border" />}
+      <span
+        className={cn(
+          "relative z-10 mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border",
+          status === "running" && "border-white/40 bg-background",
+          status === "done" && "border-white/20 bg-white/[0.08]",
+          status === "failed" && "border-block/50 bg-block/15",
+          (status === "pending" || status === "queued" || status === "skipped") && "border-border bg-background",
+        )}
+        aria-hidden="true"
+      >
+        {status === "running" ? (
+          <LoaderCircle className="size-3.5 animate-spin text-foreground" />
+        ) : status === "done" ? (
+          <Check className="size-3.5 stroke-[2.5] text-foreground" />
+        ) : status === "failed" ? (
+          <AlertCircle className="size-3.5 text-block-ink" />
+        ) : (
+          <span className="size-1 rounded-full bg-white/25" />
+        )}
+      </span>
+      <div className={cn("min-w-0 flex-1", props.last ? "pb-1" : "pb-5")}>
+        <button
+          type="button"
+          disabled={!body}
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={body ? open : undefined}
+          className="group flex w-full items-start justify-between gap-3 text-left disabled:cursor-default"
+        >
+          <span className="min-w-0">
+            <span className={cn("block text-[13.5px] font-medium", run ? "text-foreground" : "text-subtle")}>
+              {lane.title}
+              <span className="ml-2 text-[12px] font-normal text-subtle">
+                {status === "running" ? "working…" : status === "skipped" ? "not needed" : status === "pending" || status === "queued" ? "not yet" : status === "failed" ? "failed" : ""}
+              </span>
+            </span>
+            <span className={cn("mt-0.5 block text-[12.5px] leading-snug", run?.summary ? "text-muted-foreground" : "text-white/30")}>
+              {run?.error ? `Failed: ${run.error}` : (run?.summary ?? lane.role)}
+            </span>
+          </span>
+          {body && (
+            <span className="flex shrink-0 items-center gap-2 pt-0.5 font-mono text-[11px] text-subtle">
+              {run?.endedAt ? `${((run.endedAt - run.startedAt) / 1000).toFixed(1)}s` : ""}
+              <motion.span animate={{ rotate: open ? 180 : 0 }} transition={reduce ? { duration: 0 } : spring.snappy}>
+                <ChevronDown className="size-3.5 text-subtle group-hover:text-foreground" />
+              </motion.span>
+            </span>
+          )}
+        </button>
+        <AnimatePresence initial={false}>
+          {body && open && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={reduce ? { duration: 0 } : spring.smooth}
+              className="overflow-hidden"
+            >
+              <div className="mt-2.5 border-l border-border pl-3">{body}</div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </li>
   );
 }
 
@@ -73,24 +140,34 @@ function LaneDetail({ agent, run, detail }: { agent: AgentName; run: Run; detail
 }
 
 function Chips({ children }: { children: ReactNode }) {
-  return <div className="lane-body">{children}</div>;
+  return <div className="flex flex-wrap gap-1.5">{children}</div>;
+}
+
+/** A lane fact. Old "ok/warn/bad/info" tones map onto the board's palette; "ok" stays white, green is for money. */
+function Chip({ tone, children, title, className }: { tone?: string; children: ReactNode; title?: string; className?: string }) {
+  const map: Record<string, Tone> = { ok: "neutral", warn: "hold", bad: "block", info: "owner", money: "pay", approved: "pay", "": "quiet" };
+  return (
+    <Tag tone={tone === undefined ? "neutral" : (map[tone] ?? "quiet")} title={title} className={className}>
+      {children}
+    </Tag>
+  );
 }
 
 function IntakeDetail({ request: r }: { request: PaymentRequest }) {
   return (
     <Chips>
-      <span className="chip">Action: {r.requestedAction}</span>
-      {r.claimedVendorName && <span className="chip">Payee claimed: {r.claimedVendorName}</span>}
-      {r.amountCents != null && <span className="chip">{formatCents(r.amountCents)}</span>}
-      {r.invoiceNumber && <span className="chip">Invoice #{r.invoiceNumber}</span>}
-      <span className="chip">Sender says: {r.claimedSenderRole}</span>
-      {r.newBankDetails && <span className="chip warn">New bank {last4(r.newBankDetails.account)}</span>}
+      <Chip>Action: {r.requestedAction}</Chip>
+      {r.claimedVendorName && <Chip>Payee claimed: {r.claimedVendorName}</Chip>}
+      {r.amountCents != null && <Chip>{formatCents(r.amountCents)}</Chip>}
+      {r.invoiceNumber && <Chip>Invoice #{r.invoiceNumber}</Chip>}
+      <Chip>Sender says: {r.claimedSenderRole}</Chip>
+      {r.newBankDetails && <Chip tone="warn">New bank {last4(r.newBankDetails.account)}</Chip>}
       {r.urgencyClaims?.map((u) => (
-        <span key={u} className="chip warn">
+        <Chip key={u} tone="warn">
           Urgency: “{u}”
-        </span>
+        </Chip>
       ))}
-      {r.injectionAttempt && <span className="chip bad">Injection attempt</span>}
+      {r.injectionAttempt && <Chip tone="bad">Injection attempt</Chip>}
     </Chips>
   );
 }
@@ -100,24 +177,24 @@ function VendorDetail({ findings: f, detail }: { findings: VendorFindings; detai
   return (
     <Chips>
       {matched ? (
-        <span className="chip ok">
+        <Chip tone="ok">
           Match: {detail.summary.vendorName} ({Math.round(f.matchConfidence * 100)}%)
-        </span>
+        </Chip>
       ) : (
-        <span className="chip bad">No vendor-book match</span>
+        <Chip tone="bad">No vendor-book match</Chip>
       )}
-      <span className={`chip ${f.senderOnFile ? "ok" : "warn"}`}>Sender {f.senderOnFile ? "on file" : "not on file"}</span>
+      <Chip tone={f.senderOnFile ? "ok" : "warn"}>Sender {f.senderOnFile ? "on file" : "not on file"}</Chip>
       {f.bankMatches != null && (
-        <span className={`chip ${f.bankMatches ? "ok" : "bad"}`}>Bank {f.bankMatches ? "matches file" : "differs from file"}</span>
+        <Chip tone={f.bankMatches ? "ok" : "bad"}>Bank {f.bankMatches ? "matches file" : "differs from file"}</Chip>
       )}
-      <span className={`chip ${crsTone(f)}`}>{crsLaneText(f.crs) ?? "CRS: not checked"}</span>
-      <span className={`chip ${f.ofacHit ? "bad" : "ok"}`}>OFAC: {f.ofacHit ? "HIT" : "clear"}</span>
+      <Chip tone={crsTone(f)}>{crsLaneText(f.crs) ?? "CRS: not checked"}</Chip>
+      <Chip tone={f.ofacHit ? "bad" : "ok"}>OFAC: {f.ofacHit ? "HIT" : "clear"}</Chip>
       {f.alreadyPaidAt != null ? (
-        <span className="chip bad">Invoice already paid</span>
+        <Chip tone="bad">Invoice already paid</Chip>
       ) : (
-        <span className={`chip ${f.matchingInvoiceId ? "ok" : "warn"}`}>
+        <Chip tone={f.matchingInvoiceId ? "ok" : "warn"}>
           {f.matchingInvoiceId ? `Open invoice #${detail.summary.invoiceNumber ?? "?"}` : "No matching invoice"}
-        </span>
+        </Chip>
       )}
     </Chips>
   );
@@ -133,27 +210,29 @@ function RiskDetail({ risk }: { risk: RiskFindings }) {
   return (
     <>
       <Chips>
-        <span className="chip">Risk {score}/100</span>
+        <Chip>Risk {score}/100</Chip>
         {risk.flags?.map((flag) => (
-          <span key={flag} className="chip warn">
+          <Chip key={flag} tone="warn">
             {flag.replace(/_/g, " ")}
-          </span>
+          </Chip>
         ))}
-        <div className="meter" role="img" aria-label={`Risk score ${score} of 100`}>
-          <span style={{ transform: `scaleX(${score / 100})` }} />
-        </div>
+        <span className="flex h-[22px] w-28 items-center" role="img" aria-label={`Risk score ${score} of 100`}>
+          <span className="h-1 w-full overflow-hidden rounded-full bg-white/10">
+            <span
+              className={cn("block h-full origin-left rounded-full transition-transform duration-500", score >= 60 ? "bg-block" : score >= 30 ? "bg-hold" : "bg-white/60")}
+              style={{ transform: `scaleX(${score / 100})` }}
+            />
+          </span>
+        </span>
       </Chips>
       {risk.explanation && (
-        <details className="wr-more">
-          <summary>Why</summary>
-          <p>{risk.explanation}</p>
-        </details>
+        <p className="mt-2.5 text-[12.5px] leading-relaxed text-muted-foreground">{risk.explanation}</p>
       )}
     </>
   );
 }
 
-const OUTCOME_TONE: Record<string, string> = { confirmed: "ok", denied: "bad", no_answer: "warn", unclear: "warn" };
+const OUTCOME_TONE: Record<string, string> = { confirmed: "approved", denied: "bad", no_answer: "warn", unclear: "warn" };
 
 function CallbackDetail({ detail }: { detail: CaseDetail }) {
   const latest = [...detail.callbacks].sort((a, b) => b.startedAt - a.startedAt)[0];
@@ -161,21 +240,20 @@ function CallbackDetail({ detail }: { detail: CaseDetail }) {
   return (
     <>
       <Chips>
-        <span className="chip">
+        <Chip>
           Dialed {latest.numberDialed} · on file
           {latest.attempt > 1 && ` · attempt ${latest.attempt}`}
-        </span>
+        </Chip>
         {latest.outcome ? (
-          <span className={`chip ${OUTCOME_TONE[latest.outcome] ?? ""}`}>Vendor said: {latest.outcome.replace("_", " ")}</span>
+          <Chip tone={OUTCOME_TONE[latest.outcome] ?? ""}>Vendor said: {latest.outcome.replace("_", " ")}</Chip>
         ) : (
-          <span className="chip info">Calling…</span>
+          <Chip tone="info">Calling…</Chip>
         )}
       </Chips>
       {latest.transcript && (
-        <details className="wr-more">
-          <summary>Transcript</summary>
-          <pre className="transcript">{latest.transcript}</pre>
-        </details>
+        <pre className="mt-2.5 max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-white/[0.02] p-3 font-mono text-[11.5px] leading-relaxed text-muted-foreground">
+          {latest.transcript}
+        </pre>
       )}
     </>
   );
@@ -185,13 +263,13 @@ function PolicyDetail({ result }: { result: PolicyResult }) {
   return (
     <Chips>
       {result.firedRules.map((id) => (
-        <span key={id} className="chip" title={ruleInfo(id)?.description}>
+        <Chip key={id} title={ruleInfo(id)?.description}>
           {id} {ruleInfo(id)?.name}
-        </span>
+        </Chip>
       ))}
-      {result.needs.callback && <span className="chip info">Needs callback</span>}
-      {result.needs.ownerOtp && <span className="chip info">Needs owner code</span>}
-      {!result.overridable && <span className="chip bad">Not overridable</span>}
+      {result.needs.callback && <Chip tone="info">Needs callback</Chip>}
+      {result.needs.ownerOtp && <Chip tone="info">Needs owner code</Chip>}
+      {!result.overridable && <Chip tone="bad">Not overridable</Chip>}
     </Chips>
   );
 }
@@ -204,18 +282,18 @@ function OwnerDetail({ detail }: { detail: CaseDetail }) {
   let state: ReactNode;
   if (approval.cancelledAt) {
     const verb = approval.approvedAt ? "Cancelled during cooling-off" : "Declined";
-    state = <span className="chip bad">{verb} by owner via {via}</span>;
+    state = <Chip tone="bad">{verb} by owner via {via}</Chip>;
   } else if (approval.approvedAt && approval.coolingOffUntil && approval.coolingOffUntil > now) {
-    state = <span className="chip warn">Approved · cooling-off {secondsLeft(approval.coolingOffUntil, now)}s</span>;
-  } else if (approval.approvedAt) state = <span className="chip ok">Approved by owner via {via}</span>;
-  else state = <span className="chip info">Waiting for the owner&apos;s code since {clockTime(approval.requestedAt)}</span>;
+    state = <Chip tone="warn">Approved · cooling-off {secondsLeft(approval.coolingOffUntil, now)}s</Chip>;
+  } else if (approval.approvedAt) state = <Chip tone="approved">Approved by owner via {via}</Chip>;
+  else state = <Chip tone="info">Waiting for the owner&apos;s code since {clockTime(approval.requestedAt)}</Chip>;
 
   const locked = approval.lockedUntil && approval.lockedUntil > now;
   return (
     <Chips>
       {state}
-      {locked && <span className="chip bad">Locked after wrong codes · {secondsLeft(approval.lockedUntil!, now)}s</span>}
-      {!locked && (approval.attempts ?? 0) > 0 && <span className="chip warn">{approval.attempts} wrong code(s)</span>}
+      {locked && <Chip tone="bad">Locked after wrong codes · {secondsLeft(approval.lockedUntil!, now)}s</Chip>}
+      {!locked && (approval.attempts ?? 0) > 0 && <Chip tone="warn">{approval.attempts} wrong code(s)</Chip>}
     </Chips>
   );
 }
@@ -223,32 +301,32 @@ function OwnerDetail({ detail }: { detail: CaseDetail }) {
 function PayerDetail({ detail }: { detail: CaseDetail }) {
   const payment = [...detail.payments].sort((a, b) => b.createdAt - a.createdAt)[0];
   if (!payment) return null;
-  const tone = payment.status === "sent" ? "ok" : payment.status === "failed" ? "bad" : "info";
+  const tone = payment.status === "sent" ? "money" : payment.status === "failed" ? "bad" : "info";
   return (
     <>
       <Chips>
-        <span className="chip">{RAIL_LABEL[payment.rail]}</span>
-        <span className={`chip ${tone}`}>
+        <Chip>{RAIL_LABEL[payment.rail]}</Chip>
+        <Chip tone={tone}>
           {formatCents(payment.amountCents)} · {payment.status}
-        </span>
-        {payment.externalId && <span className="chip mono">{payment.externalId}</span>}
+        </Chip>
+        {payment.externalId && <Chip className="font-mono">{payment.externalId}</Chip>}
       </Chips>
       {payment.status === "sent" && (
-        <table className="journal">
+        <table className="mt-2.5 w-full max-w-md text-[12px]">
           <caption className="sr-only">Journal entry</caption>
           <thead>
-            <tr>
-              <th>Account</th>
-              <th className="amt">Debit</th>
-              <th className="amt">Credit</th>
+            <tr className="border-b border-border text-left text-subtle">
+              <th className="py-1.5 font-normal">Account</th>
+              <th className="py-1.5 text-right font-normal">Debit</th>
+              <th className="py-1.5 text-right font-normal">Credit</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="font-mono text-muted-foreground">
             {payment.journal.map((line) => (
-              <tr key={line.account}>
-                <td>{line.account}</td>
-                <td className="amt">{line.debitCents ? formatCents(line.debitCents) : ""}</td>
-                <td className="amt">{line.creditCents ? formatCents(line.creditCents) : ""}</td>
+              <tr key={line.account} className="border-b border-border last:border-0">
+                <td className="py-1.5 font-sans">{line.account}</td>
+                <td className="py-1.5 text-right">{line.debitCents ? formatCents(line.debitCents) : ""}</td>
+                <td className="py-1.5 text-right">{line.creditCents ? formatCents(line.creditCents) : ""}</td>
               </tr>
             ))}
           </tbody>

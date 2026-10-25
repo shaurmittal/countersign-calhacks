@@ -1,12 +1,17 @@
 "use client";
-// Decision card (spec §7.2, right): what the Policy Engine decided, which rules fired and why.
+// The live strip (spec §7.2): the selected request as one wide flight strip. Who sent what, what Countersign
+// replied, and the verdict stamped at the strip's end, with the rules that decided it.
 import type { FunctionReturnType } from "convex/server";
+import { motion, useReducedMotion } from "framer-motion";
 import type { api } from "../../convex/_generated/api";
 import { formatCents, RAIL_LABEL } from "../../shared/ledger";
 import { RULES } from "../../shared/policy/rules";
 import type { Decision, PaymentRequest, PolicyResult, RuleId } from "../../shared/types";
+import { cn } from "../ui/cn";
+import { decisionTone, Stamp, Tag } from "../ui/primitives";
 import type { CaseDetail } from "./AgentLanes";
-import { ruleInfo, secondsLeft, useNow } from "./format";
+import { ChannelIcon, IncomingMessage } from "./Incoming";
+import { channelLabel, clockTime, ruleInfo, secondsLeft, useNow } from "./format";
 
 export type CaseRow = FunctionReturnType<typeof api.cases.recent>[number];
 
@@ -15,7 +20,9 @@ const KEY_RULE_ORDER: RuleId[] = ["R10", "R17", "R16", "R13", "R9", "R8", "R1", 
 
 export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | undefined }) {
   const now = useNow();
+  const reduce = useReducedMotion();
   const result = c.policyResult as PolicyResult | undefined;
+  const request = c.request as PaymentRequest | undefined;
   const decision: Decision | undefined = c.decision ?? result?.decision;
   const approval = detail?.approvals.at(-1);
   const coolingOff =
@@ -25,44 +32,95 @@ export function DecisionCard({ c, detail }: { c: CaseRow; detail: CaseDetail | u
   const fired = new Set<RuleId>(result?.firedRules ?? []);
   const keyRule = KEY_RULE_ORDER.find((id) => fired.has(id)) ?? result?.firedRules[0];
   const reasonFor = (id: RuleId) => result?.reasons.find((reason) => reason.startsWith(`${id} `));
+  const tone = decisionTone(decision);
+  const amount = request?.amountCents ?? detail?.summary.amountCents ?? null;
+  const payee = detail?.summary.vendorName ?? request?.claimedVendorName ?? null;
 
   return (
-    <section className="lp-lockpanel wr-verdict" data-verdict={decision} aria-label="Decision">
-      <p key={decision ?? c.status} className="wr-verdict-word" data-decision={decision} role="status" aria-live="polite">
-        {decision ? verdictWord(decision, c.request as PaymentRequest | undefined) : `${c.status.replace(/_/g, " ")}…`}
-      </p>
-      {decision && <p className="wr-verdict-line">{explain(decision, result, detail)}</p>}
-      {result && result.firedRules.length > 0 && (
-        <ul className="lp-fired" aria-label="Rules that fired">
-          {result.firedRules.map((id) => (
-            <li key={id} data-key={id === keyRule ? "" : undefined} title={reasonFor(id)}>
-              <b>{id}</b> {ruleInfo(id)?.name ?? "rule"}
-            </li>
-          ))}
-        </ul>
+    <section
+      aria-label="Live case"
+      className={cn(
+        "overflow-hidden rounded-xl border bg-surface transition-colors duration-500",
+        tone === "pay" ? "border-pay/30" : tone === "block" ? "border-block/30" : "border-border",
       )}
-      <ol className="lp-rules" aria-label={`All ${Object.keys(RULES).length} rules`}>
-        {(Object.keys(RULES) as RuleId[]).map((id) => (
-          <li key={id} data-state={fired.has(id) ? "fired" : decision ? "checked" : "idle"} title={`${id} ${RULES[id].name}`}>
-            {id}
-          </li>
-        ))}
-      </ol>
-      {coolingOff && (
-        <p className="wr-countdown" role="timer">
-          Owner approved · cooling-off {secondsLeft(coolingOff, now)}s · the owner can still cancel
-        </p>
-      )}
-      {result && result.reasons.length > 0 && (
-        <details className="wr-more">
-          <summary>Why</summary>
-          <ul>
-            {result.reasons.map((reason) => (
-              <li key={reason}>{reason}</li>
+    >
+      {/* The strip: fixed columns, only the values change. */}
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 border-b border-border px-4 py-4 sm:grid-cols-[88px_150px_minmax(0,1fr)_auto] sm:px-6">
+        <time className="font-mono text-[12.5px] text-muted-foreground" dateTime={new Date(c.createdAt).toISOString()}>
+          {clockTime(c.createdAt)}
+        </time>
+        <span className="hidden items-center gap-2 text-[13px] text-foreground/90 sm:flex">
+          <ChannelIcon channel={c.channel} />
+          {channelLabel(c.channel)}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-[15px] font-medium tracking-[-0.01em] text-foreground">
+            {payee ?? "Unknown payee"}
+            {amount != null && <span className="ml-2 font-mono text-[14px] font-normal text-foreground/80">{formatCents(amount)}</span>}
+          </p>
+          <p className="truncate font-mono text-[12px] text-subtle">from {c.fromAddress}</p>
+        </div>
+        <motion.span
+          key={decision ?? c.status}
+          initial={reduce ? false : { opacity: 0, scale: 1.18, filter: "blur(6px)" }}
+          animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+          transition={{ type: "spring", stiffness: 260, damping: 22, mass: 0.8 }}
+          role="status"
+          aria-live="polite"
+        >
+          <Stamp tone={tone} size="lg">
+            {decision ? verdictWord(decision, request) : `${c.status.replace(/_/g, " ").toLowerCase()}…`}
+          </Stamp>
+        </motion.span>
+      </div>
+
+      <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
+        <IncomingMessage c={c} />
+        <div className="border-t border-border px-4 py-5 sm:px-6 md:border-l md:border-t-0">
+          <p className="text-[15px] leading-snug text-foreground">{decision ? explain(decision, result, detail) : "Countersign is checking this request."}</p>
+          {coolingOff && (
+            <p className="mt-3 flex items-center gap-2 font-mono text-[12.5px] text-hold-ink" role="timer">
+              <span className="size-1.5 rounded-full bg-hold" aria-hidden="true" />
+              Owner approved · releases in {secondsLeft(coolingOff, now)}s · she can still cancel
+            </p>
+          )}
+          {result && result.firedRules.length > 0 && (
+            <ul className="mt-4 flex flex-wrap gap-1.5" aria-label="Rules that fired">
+              {result.firedRules.map((id) => (
+                <li key={id}>
+                  <Tag tone={id === keyRule ? decisionTone(decision) : "neutral"} title={reasonFor(id)}>
+                    <b className="font-mono font-medium">{id}</b> {ruleInfo(id)?.name ?? "rule"}
+                  </Tag>
+                </li>
+              ))}
+            </ul>
+          )}
+          <ol className="mt-4 flex flex-wrap gap-1" aria-label={`All ${Object.keys(RULES).length} rules, fired ones lit`}>
+            {(Object.keys(RULES) as RuleId[]).map((id) => (
+              <li
+                key={id}
+                title={`${id} ${RULES[id].name}`}
+                className={cn(
+                  "grid h-5 min-w-7 place-items-center rounded px-1 font-mono text-[10px] transition-colors duration-300",
+                  fired.has(id) ? "bg-foreground text-background" : decision ? "bg-white/[0.06] text-subtle" : "bg-white/[0.03] text-white/25",
+                )}
+              >
+                {id}
+              </li>
             ))}
-          </ul>
-        </details>
-      )}
+          </ol>
+          {result && result.reasons.length > 0 && (
+            <details className="group mt-4 text-[13px]">
+              <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground">Why, in the engine&apos;s words</summary>
+              <ul className="mt-2 space-y-1.5 border-l border-border pl-3 text-muted-foreground">
+                {result.reasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
@@ -92,8 +150,8 @@ function explain(decision: Decision, result: PolicyResult | undefined, detail: C
   }
 }
 
-/** The big word. A message that asks for no money is forwarded to the owner, filtered as spam, or just answered. */
-function verdictWord(decision: Decision, request: PaymentRequest | undefined): string {
+/** The stamp's word. A message that asks for no money is forwarded to the owner, filtered as spam, or just answered. */
+export function verdictWord(decision: Decision, request: PaymentRequest | undefined): string {
   if (decision !== "NO_ACTION") return decision;
   const type = request?.messageType;
   if (type === "sales_or_spam") return "FILTERED";

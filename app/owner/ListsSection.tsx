@@ -9,7 +9,12 @@ import { useState, type FormEvent } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { OWNER_CODE } from "../../shared/config";
+import { motion } from "framer-motion";
 import { clockTime } from "../components/format";
+import { cn } from "../ui/cn";
+import { spring } from "../ui/motion";
+import { OtpInput } from "../ui/OtpInput";
+import { buttonClass, SectionHead, Stamp } from "../ui/primitives";
 
 type Lists = FunctionReturnType<typeof api.senderLists.list>;
 type Entry = Lists["entries"][number];
@@ -85,85 +90,94 @@ export function ListsSection() {
     if (next === "trust" && match === "bank") setMatch("phone");
   }
 
+  const field = "h-10 w-full rounded-lg border border-border-strong bg-background px-3 text-[14px] text-foreground outline-none transition-colors focus:border-foreground";
   return (
-    <section className="lists" aria-labelledby="lists-title">
-      <h2 id="lists-title">Block and trust lists</h2>
-      <p className="code-help">
+    <section aria-labelledby="lists-title">
+      <SectionHead title={<span id="lists-title">Block and trust lists</span>} />
+      <p className="mb-4 max-w-[68ch] text-[13px] leading-relaxed text-muted-foreground">
         Block refuses anything from or to an entry. Trust only says a sender belongs to a vendor: bank changes still
         need a callback and your approval.
       </p>
 
-      <div className="code-form">
-        <label htmlFor="lists-code">Code from your authenticator app</label>
-        <input
-          id="lists-code"
-          className="code-input"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          pattern="[0-9]*"
-          maxLength={OWNER_CODE.digits}
-          value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, OWNER_CODE.digits))}
-        />
-        <p className="code-help">Each add or remove uses one code. Wait for the next one before the next change.</p>
-      </div>
-
-      <form className="list-form" onSubmit={onAdd}>
-        <div className="segmented" role="radiogroup" aria-label="List">
-          {(["deny", "trust"] as const).map((k) => (
-            <button key={k} type="button" role="radio" aria-checked={kind === k} className="seg" onClick={() => chooseKind(k)}>
-              {k === "deny" ? "Block" : "Trust for a vendor"}
-            </button>
-          ))}
+      <div className="overflow-hidden rounded-xl border border-border bg-surface">
+        <div className="space-y-3 border-b border-border px-5 py-5 sm:px-6">
+          <label htmlFor="lists-code" className="block text-[13px] font-medium">
+            Code from your authenticator app
+          </label>
+          <OtpInput id="lists-code" length={OWNER_CODE.digits} value={code} onChange={setCode} describedBy="lists-code-help" />
+          <p id="lists-code-help" className="text-[12.5px] text-muted-foreground">
+            Each add or remove uses one code. Wait for the next one before the next change.
+          </p>
         </div>
-        <label className="field">
-          <span>Match</span>
-          <select value={match} onChange={(e) => setMatch(e.target.value as Match)}>
-            {matches.map((m) => (
-              <option key={m} value={m}>
-                {MATCH_LABELS[m]}
-              </option>
+
+        <form className="grid gap-4 px-5 py-5 sm:grid-cols-2 sm:px-6" onSubmit={onAdd}>
+          <div className="relative grid grid-cols-2 rounded-lg border border-border-strong p-1 sm:col-span-2" role="radiogroup" aria-label="List">
+            {(["deny", "trust"] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                role="radio"
+                aria-checked={kind === k}
+                className="relative h-8 rounded-md text-[13px] text-muted-foreground aria-checked:text-foreground"
+                onClick={() => chooseKind(k)}
+              >
+                {kind === k && <motion.span layoutId="list-kind" className="absolute inset-0 rounded-md bg-white/[0.09]" transition={spring.snappy} />}
+                <span className="relative">{k === "deny" ? "Block" : "Trust for a vendor"}</span>
+              </button>
             ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>{MATCH_LABELS[match]}</span>
-          <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={PLACEHOLDERS[match]} required />
-        </label>
-        {kind === "trust" && (
-          <label className="field">
-            <span>Vendor</span>
-            <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} required>
-              <option value="">Choose a vendor…</option>
-              {(vendors ?? []).map((vendor) => (
-                <option key={vendor.id} value={vendor.id}>
-                  {vendor.name}
+          </div>
+          <label className="space-y-1.5 text-[12.5px] text-muted-foreground">
+            <span>Match</span>
+            <select className={field} value={match} onChange={(e) => setMatch(e.target.value as Match)}>
+              {matches.map((m) => (
+                <option key={m} value={m}>
+                  {MATCH_LABELS[m]}
                 </option>
               ))}
             </select>
           </label>
-        )}
-        <label className="field">
-          <span>Note (optional)</span>
-          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="Why" />
-        </label>
-        <label className="field">
-          <span>Expires after (days, optional)</span>
-          <input value={days} onChange={(e) => setDays(e.target.value.replace(/\D/g, "").slice(0, 3))} inputMode="numeric" placeholder="Never" />
-        </label>
-        <button type="submit" className="btn btn-primary" disabled={!codeReady || value.trim() === ""}>
-          {kind === "deny" ? "Add to block list" : "Add to trust list"}
-        </button>
-      </form>
-
-      <div aria-live="polite">{result && <p className={`result ${result.ok ? "ok" : "bad"}`}>{result.text}</p>}</div>
+          <label className="space-y-1.5 text-[12.5px] text-muted-foreground">
+            <span>{MATCH_LABELS[match]}</span>
+            <input className={cn(field, "font-mono")} value={value} onChange={(e) => setValue(e.target.value)} placeholder={PLACEHOLDERS[match]} required />
+          </label>
+          {kind === "trust" && (
+            <label className="space-y-1.5 text-[12.5px] text-muted-foreground sm:col-span-2">
+              <span>Vendor</span>
+              <select className={field} value={vendorId} onChange={(e) => setVendorId(e.target.value)} required>
+                <option value="">Choose a vendor…</option>
+                {(vendors ?? []).map((vendor) => (
+                  <option key={vendor.id} value={vendor.id}>
+                    {vendor.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="space-y-1.5 text-[12.5px] text-muted-foreground">
+            <span>Note (optional)</span>
+            <input className={field} value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="Why" />
+          </label>
+          <label className="space-y-1.5 text-[12.5px] text-muted-foreground">
+            <span>Expires after (days, optional)</span>
+            <input className={field} value={days} onChange={(e) => setDays(e.target.value.replace(/\D/g, "").slice(0, 3))} inputMode="numeric" placeholder="Never" />
+          </label>
+          <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+            <button type="submit" className={buttonClass("primary")} disabled={!codeReady || value.trim() === ""}>
+              {kind === "deny" ? "Add to block list" : "Add to trust list"}
+            </button>
+            <div aria-live="polite" className="text-[13px]">
+              {result && <p className={result.ok ? "text-pay-ink" : "text-block-ink"}>{result.text}</p>}
+            </div>
+          </div>
+        </form>
+      </div>
 
       {lists === undefined ? (
-        <p className="muted">Loading…</p>
+        <div className="skeleton mt-4 h-14 rounded-lg" />
       ) : lists.entries.length === 0 ? (
-        <p className="muted">No entries yet.</p>
+        <p className="mt-4 text-[13px] text-muted-foreground">No entries yet.</p>
       ) : (
-        <ul className="feed">
+        <ul className="mt-4 space-y-px overflow-hidden rounded-xl border border-border bg-border">
           {lists.entries.map((entry) => (
             <EntryItem key={entry.id} entry={entry} disabled={!codeReady} onRemove={() => run(() => remove({ entryId: entry.id, code }))} />
           ))}
@@ -171,17 +185,20 @@ export function ListsSection() {
       )}
 
       {lists && lists.knownBad.length > 0 && (
-        <>
-          <h2>Marked bad after a denied callback</h2>
-          <ul className="feed">
+        <div className="mt-8">
+          <SectionHead title="Marked bad after a denied callback" />
+          <ul className="space-y-px overflow-hidden rounded-xl border border-border bg-border">
             {lists.knownBad.map((k, i) => (
-              <li key={`${k.vendorName}-${i}`}>
-                <time>Never counts as on file again</time>
-                {k.value} · claimed to be {k.vendorName}
+              <li key={`${k.vendorName}-${i}`} className="flex flex-wrap items-center justify-between gap-2 bg-background px-4 py-3 text-[13px]">
+                <span>
+                  <span className="font-mono text-foreground">{k.value}</span>
+                  <span className="text-muted-foreground"> · claimed to be {k.vendorName}</span>
+                </span>
+                <span className="text-[12px] text-block-ink">Never counts as on file again</span>
               </li>
             ))}
           </ul>
-        </>
+        </div>
       )}
     </section>
   );
@@ -189,17 +206,22 @@ export function ListsSection() {
 
 function EntryItem({ entry, disabled, onRemove }: { entry: Entry; disabled: boolean; onRemove: () => void }) {
   return (
-    <li className="list-entry" data-kind={entry.kind} data-expired={entry.expired}>
-      <div>
-        <time dateTime={new Date(entry.createdAt).toISOString()}>
-          {entry.kind === "deny" ? "Blocked" : `Trusted for ${entry.vendorName ?? "a vendor"}`} · {MATCH_LABELS[entry.match]} ·
-          added {clockTime(entry.createdAt)}
+    <li className={cn("flex items-center justify-between gap-3 bg-background px-4 py-3", entry.expired && "opacity-55")}>
+      <div className="min-w-0">
+        <p className="flex flex-wrap items-center gap-2">
+          <Stamp tone={entry.kind === "deny" ? "block" : "pay"} size="sm">
+            {entry.kind === "deny" ? "Blocked" : "Trusted"}
+          </Stamp>
+          <span className="truncate font-mono text-[13.5px]">{entry.value}</span>
+        </p>
+        <p className="mt-1 text-[12px] text-muted-foreground">
+          {entry.kind === "trust" && `For ${entry.vendorName ?? "a vendor"} · `}
+          {MATCH_LABELS[entry.match]} · added {clockTime(entry.createdAt)}
           {entry.expired ? " · expired" : entry.expiresAt ? ` · until ${new Date(entry.expiresAt).toLocaleDateString()}` : ""}
-        </time>
-        <span className="list-value">{entry.value}</span>
-        {entry.note && <span className="muted"> · {entry.note}</span>}
+          {entry.note && ` · ${entry.note}`}
+        </p>
       </div>
-      <button type="button" className="btn btn-danger" disabled={disabled} onClick={onRemove} aria-label={`Remove ${entry.value}`}>
+      <button type="button" className={buttonClass("ghost", "h-8 shrink-0 px-3")} disabled={disabled} onClick={onRemove} aria-label={`Remove ${entry.value}`}>
         Remove
       </button>
     </li>
