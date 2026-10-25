@@ -12,6 +12,12 @@ address. A forged sender can't count as a vendor or the owner (rule R17), and Cl
 PDF invoices. Countersign never sends email; its reply shows as an unsent draft. Setup:
 [docs/email-setup.md](docs/email-setup.md).
 
+**Lumen Bank** (`/bank`) is a sandbox bank that moves money only on a transfer countersigned by the
+Policy Engine's PAY. The Payer signs exactly one transfer (ECDSA P-256, single-use, 2-minute expiry), and
+the bank checks it against the public key. Its "Simulate a hijacked agent" panel sends four real
+transfers to the bank's public endpoint, and all four are refused. Changing a payee's bank details on
+`/bank` freezes the payee and goes through Countersign's callback first.
+
 ## Setup (everyone)
 
 ```bash
@@ -51,6 +57,8 @@ shared/                     pure TS, no Convex imports, runs in tests/Convex/bro
   audit.ts                  P1  hash-chain helpers (sorted-key canonical JSON)
   totp.ts                   P4  owner step-up code check (RFC 6238, replay guard)
   ledger.ts                 P4  double-entry journal lines per payment
+  bank/payload.ts           P1  countersigned release payload: canonical JSON, ECDSA P-256 sign/verify
+  bank/verify.ts            P1  Lumen Bank's transfer checks, in order (pure, unit-tested)
   scoreboard.ts             P4  scoreboard definitions (scam attempt, dollars lost, decision time)
   whatsapp.ts               P2  WhatsApp webhook handshake, signature check, payload parsing, E.164
 convex/
@@ -66,7 +74,9 @@ convex/
   agents/riskAnalyst.ts     P3  red flags + Claude explanation
   agents/callbackVerifier.ts P2 Cartesia outbound call to phoneOnFile; outcome, retry, timeout
   agents/ownerConcierge.ts  P4  authenticator-code approval (owner page / ASI:One), cooling-off, owner alerts
-  agents/payer.ts           P4  mock ledger always; Increase sandbox ACH when INCREASE_API_KEY is set
+  agents/payer.ts           P4  Lumen Bank by default; PAYMENT_RAIL=mock or ach_sandbox (Increase) instead
+  lib/countersign.ts        P1  signRelease: the only reader of COUNTERSIGN_SIGNING_KEY, called only by the Payer
+  bank.ts                   P1  Lumen Bank: transfers (Payer + POST /bank/transfers), payees, bank-detail changes
   payments.ts               P4  payment rows, idempotency, `provisionIncrease` sandbox setup
   owner.ts                  P4  owner page queries (pending approvals, alert feed)
   warRoom.ts                P4  War Room case detail (lanes, callbacks, approvals, payments)
@@ -85,6 +95,7 @@ convex/
   scoreboard.ts             P4  top-bar numbers
 app/                        P4  War Room (Next.js + Convex React hooks)
 app/owner/                  P4  owner approvals and the block/trust lists, opened on the owner's phone
+app/bank/                   P1  Lumen Bank: balance, payees, "Simulate a hijacked agent", live ledger
 app/try/                    P2  judge chat page (QR code on the judge card)
 scenarios/scenarios.json    P1  30-scenario answer key (spec §9)
 scenarios/world.ts          P1  seed world as data + reference verifier (what VendorFindings must contain)
@@ -268,6 +279,7 @@ Convex is the whole backend: the database, every agent step, the timers and the 
 | Fetch.ai agents on Agentverse speaking the Chat Protocol; the owner flow in ASI:One | The vendor billing agent is ours, playing a compromised vendor |
 | Email: real mail to the Postmark inbound address, its real SPF/DKIM/DMARC results, attached PDFs read by Claude | The five email attacks on /try are crafted webhook payloads (forged headers can't be sent from a judge's inbox); they run through the same parser and pipeline and are labelled "Simulated" |
 | | Replies to email are drafts shown in the War Room; nothing is ever sent |
+| Lumen Bank's countersignature: real ECDSA P-256 signatures, single-use nonces, checked against the public key | Lumen Bank itself is a sandbox inside the same Convex deployment as the signer; in production the bank holds only the public key and the signer runs in its own isolated service |
 
 Every lane in the War Room is a real database row written by the agent that did the work.
-The rail used for each payment (mock ledger or Increase sandbox) is shown on the payment.
+The rail used for each payment (Lumen Bank, mock ledger or Increase sandbox) is shown on the payment.
