@@ -11,7 +11,7 @@ import { EMAIL_ATTACKS, emailAttack } from "../../shared/email/attacks";
 import { RULES } from "../../shared/policy/rules";
 import type { RuleId } from "../../shared/types";
 import { motion } from "framer-motion";
-import { ArrowUp, Check, LoaderCircle, Mail, Paperclip, Phone } from "lucide-react";
+import { ArrowUp, Check, LoaderCircle, Mail, MessageSquareText, Paperclip, Phone } from "lucide-react";
 import { AppShell } from "../ui/AppShell";
 import { cn } from "../ui/cn";
 import { spring } from "../ui/motion";
@@ -19,7 +19,6 @@ import { decisionTone, SectionHead, Stamp, Tag } from "../ui/primitives";
 
 const STORAGE_KEY = "countersign-sender";
 const PHONE_DISPLAY = "+1 (256) 215-6932";
-const PHONE_TEL = "+12562156932";
 const EMAIL_ADDRESS = process.env.NEXT_PUBLIC_EMAIL_ADDRESS ?? "";
 const ATTACK_PDF = "/demo/email/northwind-invoice-nw-889.pdf";
 
@@ -129,14 +128,10 @@ export default function TryPage() {
   return (
     <AppShell
       wide
+      icon={<MessageSquareText />}
+      tone="accent"
       title="Try to scam it"
       subtitle="You're messaging Countersign, the payments assistant for Lumen Labs, a one-person company. Pretend to be a vendor, the boss, anyone. Every message goes through the same agents and the same lock as a phone call."
-      actions={
-        <a href={`tel:${PHONE_TEL}`} className="flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-[13px] text-muted-foreground hover:text-foreground">
-          <Phone className="size-4" aria-hidden="true" />
-          <span className="font-mono">{PHONE_DISPLAY}</span>
-        </a>
-      }
     >
       <div className="grid grid-cols-[minmax(0,1fr)] gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
         <section aria-label="Conversation" className="flex min-h-[60vh] min-w-0 flex-col">
@@ -329,7 +324,7 @@ function Progress({ m, mail }: { m: Outcome; mail?: boolean }) {
         return (
           <li key={label} className={cn("flex items-center gap-2.5 text-[13px]", state === "todo" ? "text-subtle" : state === "active" ? "text-foreground" : "text-muted-foreground")}>
             <span className="grid size-4 place-items-center" aria-hidden="true">
-              {state === "done" ? <Check className="size-3.5" /> : state === "active" ? <LoaderCircle className="size-3.5 animate-spin" /> : <span className="size-1 rounded-full bg-white/25" />}
+              {state === "done" ? <Check className="size-3.5" /> : state === "active" ? <LoaderCircle className="size-3.5 animate-spin text-accent" /> : <span className="size-1 rounded-full bg-white/25" />}
             </span>
             {label}
           </li>

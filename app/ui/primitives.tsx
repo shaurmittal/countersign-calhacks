@@ -2,9 +2,9 @@
 import type { ReactNode } from "react";
 import { cn } from "./cn";
 
-export type Tone = "pay" | "block" | "hold" | "owner" | "neutral" | "quiet";
+export type Tone = "pay" | "block" | "hold" | "owner" | "code" | "neutral" | "quiet";
 
-/** Decision -> tone. Green clears money, red refuses, amber holds, white waits for the owner. */
+/** Decision -> tone. Green clears money, red refuses, amber holds, violet waits for the owner. */
 export function decisionTone(decision: string | null | undefined): Tone {
   switch (decision) {
     case "PAY":
@@ -27,7 +27,8 @@ const STAMP: Record<Tone, string> = {
   pay: "border-pay/50 bg-pay/[0.12] text-pay-ink",
   block: "border-block/50 bg-block/[0.12] text-block-ink",
   hold: "border-hold/40 bg-hold/[0.08] text-hold-ink",
-  owner: "border-white/40 bg-white/[0.06] text-foreground",
+  owner: "border-owner/50 bg-owner/[0.12] text-owner-ink",
+  code: "border-code/50 bg-code/[0.1] text-code-ink",
   neutral: "border-border-strong text-muted-foreground",
   quiet: "border-border text-muted-foreground",
 };
@@ -54,7 +55,8 @@ const TAG: Record<Tone, string> = {
   pay: "text-pay-ink border-pay/30 bg-pay/[0.07]",
   block: "text-block-ink border-block/30 bg-block/[0.07]",
   hold: "text-hold-ink border-hold/25 bg-hold/[0.06]",
-  owner: "text-foreground border-white/25",
+  owner: "text-owner-ink border-owner/35 bg-owner/[0.07]",
+  code: "text-code-ink border-code/35 bg-code/[0.07]",
   neutral: "text-foreground/85 border-border-strong",
   quiet: "text-muted-foreground border-border",
 };

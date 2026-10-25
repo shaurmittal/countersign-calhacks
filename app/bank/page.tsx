@@ -9,7 +9,7 @@ import { api } from "../../convex/_generated/api";
 import { generateCountersignKeys, signPayload, type ReleasePayload } from "../../shared/bank/payload";
 import { formatCents } from "../../shared/ledger";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, LoaderCircle, Send, X } from "lucide-react";
+import { Check, Landmark, LoaderCircle, Send, ShieldAlert, X } from "lucide-react";
 import { AnimatedNumber } from "../ui/AnimatedNumber";
 import { AppShell } from "../ui/AppShell";
 import { cn } from "../ui/cn";
@@ -113,11 +113,13 @@ export default function BankPage() {
 
   return (
     <AppShell
+      icon={<Landmark />}
+      tone="code"
       title="Lumen Bank"
       subtitle="A sandbox bank that only moves money Countersign signed. When the Policy Engine says PAY, the Payer signs that exact transfer: who, how much, which invoice, once. Anything without a valid countersignature is refused at the door."
     >
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-        <section aria-label="Account" className="rounded-xl border border-border bg-surface">
+        <section aria-label="Account" className="rounded-xl border border-code/20 bg-surface bg-[linear-gradient(170deg,rgba(124,196,245,0.08),transparent_45%)]">
           <div className="border-b border-border px-5 py-5 sm:px-6">
             <p className="text-[12.5px] text-muted-foreground">{account?.name ?? "Operating account"}</p>
             <p className="mt-2 text-[34px] font-medium leading-none tracking-[-0.03em] sm:text-[40px]">
@@ -142,9 +144,10 @@ export default function BankPage() {
           </div>
         </section>
 
-        <section aria-labelledby="hijack-title" className="rounded-xl border border-border bg-surface">
+        <section aria-labelledby="hijack-title" className="rounded-xl border border-block/25 bg-surface bg-[linear-gradient(170deg,rgba(255,107,74,0.10),transparent_45%)]">
           <div className="border-b border-border px-5 py-5 sm:px-6">
-            <h2 id="hijack-title" className="text-[18px] font-medium tracking-[-0.015em]">
+            <h2 id="hijack-title" className="flex items-center gap-2.5 text-[18px] font-medium tracking-[-0.015em]">
+              <ShieldAlert className="size-5 text-block-ink" aria-hidden="true" />
               Simulate a hijacked agent
             </h2>
             <p className="mt-1.5 max-w-[60ch] text-[13.5px] leading-relaxed text-muted-foreground">
@@ -236,7 +239,7 @@ export default function BankPage() {
                       <td className="py-3 pr-4 max-md:col-start-2 max-md:col-end-4 max-md:row-start-2 max-md:py-0.5">
                         {t.status === "accepted" ? (
                           <span className="text-pay-ink">
-                            Countersigned <span className="font-mono text-[12px] text-muted-foreground">sig {t.sig}…</span>
+                            Countersigned <span className="font-mono text-[12px] text-code-ink">sig {t.sig}…</span>
                           </span>
                         ) : (
                           <span className="text-block-ink">{t.reason}</span>

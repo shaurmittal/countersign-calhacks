@@ -85,7 +85,7 @@ export function OtpInput(props: {
           className={cn(
             "h-12 w-10 rounded-lg border bg-surface text-center font-mono text-[20px] text-foreground outline-none transition-colors sm:h-14 sm:w-12 sm:text-[22px]",
             d ? "border-white/35" : "border-border-strong",
-            "focus:border-foreground focus-visible:outline-none disabled:opacity-40",
+            "focus:border-owner focus:shadow-[0_0_0_3px_rgba(195,166,255,0.18)] focus-visible:outline-none disabled:opacity-40",
           )}
         />
       ))}

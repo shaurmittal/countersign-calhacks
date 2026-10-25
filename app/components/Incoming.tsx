@@ -1,17 +1,14 @@
 "use client";
-// The request as it arrived and Countersign's reply (inside the live strip), and the strip bays: every
-// recent case as a strip in the bay its state puts it in. Two judges can test at once; click a strip to pin it.
+// The request as it arrived and Countersign's reply (the caption under the room), and the case tabs:
+// every recent case, newest first, so two judges can test at once; click a tab to pin it.
 import { motion } from "framer-motion";
-import { Bot, Landmark, Mail, MessageCircle, MessageSquare, MessageSquareText, Phone, Paperclip } from "lucide-react";
+import { Bot, Landmark, Mail, MessageCircle, MessageSquare, MessageSquareText, Phone, Paperclip, Radio } from "lucide-react";
 import type { Id } from "../../convex/_generated/dataModel";
 import type { CaseRow } from "./DecisionCard";
-import { verdictWord } from "./DecisionCard";
 import { authBadge } from "../../shared/email/auth";
-import { formatCents } from "../../shared/ledger";
-import type { PaymentRequest } from "../../shared/types";
 import { cn } from "../ui/cn";
 import { spring } from "../ui/motion";
-import { decisionTone, Stamp, Tag } from "../ui/primitives";
+import { decisionTone, Tag } from "../ui/primitives";
 import { channelLabel, clockTime } from "./format";
 
 const ICONS: Record<string, typeof Phone> = {
@@ -29,32 +26,27 @@ export function ChannelIcon({ channel, className }: { channel: string; className
   return <Icon className={cn("size-[15px] stroke-[1.75] text-muted-foreground", className)} aria-hidden="true" />;
 }
 
+/** The caption: who asked for what, in their words, and what Countersign said back. Sized for the back of a room. */
 export function IncomingMessage({ c }: { c: CaseRow }) {
   const email = c.channel === "email" ? c.emailSignals : null;
   return (
-    <div className="space-y-5 px-4 py-5 sm:px-6" aria-live="polite">
+    <div className="space-y-5 rounded-xl border border-border bg-surface px-5 py-5 sm:px-6" aria-live="polite">
       <div>
-        <blockquote className="text-[16px] leading-relaxed tracking-[-0.01em] text-foreground sm:text-[17px]">
+        <p className="mb-2 font-mono text-[12px] uppercase tracking-[0.12em] text-foreground">
+          {channelLabel(c.channel)} <span className="text-subtle">· from {c.fromAddress} · {clockTime(c.createdAt)}</span>
+        </p>
+        <blockquote className="text-[19px] font-medium leading-snug tracking-[-0.015em] text-foreground sm:text-[21px]">
           {email ? emailBody(c.rawContent) : c.rawContent}
         </blockquote>
         {email && <EmailBadges email={email} />}
       </div>
       {c.replyText && (
-        <motion.div
-          key={c.replyText}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={spring.smooth}
-          className="rounded-lg border border-border bg-white/[0.02] px-4 py-3"
-        >
-          <p className="mb-1.5 text-[12px] text-muted-foreground">
-            {email ? (
-              <>Countersign&apos;s draft reply · not sent · Re: {email.subject || "(no subject)"}</>
-            ) : (
-              <>Countersign replied</>
-            )}
+        <motion.div key={c.replyText} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={spring.smooth} className="border-t border-border pt-4">
+          <p className="mb-2 font-mono text-[12px] uppercase tracking-[0.12em] text-accent">
+            Countersign{" "}
+            <span className="text-subtle">{email ? `· draft reply · not sent · Re: ${email.subject || "(no subject)"}` : "· replied"}</span>
           </p>
-          <p className="text-[14px] leading-relaxed text-foreground/90">{c.replyText}</p>
+          <p className="text-[19px] leading-snug tracking-[-0.015em] text-foreground/90 sm:text-[21px]">{c.replyText}</p>
         </motion.div>
       )}
     </div>
@@ -100,97 +92,58 @@ function authTitle(a: EmailView["auth"]): string {
   return `SPF ${a.spf}, DKIM ${a.dkim}, DMARC ${a.dmarc}, as reported by the receiving mail server`;
 }
 
-/** Closed holds sit apart from "Waiting": nobody is being asked anything, so the strip isn't waiting on a person. */
-const BAYS: { id: string; title: string; holds: (c: CaseRow) => boolean }[] = [
-  { id: "working", title: "Working", holds: (c) => ["RECEIVED", "PARSED", "VERIFYING", "DECIDED"].includes(c.status) },
-  { id: "waiting", title: "Waiting on a person", holds: (c) => c.status === "CALLBACK_PENDING" || c.status === "AWAITING_OWNER" },
-  { id: "cleared", title: "Cleared and paid", holds: (c) => c.status === "CLOSED" && c.decision === "PAY" },
-  { id: "refused", title: "Refused", holds: (c) => c.status === "CLOSED" && c.decision === "BLOCK" },
-  { id: "held", title: "Held, or not a payment", holds: (c) => c.status === "CLOSED" && c.decision !== "PAY" && c.decision !== "BLOCK" },
-];
-
-const ASK: Record<string, string> = {
-  pay_invoice: "pay an invoice",
-  change_bank: "change bank details",
-  wire: "send a wire",
-  gift_cards: "buy gift cards",
-  crypto: "pay in crypto",
-  update_payroll: "change payroll",
-  other: "something else",
-  none: "not a payment",
+const DOT: Record<string, string> = {
+  pay: "bg-pay",
+  block: "bg-block",
+  hold: "bg-hold",
+  owner: "bg-owner",
+  code: "bg-code",
+  quiet: "bg-white/40",
+  neutral: "bg-white/25",
 };
 
-/** What the strip asks for, in a few words: "pay an invoice · $362.00". */
-function askOf(request: PaymentRequest | undefined): string {
-  if (!request) return "reading…";
-  const what = ASK[request.requestedAction] ?? request.requestedAction;
-  return request.amountCents != null ? `${what} · ${formatCents(request.amountCents)}` : what;
-}
-
-/** Every recent case as a strip in its bay. Every bay keeps its slot; refused strips stay on the board, struck through. */
+/** Every recent case as a tab, newest first: time, channel, and a dot in its verdict's colour. */
 export function CaseQueue(props: {
   cases: CaseRow[];
   selectedId: Id<"cases"> | null;
+  following: boolean;
   onSelect: (id: Id<"cases">) => void;
+  onFollow: () => void;
 }) {
   return (
-    <div>
-      <p className="mb-2 grid grid-cols-[64px_18px_minmax(0,1fr)_auto] gap-2.5 border-b border-border px-3 pb-2 text-[12px] text-subtle" aria-hidden="true">
-        <span>Time</span>
-        <span />
-        <span>From · ask</span>
-        <span>Verdict</span>
-      </p>
-      <div className="space-y-4" role="list" aria-label="Cases by state">
-        {BAYS.map((bay) => {
-          const strips = props.cases.filter(bay.holds);
+    <div className="flex min-w-0 items-center gap-2">
+      <ol className="flex min-w-0 gap-1 overflow-x-auto [scrollbar-width:none]" aria-label="Cases, newest first">
+        {props.cases.map((c) => {
+          const selected = c._id === props.selectedId;
           return (
-            <section key={bay.id} role="listitem" aria-label={bay.title}>
-              <p className="mb-1.5 flex items-center justify-between px-1 text-[13px] text-muted-foreground">
-                {bay.title}
-                <span className="font-mono text-subtle">{strips.length}</span>
-              </p>
-              {strips.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-border px-3 py-2 text-[12.5px] text-subtle">None</p>
-              ) : (
-                <motion.ol layout className="space-y-px overflow-hidden rounded-lg border border-border bg-border">
-                  {strips.map((c) => (
-                    <Strip key={c._id} c={c} selected={c._id === props.selectedId} onSelect={() => props.onSelect(c._id)} />
-                  ))}
-                </motion.ol>
-              )}
-            </section>
+            <li key={c._id} className="relative shrink-0">
+              {selected && <motion.span layoutId="case-tab" className="absolute inset-0 rounded-lg border border-accent/50 bg-accent/[0.08]" transition={spring.morph} />}
+              <button
+                type="button"
+                aria-current={selected ? "true" : undefined}
+                onClick={() => props.onSelect(c._id)}
+                className={cn("relative flex h-10 items-center gap-2 rounded-lg px-3 text-[14px] transition-colors", selected ? "text-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                <span className="font-mono text-[12.5px] text-subtle">{clockTime(c.createdAt)}</span>
+                <ChannelIcon channel={c.channel} className={selected ? "text-foreground" : undefined} />
+                <span className="hidden lg:inline">{channelLabel(c.channel)}</span>
+                <span className={cn("size-2 rounded-full", DOT[decisionTone(c.decision)])} aria-hidden="true" />
+                <span className="sr-only">{c.decision ?? c.status.toLowerCase().replace("_", " ")}</span>
+              </button>
+            </li>
           );
         })}
-      </div>
+      </ol>
+      {!props.following && (
+        <button
+          type="button"
+          onClick={props.onFollow}
+          className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border-strong px-3 text-[13px] text-foreground hover:bg-white/[0.06]"
+        >
+          <Radio className="size-4" aria-hidden="true" />
+          Follow newest
+        </button>
+      )}
     </div>
-  );
-}
-
-function Strip({ c, selected, onSelect }: { c: CaseRow; selected: boolean; onSelect: () => void }) {
-  const request = c.request as PaymentRequest | undefined;
-  const refused = c.status === "CLOSED" && c.decision === "BLOCK";
-  const who = request?.claimedVendorName ?? c.fromAddress;
-  return (
-    // layoutId: when a strip is stamped it travels from its old bay to its new one.
-    <motion.li layoutId={`strip-${c._id}`} transition={spring.morph} className="relative bg-background">
-      {selected && <motion.span layoutId="strip-selected" className="absolute inset-0 bg-white/[0.08]" transition={spring.morph} />}
-      <button
-        type="button"
-        onClick={onSelect}
-        aria-current={selected ? "true" : undefined}
-        className="relative grid w-full grid-cols-[64px_18px_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-white/[0.04]"
-      >
-        <time className="font-mono text-[13px] text-subtle">{clockTime(c.createdAt).replace(/:\d\d /, " ")}</time>
-        <ChannelIcon channel={c.channel} className="size-[15px]" />
-        <span className="min-w-0">
-          <span className={cn("block truncate text-[14px]", selected ? "text-foreground" : "text-foreground/90", refused && "struck")}>{who}</span>
-          <span className="block truncate text-[13px] text-muted-foreground">{askOf(request)}</span>
-        </span>
-        <Stamp tone={decisionTone(c.decision)} size="sm">
-          {c.decision ? verdictWord(c.decision, request) : "…"}
-        </Stamp>
-      </button>
-    </motion.li>
   );
 }

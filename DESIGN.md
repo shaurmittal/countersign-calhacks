@@ -11,13 +11,92 @@ colors:
   muted-ink: "#a3a3a3"
   subtle-ink: "#8f8f8f"
   placeholder-ink: "#737373"
-  cleared-green: "#22c55e"
-  cleared-green-ink: "#4ade80"
-  refusal-red: "#ef4444"
-  refusal-red-ink: "#f87171"
-  hold-amber: "#f59e0b"
-  hold-amber-ink: "#fbbf24"
+  countersign-amber: "#f2b04c"
+  countersign-amber-ink: "#ffd08a"
+  lock-ice: "#7cc4f5"
+  lock-ice-ink: "#b5defa"
+  owner-violet: "#c3a6ff"
+  owner-violet-ink: "#ddd0ff"
+  cleared-green: "#5bd69b"
+  cleared-green-ink: "#86e4b6"
+  refusal-red: "#ff6b4a"
+  refusal-red-ink: "#ff9a82"
+  hold-amber: "#f2b04c"
+  hold-amber-ink: "#ffd08a"
 typography:
+  verdict:
+    fontFamily: "Geist Mono, ui-monospace, SF Mono, Menlo, monospace"
+    fontSize: "60px"
+    fontWeight: 700
+    lineHeight: 1.15
+    letterSpacing: "0.08em"
+  verdict-compact:
+    fontFamily: "Geist Mono, ui-monospace, SF Mono, Menlo, monospace"
+    fontSize: "46px"
+    fontWeight: 700
+    lineHeight: 1.15
+    letterSpacing: "0.08em"
+  page-title:
+    fontFamily: "Geist, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+    fontSize: "32px"
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: "-0.025em"
+  balance:
+    fontFamily: "Geist, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+    fontSize: "40px"
+    fontWeight: 500
+    lineHeight: 1
+    letterSpacing: "-0.03em"
+  amount:
+    fontFamily: "Geist Mono, ui-monospace, SF Mono, Menlo, monospace"
+    fontSize: "30px"
+    fontWeight: 500
+    lineHeight: 1
+    letterSpacing: "-0.03em"
+  amount-compact:
+    fontFamily: "Geist Mono, ui-monospace, SF Mono, Menlo, monospace"
+    fontSize: "28px"
+    fontWeight: 500
+    lineHeight: 1
+    letterSpacing: "-0.03em"
+  metric-strip:
+    fontFamily: "Geist Mono, ui-monospace, SF Mono, Menlo, monospace"
+    fontSize: "22px"
+    fontWeight: 500
+    lineHeight: 1
+    letterSpacing: "-0.02em"
+  caption:
+    fontFamily: "Geist, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+    fontSize: "21px"
+    fontWeight: 500
+    lineHeight: 1.375
+    letterSpacing: "-0.015em"
+  caption-compact:
+    fontFamily: "Geist, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+    fontSize: "19px"
+    fontWeight: 400
+    lineHeight: 1.375
+  lead:
+    fontFamily: "Geist, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+    fontSize: "18px"
+    fontWeight: 400
+    lineHeight: 1.375
+  explain:
+    fontFamily: "Geist, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+    fontSize: "20px"
+    fontWeight: 400
+    lineHeight: 1.375
+  narration:
+    fontFamily: "Geist, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+    fontSize: "17px"
+    fontWeight: 400
+    lineHeight: 1.375
+  node:
+    fontFamily: "Geist, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+    fontSize: "15px"
+    fontWeight: 600
+    lineHeight: 1.25
   headline:
     fontFamily: "Geist, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
     fontSize: "26px"
@@ -171,7 +250,7 @@ Scope: the app pages only (War Room `/`, `/owner`, `/bank`, `/try`), styled by `
 
 Every payment request is a strip a controller must clear before it lands. The board is OLED black, written in white at stepped alphas, ruled with one-pixel white hairlines. Strips are long, low rows with a fixed column grammar (time, channel, from and ask, verdict stamp); the columns never move, only their values change. One region dominates each page (the live strip in the War Room, the waiting approval on /owner, the account on /bank), and everything else sits in quiet bays beside it.
 
-Colour is reserved for outcomes. Green appears only when money is cleared or an approval lands, red only for refusals, amber only for holds; every other pixel is black, white or grey. The verdict is stamped in monospace capitals at the strip's end, the one place the system raises its voice. Motion is spring-settled and conveys state only: a row arriving, a verdict landing, a selection gliding.
+Colour carries meaning, in the /demo film's palette: amber is Countersign at work, ice blue is deterministic code and the lock, violet is waiting on the owner, green is money cleared, red is a refusal. The verdict is stamped in monospace capitals, the one place the system raises its voice. Motion is spring-settled and conveys state only: an agent working, a verdict landing, a selection gliding.
 
 Density is operational, not editorial: 14px body, 12 to 13px labels, mono for every time, amount, hash and code. Nothing disappears when it is cancelled or refused; refused strips stay on the board, struck through.
 
@@ -185,17 +264,19 @@ Density is operational, not editorial: 14px body, 12 to 13px labels, mono for ev
 
 ## Colors
 
-A black-and-white operating board with three signal hues that only ever mean a decision.
+OLED black and white, with the /demo film's palette, each hue holding one fixed meaning so the app and the film read as one product. (Updated Oct 24, 2026 at the user's request: "you may bring color into the UI now".)
 
 ### Primary
-- **White Ink** (white-ink): the secondary colour of the whole system. Body text, headlines, primary buttons (filled white on black), the active rail badge, focus outlines, selection, the live dot, and the ESCALATE stamp (white means "waiting for the owner"). Lower-emphasis text uses it at stepped alphas (90%, 85%) before falling to the grey inks.
+- **White Ink** (white-ink): body text, headlines, primary buttons (filled white on black), focus outlines, selection. Lower-emphasis text uses it at stepped alphas before falling to the grey inks.
 
-### Secondary (signal hues, decision-only)
-- **Cleared Green** (cleared-green) with **Cleared Green Ink** (cleared-green-ink) for text on black: PAY stamps, a paid amount, "Lost to scams $0.00", the approve button, an approved bank change, an accepted bank transfer, the check in the logo.
-- **Refusal Red** (refusal-red) with **Refusal Red Ink** (refusal-red-ink): BLOCK stamps, the key fired rule on a refused case, a broken audit chain, a declined or rejected result, the danger button, and the strike-through on refused strips (red ink at 55%).
-- **Hold Amber** (hold-amber) with **Hold Amber Ink** (hold-amber-ink): HOLD stamps, the cooling-off timer after an owner approval, a frozen payee awaiting callback, the "calling the vendor" line. Kept small: text and stamps, never a filled panel beyond a 5% wash on a frozen row.
+### Meaning hues
+- **Countersign Amber** `#f2b04c` / ink `#ffd08a` (`accent`): Countersign at work and the brand. The live dot and LIVE label, the logo's check, the "Call" pill, the selected case tab, the leader's glow in the room, an agent that is working (amber border, glow, breathing ring, a lit wire carrying a dot), finished agents (amber outline and check badge), agent-card titles, the "Countersign replied" label, the active step on /try. HOLD stamps share amber, as in the film.
+- **Lock Ice** `#7cc4f5` / ink `#b5defa` (`code`): deterministic code and cryptography. The Policy Engine node and card, fired rules in the rule grid, "Audit chain verified", the audit ticker, countersignature hashes on /bank, the Payer's sealed lock, the Lumen Bank page tile.
+- **Owner Violet** `#c3a6ff` / ink `#ddd0ff` (`owner`): waiting on Priya. ESCALATE stamps and their rule cell, "Needs your code" stamps, the approvals badge, the owner's chip in the room, focus on the code boxes, the Approvals page tile.
+- **Cleared Green** `#5bd69b` / ink `#86e4b6` (`pay`): money cleared or an approval landed. PAY stamps, a paid Payer and its wire, "$0.00 lost to scams", the approve buttons, accepted transfers, an approved bank change.
+- **Refusal Red** `#ff6b4a` / ink `#ff9a82` (`block`): refusals and attacks. BLOCK stamps, failed steps, rejected transfers, struck-through refused amounts, the hijacked-agent panel's wash.
 
-Signal fills follow a fixed recipe: stamp border at 50% (amber 40%), fill at 12% (amber 8%), text in the -ink tint; tags drop to 30% border and 7% fill; a whole bay border tints to 30% when its verdict lands.
+Fills follow one recipe: stamp border at 50%, fill at 10–12%, text in the -ink tint; tags 30–35% border and 7% fill; a verdict card takes a faint 160° wash of its verdict's hue; page title tiles take a 12% fill with a soft glow.
 
 ### Neutral
 - **OLED Black** (oled-black): page ground, strip rows, the rail, input fields.
@@ -208,9 +289,9 @@ Signal fills follow a fixed recipe: stamp border at 50% (amber 40%), fill at 12%
 - **Placeholder Ink** (placeholder-ink): input placeholders.
 
 ### Named Rules
-**The Outcome-Only Colour Rule.** Green only when money is cleared or an approval lands, red only for refusals, amber only for holds. Everything else is neutral. If a hue does not name a decision, it is grey.
+**The One-Meaning Colour Rule.** Every hue names one thing: amber is Countersign working, ice is code and the lock, violet is the owner, green is money cleared, red is a refusal. A hue never decorates something outside its meaning; if nothing fits, it is grey.
 
-**The White Waits Rule.** A case waiting for the owner is white, not a colour. Escalation is a question, not an outcome.
+**The Violet Waits Rule.** A case waiting for the owner is violet: escalation is Priya's question, not an outcome.
 
 **The Ink-On-Black Rule.** Signal text on black uses the lighter -ink tint, never the base hue; the base hue is for fills, borders and the one filled key-rule cell.
 
@@ -289,23 +370,33 @@ Quiet, compact, and decisive only when the action moves money.
 - **OTP input:** six 48 by 56px digit boxes (40 by 48 on mobile) on bay surface, 22px mono digits; a filled box's border rises to 35% white; each typed digit pops (spring scale to 1.14); paste and one-time-code autofill fill all six.
 
 ### Navigation
-- **Rail:** logo and wordmark (15px semibold) in a 68px header, four 36px items with 17px line icons at 1.75 stroke, 13.5px labels in muted ink. A 4% white hover pill follows the pointer; the 8% active pill glides between items on a shared-layout spring. The approvals count is a small filled-white badge. A hairline-topped footer carries the phone line in mono.
-- **Mobile:** sticky 48px top bar, then a scrolling row of 32px fully rounded pills; active is a 10% white wash.
+- **Top bar (every page):** a sticky 56px bar, 85% black with a backdrop blur: the logo (amber check) and wordmark, then War Room, Approvals, Lumen Bank, Try to scam it and The film as 32px items with 15px line icons. The active page sits in an 8% white pill with a 10% ring that glides between items on a shared-layout spring. The approvals count is a violet badge. At the right, an amber "Call" pill with the line in mono.
+- **Mobile:** the same bar, then a scrolling row of 32px fully rounded pills; active is a 10% white wash.
+- **Page header (Approvals, Lumen Bank, Try):** a 44px icon tile in the page's colour (violet, ice, amber) beside a 32px title and a 14.5px subtitle; content is centred at 1240px (1480px for /try). The War Room has no header: the stage is the page.
+
+### War Room composition
+Built for a projector, in the /demo film's arrangement: a top bar instead of the rail (logo, a WAR ROOM tag, the other pages, a "Call" pill with the line), then the live numbers strip, then one bordered frame holding the case tabs with the case clock at the right, the agent room with the request and reply under it on the left, the verdict card and the agent cards on the right, and the audit ticker along the bottom. The other app pages keep the rail.
 
 ### Verdict Stamp (signature)
-The decision stamped at a strip's end: Geist Mono semibold capitals, letter-spaced, 6px radius, bordered and washed in its decision's tone (pay, block, hold, owner-white, neutral, quiet). Small (24px) in rows and lists; large (60px tall, 30px type) on the live strip, where it lands with a spring from 1.18 scale and 6px blur.
+Geist Mono capitals, letter-spaced, bordered and washed in its decision's tone (pay, block, hold, owner-white, neutral, quiet). Small (24px) in lists and alerts. On the War Room's verdict card it is the headline: 60px bold type in a 2px-bordered box, landing with a spring from 1.12 scale and 8px blur, followed by the one-sentence explanation at 19px, the fired-rule chips (the key rule in the verdict's tone) and the 18-rule grid with fired rules lit.
 
-### Flight Strip (signature)
-A row in a bay: OLED black on a 1px-gap hairline list, fixed columns (mono time, channel icon, who over ask, verdict stamp), 10px by 12px padding. Hover is a 4% wash; the selected strip carries an 8% wash that glides between rows. Refused strips stay listed with their name struck through in 55% red ink.
+### Case Tabs
+Every recent case newest first as a 40px tab: mono time, channel icon and name, and a dot in its verdict's colour. The selected tab carries a 30% white border and 7% wash that glides between tabs; "Follow newest" appears only when a tab is pinned.
 
-### Agent Roster
-A fixed vertical timeline of every agent in order, joined by a hairline spine: a check, spinner or alert in a 24px node, the agent name at 13.5px medium, a one-line summary, mono duration at the right, and an expandable evidence panel behind a hairline left rule. Agents that did not run stay in the roster, dimmed and marked "not needed".
+### Agent Cards
+One card per agent that has run, in pipeline order: the agent name in mono capitals with its status (Working, Done, Failed) and duration at the right, the finding as a 16px medium sentence, and the evidence chips underneath, always visible. Agents that haven't run appear only in the room.
 
 ### Agent Room (signature)
-The case drawn as a left-to-right flow of hairline-bordered step cards: Request → Intake → Vendor check ∥ Risk check → Policy Engine, with the callback and the owner's code as detours above and below the Policy Engine that loop back into it, and the lock, a short vertical bar the path must cross, between the Policy Engine and the Payer. State comes from the case's rows (app/components/roomState.ts). Steps carry a white number badge in the order their runs actually started; the route the case took stays as solid 55% white connectors while untaken ones stay dashed and faint; a 4px dot travels the connector into whichever step is working. The Policy Engine is the one square-cornered card (code, not AI) and takes the verdict's colour; the PAY path crosses the lock in green ("PAY crossed the lock"), any other verdict stops at it with a red bar ("Stopped at the lock"). One caption line narrates the current step. The drawing caps at 960px, drops the Request card under 760px of width, and hides below 640px, where the caption and the step list carry the story.
+The film's formation in the app's palette: Countersign (the leader, 80px) at the centre of a faint dotted orbit, the five AI agents around it as 64px circles, the Policy Engine below as the one rounded-square node (code, not AI), and the Payer under it, reachable only from the Policy Engine. Rows sit far enough apart that no label meets the next node. Wires are white hairlines, dashed at rest; a wire turns solid and carries a travelling dot while the agent at its end works. Nodes go idle (15% border, 40% ink), working (white border, soft white glow, breathing ring), done (white check badge), failed (red badge). The Policy Engine takes the verdict's colour; the Payer turns green only on a real payment and otherwise reads "Never called", "$0 moved · sealed" or "Payment failed". A 17px caption under the room narrates the current step. State comes from the case's rows (app/components/roomState.ts). Below 768px the drawing hides and the caption and agent cards carry the story.
+
+### Request Caption
+Under the room: the channel, sender and time in mono capitals, the request itself at 21px, the mail server's verdict chips for email, then Countersign's reply at 21px under a hairline.
+
+### Audit Ticker
+A single row along the bottom of the frame: "Audit chain" label, then the case's latest events newest first as mono chips (#seq, actor, action, hash prefix) joined by left arrows, fading out at the right edge. New events slide in from the left.
 
 ### Live Numbers
-The scoreboard rail: hairline-ruled cells, 12.5px muted label over a mono metric whose digits roll on a spring when a real row changes the count. The live dot (6px white, a 2.4s expanding ring) means only "this updates by itself".
+One line a room can read from the back: a white live dot, then each number in 22px mono with its label in muted sans (requests, scam attempts stopped, lost to scams in green while it's $0, bills paid with the total, median decision), and "Audit chain verified · N events" with a drawn check at the right. Digits roll on a spring when a real row changes them.
 
 ## Do's and Don'ts
 

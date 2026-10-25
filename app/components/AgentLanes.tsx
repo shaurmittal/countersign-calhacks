@@ -1,13 +1,12 @@
 "use client";
-// The agent roster (spec §7.2). Seven agents in seven fixed slots, always in the same order, so a room
-// learns the board once. Each slot is the latest real agentRuns row for that agent plus the rows it
-// produced (callbacks, approvals, payments); an agent that hasn't run shows as not needed or not yet.
-// Nothing is animated for show: a slot moves only when its row changes. Timeline styling adapted from
-// EasyUI's AI Agent Activity (MIT: github.com/Surajmaurya1/easyui).
+// Agent lanes (spec §7.2): one card per agent that has run on this case, in pipeline order. Each card is
+// the latest real agentRuns row for that agent plus the rows it produced (callbacks, approvals, payments).
+// Nothing is animated for show: a card moves only when its row changes. (The room graph shows the agents
+// that haven't run.)
 import type { FunctionReturnType } from "convex/server";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { AlertCircle, Check, ChevronDown, LoaderCircle, TriangleAlert } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertCircle, Check, LoaderCircle, TriangleAlert } from "lucide-react";
+import type { ReactNode } from "react";
 import type { api } from "../../convex/_generated/api";
 import type { AgentName, PaymentRequest, PolicyResult, RiskFindings, VendorFindings } from "../../shared/types";
 import { formatCents, RAIL_LABEL } from "../../shared/ledger";
@@ -30,89 +29,52 @@ const LANES: { agent: AgentName; title: string; role: string }[] = [
   { agent: "payer", title: "Payer", role: "Signs exactly one transfer, only on PAY" },
 ];
 
-export function AgentLanes({ detail, closed }: { detail: CaseDetail; closed: boolean }) {
+/** One card per agent that has run, in pipeline order, each with its finding and the evidence behind it. */
+export function AgentLanes({ detail }: { detail: CaseDetail }) {
+  const ran = LANES.map((lane) => ({ lane, run: latestRun(detail.runs, lane.agent) })).filter((x) => x.run);
+  if (ran.length === 0) {
+    return <p className="rounded-xl border border-dashed border-border-strong px-5 py-6 text-[14px] text-muted-foreground">The agents haven&apos;t started on this case yet.</p>;
+  }
   return (
-    <ol className="relative" aria-label="Agents, in order">
-      {LANES.map((lane, i) => {
-        const run = latestRun(detail.runs, lane.agent);
-        return <Slot key={lane.agent} lane={lane} run={run} detail={detail} closed={closed} last={i === LANES.length - 1} />;
-      })}
+    <ol className="space-y-3" aria-label="What each agent found">
+      <AnimatePresence initial={false}>
+        {ran.map(({ lane, run }) => (
+          <LaneCard key={lane.agent} lane={lane} run={run!} detail={detail} />
+        ))}
+      </AnimatePresence>
     </ol>
   );
 }
 
-function Slot(props: { lane: (typeof LANES)[number]; run: Run | undefined; detail: CaseDetail; closed: boolean; last: boolean }) {
-  const { lane, run, detail } = props;
-  const reduce = useReducedMotion();
-  const [open, setOpen] = useState(false);
-  const status = run?.status ?? (props.closed ? "skipped" : "pending");
-  const body = run ? <LaneDetail agent={lane.agent} run={run} detail={detail} /> : null;
+function LaneCard({ lane, run, detail }: { lane: (typeof LANES)[number]; run: Run; detail: CaseDetail }) {
+  const status = run.status;
   return (
-    <li className="relative flex gap-3.5">
-      {!props.last && <span aria-hidden="true" className="absolute bottom-0 left-[11px] top-7 w-px bg-border" />}
-      <span
-        className={cn(
-          "relative z-10 mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border",
-          status === "running" && "border-white/40 bg-background",
-          status === "done" && "border-white/20 bg-white/[0.08]",
-          status === "failed" && "border-block/50 bg-block/15",
-          (status === "pending" || status === "queued" || status === "skipped") && "border-border bg-background",
-        )}
-        aria-hidden="true"
-      >
-        {status === "running" ? (
-          <LoaderCircle className="size-3.5 animate-spin text-foreground" />
-        ) : status === "done" ? (
-          <Check className="size-3.5 stroke-[2.5] text-foreground" />
-        ) : status === "failed" ? (
-          <AlertCircle className="size-3.5 text-block-ink" />
-        ) : (
-          <span className="size-1 rounded-full bg-white/25" />
-        )}
-      </span>
-      <div className={cn("min-w-0 flex-1", props.last ? "pb-1" : "pb-5")}>
-        <button
-          type="button"
-          disabled={!body}
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={body ? open : undefined}
-          className="group flex w-full items-start justify-between gap-3 text-left disabled:cursor-default"
-        >
-          <span className="min-w-0">
-            <span className={cn("block text-[13.5px] font-medium", run ? "text-foreground" : "text-subtle")}>
-              {lane.title}
-              <span className="ml-2 text-[12px] font-normal text-subtle">
-                {status === "running" ? "working…" : status === "skipped" ? "not needed" : status === "pending" || status === "queued" ? "not yet" : status === "failed" ? "failed" : ""}
-              </span>
-            </span>
-            <span className={cn("mt-0.5 block text-[12.5px] leading-snug", run?.summary ? "text-muted-foreground" : "text-white/30")}>
-              {run?.error ? `Failed: ${run.error}` : run?.summary ? <Summary text={run.summary} /> : lane.role}
-            </span>
-          </span>
-          {body && (
-            <span className="flex shrink-0 items-center gap-2 pt-0.5 font-mono text-[11px] text-subtle">
-              {run?.endedAt ? `${((run.endedAt - run.startedAt) / 1000).toFixed(1)}s` : ""}
-              <motion.span animate={{ rotate: open ? 180 : 0 }} transition={reduce ? { duration: 0 } : spring.snappy}>
-                <ChevronDown className="size-3.5 text-subtle group-hover:text-foreground" />
-              </motion.span>
-            </span>
-          )}
-        </button>
-        <AnimatePresence initial={false}>
-          {body && open && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={reduce ? { duration: 0 } : spring.smooth}
-              className="overflow-hidden"
-            >
-              <div className="mt-2.5 border-l border-border pl-3">{body}</div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+    <motion.li
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={spring.smooth}
+      className={cn(
+        "rounded-xl border bg-surface px-5 py-4",
+        status === "running" ? "border-accent/50 shadow-[0_0_24px_rgba(242,176,76,0.12)]" : status === "failed" ? "border-block/40" : lane.agent === "policy" ? "border-code/30" : "border-border",
+      )}
+      aria-label={`${lane.title}: ${status}`}
+    >
+      <p className="flex items-center justify-between gap-3 font-mono text-[12px] uppercase tracking-[0.12em]">
+        <span className={lane.agent === "policy" ? "text-code-ink" : "text-accent"}>{lane.title}</span>
+        <span className={cn("flex items-center gap-1.5", status === "failed" ? "text-block-ink" : status === "running" ? "text-accent-ink" : "text-muted-foreground")}>
+          {status === "running" ? <LoaderCircle className="size-3.5 animate-spin" /> : status === "failed" ? <AlertCircle className="size-3.5" /> : <Check className="size-3.5 stroke-[2.5]" />}
+          {status === "running" ? "Working" : status === "failed" ? "Failed" : "Done"}
+          {run.endedAt ? <span className="text-subtle normal-case">· {((run.endedAt - run.startedAt) / 1000).toFixed(1)}s</span> : null}
+        </span>
+      </p>
+      <p className="mt-2 text-[16px] font-medium leading-snug text-foreground">
+        {run.error ? `Failed: ${run.error}` : run.summary ? <Summary text={run.summary} /> : lane.role}
+      </p>
+      <div className="mt-3">
+        <LaneDetail agent={lane.agent} run={run} detail={detail} />
       </div>
-    </li>
+    </motion.li>
   );
 }
 

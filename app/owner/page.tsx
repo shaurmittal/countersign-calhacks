@@ -4,7 +4,7 @@
 // checked server-side (convex/agents/ownerConcierge.ts). This page holds no secrets.
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { Clock } from "lucide-react";
+import { Clock, ShieldCheck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { api } from "../../convex/_generated/api";
 import { OWNER_CODE } from "../../shared/config";
@@ -27,6 +27,8 @@ export default function OwnerPage() {
 
   return (
     <AppShell
+      icon={<ShieldCheck />}
+      tone="owner"
       title="Approvals"
       subtitle="Known bills are paid on their own. Anything new or unusual waits here for Priya's authenticator code. A voice, a text or an email never counts."
     >
