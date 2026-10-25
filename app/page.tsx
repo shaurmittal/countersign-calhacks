@@ -4,6 +4,7 @@
 // with the request and Countersign's reply under it on the left; the verdict and what each agent found on
 // the right; the case's audit chain along the bottom. Follows the newest case unless a tab is pinned.
 import { useQuery } from "convex/react";
+import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
@@ -43,6 +44,7 @@ export default function WarRoom() {
               <p className="px-2 text-[14px] text-muted-foreground">{cases === undefined ? "Connecting…" : "No requests yet"}</p>
             )}
           </div>
+          <ScamTypeFilter />
           <p className="shrink-0 text-right font-mono" aria-live="off">
             <span className="block text-[11px] uppercase tracking-[0.12em] text-subtle">Case clock · real time</span>
             <span className="block text-[18px] font-medium leading-tight tracking-[-0.02em] text-foreground">{clock ? `T+${clock}s` : "—"}</span>
@@ -78,6 +80,40 @@ export default function WarRoom() {
         )}
       </main>
     </StageShell>
+  );
+}
+
+/**
+ * What Countersign watches for. Only payment fraud is live; the rest are on the roadmap and can't be
+ * picked, so the menu never suggests a filter that isn't real.
+ */
+const SCAM_TYPES = [
+  "Account takeover & password resets",
+  "Payroll & direct-deposit changes",
+  "Tech-support & remote-access scams",
+  "Government & tax impersonation",
+  "Fake refunds & chargebacks",
+];
+
+function ScamTypeFilter() {
+  return (
+    <label className="hidden shrink-0 items-center gap-2 sm:flex">
+      <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-subtle">Protecting against</span>
+      <span className="relative block">
+        <select
+          defaultValue="payments"
+          className="h-8 w-[220px] appearance-none truncate rounded-lg border border-border-strong bg-background pl-2.5 pr-8 text-[13px] text-foreground outline-none transition-colors focus:border-foreground"
+        >
+          <option value="payments">Payment & invoice fraud · live</option>
+          {SCAM_TYPES.map((t) => (
+            <option key={t} value={t} disabled>
+              {t} · coming soon
+            </option>
+          ))}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+      </span>
+    </label>
   );
 }
 
