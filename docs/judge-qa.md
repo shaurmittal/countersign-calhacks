@@ -121,6 +121,44 @@ Over $2,000 (demo limit) needs the owner's code (R6). Over $10,000 also gets a c
 
 Every step writes an event with `hash = sha256(prevHash + event)`. Editing or deleting any event breaks the chain, and the War Room shows it. Tests: `shared/audit.test.ts` (edited payload, deleted event).
 
+## "What if the agent is hijacked and calls the bank directly?"
+
+The bank won't move money without the Policy Engine's countersignature. On a PAY, the Payer signs exactly
+one transfer (who, how much, which invoice, which case) with ECDSA P-256. Lumen Bank checks it against the
+public key before it moves anything. A countersignature is single-use and expires after two minutes.
+
+- Live on `/bank`: "Simulate a hijacked agent" sends four real requests to the bank's public endpoint:
+  - no signature → "No countersignature"
+  - the agent's own key → "Countersignature invalid"
+  - a real one with the amount edited → "Countersignature invalid"
+  - a real one replayed → "Countersignature already used"
+- Tests: `shared/bank/verify.test.ts` (every check, in order), `convex/bank.test.ts` (the four attempts over
+  HTTP, no signing key → HOLD, a key the bank doesn't trust → HOLD).
+- An import-guard test fails if anything but the Payer calls `signRelease` or reads the private key
+  (`convex/lib/countersign.test.ts`).
+
+## "Is that a real bank? Where's the private key?"
+
+No, it's a sandbox bank with a fictional company and no real money. In the hackathon the bank and the
+signer run in the same Convex deployment. The private key is read only by the Payer's signing path, and the
+bank only ever reads the public key. Say it like this: *"In production the bank holds only the public key,
+and the signer runs in its own isolated service."* Don't claim hardware security or a real bank.
+
+## "Change Pixel & Pine's bank details on /bank."
+
+The bank freezes the payee and opens a Countersign case. Countersign phones the vendor on the number
+already on file (R2). Then:
+
+- **They deny it:** BLOCK, and the payee goes back to its old account.
+- **They confirm it:** it waits on `/owner` until Priya approves it with her authenticator code.
+- **No answer:** it stays frozen.
+
+A bank change never pays anything: it carries no amount and no invoice, so the engine holds it.
+
+- Tests: `convex/bankChange.test.ts` (denied, confirmed → approve or decline with a code, wrong-code
+  lockout, no answer, and that the vendor's open invoice is never paid); engine test *"a Lumen Bank change
+  request ... never PAYs"*.
+
 ## "Isn't this just Ramp or Brex approvals?"
 
 Those need two people. Countersign *is* the second person, and it works across calls, email, chat and agent messages, not only cards.
@@ -133,3 +171,4 @@ Those need two people. Countersign *is* the second person, and it works across c
 - **Email from a domain with no SPF/DKIM/DMARC** can't be authenticated at all. It's treated as "not on file", so it gets a callback rather than a block.
 - **The /try email attacks are simulated** headers (you can't forge DMARC from your own inbox). Real email to the address carries real authentication results.
 - **Countersign never sends email.** Replies are drafts shown in the War Room.
+- **Lumen Bank is a sandbox** in the same deployment as the signer; see "Is that a real bank?" above.

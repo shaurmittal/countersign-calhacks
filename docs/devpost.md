@@ -27,6 +27,9 @@ another agent over Fetch.ai's Chat Protocol.
 - **Unverifiable requests are refused**, politely and firmly, even from someone claiming to be the owner.
 - **The real owner can override**, but only with a code from their authenticator app, plus a
   cooling-off delay for large amounts that they can still cancel. A voice never counts.
+- **The bank needs Countersign's signature.** Lumen Bank, our sandbox bank, moves money only for a
+  transfer the Policy Engine's PAY has signed. A hijacked agent calling the bank directly gets
+  "No countersignature" (try it on `/bank`).
 - **Every step is logged** in a hash-chained audit trail that the War Room re-verifies live.
 
 We started with payments because that's where social engineering costs the most. The same pipeline
@@ -45,8 +48,13 @@ We started with payments because that's where social engineering costs the most.
   timers, and streams every agent step to the War Room in real time.
 - **Fetch.ai:** Countersign is a uAgent on Agentverse speaking the Chat Protocol; the owner can list
   and approve pending payments in ASI:One; a demo vendor billing agent sends requests agent-to-agent.
-- **Increase** sandbox ACH transfers (or a mock double-entry ledger), with idempotency keys so a
-  retry can never pay twice.
+- **Lumen Bank**, our sandbox bank: the Payer turns a PAY into an ECDSA P-256 countersignature over
+  exactly one transfer (single-use, 2-minute expiry), and the bank verifies it with the public key
+  before moving money. A bank-detail change freezes the payee until the vendor confirms by callback and
+  the owner approves with her code. In production the bank would hold only the public key, with the
+  signer in its own isolated service.
+- **Increase** sandbox ACH transfers or a mock double-entry ledger as alternative rails, with
+  idempotency keys so a retry can never pay twice.
 - **Email** via Postmark Inbound: the receiving server's SPF/DKIM/DMARC results decide whether a
   From address counts as a vendor or the owner (rule R17), and Claude reads attached PDF invoices as
   untrusted data. Countersign never sends email; replies are drafts in the War Room.
@@ -70,6 +78,8 @@ We started with payments because that's where social engineering costs the most.
 - Email that can't be faked into counting: a forged vendor or owner address is refused (R17), using
   the receiving server's real SPF/DKIM/DMARC results, and Claude reads PDF invoices without obeying them.
 - Scoreboard on screen: dollars lost stays $0 because it is computed from real payments.
+- Countersigned transfers: even an attacker with the bank's API can't move money. All four
+  hijacked-agent attempts on `/bank` (no signature, wrong key, edited, replayed) are refused live.
 
 ## What's next
 
