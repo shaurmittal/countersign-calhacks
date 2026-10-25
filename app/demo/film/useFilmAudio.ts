@@ -72,7 +72,7 @@ export function useFilmAudio(t: number, playing: boolean) {
     const prev = lastT.current;
     lastT.current = t;
     if (!ac || !gain) return;
-    const ringing = on && playing && t >= TIMES.dial && t < TIMES.connect && (t - TIMES.dial) % RING_CYCLE < RING_ON;
+    const ringing = on && playing && t >= TIMES.ringFrom && t < TIMES.connect && (t - TIMES.ringFrom) % RING_CYCLE < RING_ON;
     gain.gain.setTargetAtTime(ringing ? 0.035 : 0, ac.currentTime, 0.02);
     if (on && playing && prev < TIMES.block && t >= TIMES.block && t - prev < 0.5) thud(ac);
   }, [t, on, playing]);
