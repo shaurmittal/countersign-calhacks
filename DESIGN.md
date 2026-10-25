@@ -301,6 +301,9 @@ A row in a bay: OLED black on a 1px-gap hairline list, fixed columns (mono time,
 ### Agent Roster
 A fixed vertical timeline of every agent in order, joined by a hairline spine: a check, spinner or alert in a 24px node, the agent name at 13.5px medium, a one-line summary, mono duration at the right, and an expandable evidence panel behind a hairline left rule. Agents that did not run stay in the roster, dimmed and marked "not needed".
 
+### Agent Room (signature)
+The case drawn as the system: the leader at the centre, the five AI agents on a dotted orbit around it, the Policy Engine below as the one square node (code, not AI), and the Payer under it, reachable only from the Policy Engine. Geometry is shared with the /demo film (`AGENTS`/`EDGES` in app/demo/film/story.ts); state comes from the case's rows (app/components/roomState.ts). Wires are 1px white hairlines, dashed at rest; a wire turns solid with a travelling white pulse while the agent at its end works. Nodes go idle (15% border, 35% ink), working (white border, breathing ring), done (white check badge), failed (red badge). The Policy Engine takes the verdict's colour once it decides; the Payer turns green only on a real payment and otherwise shows "Never called", "$0 moved · sealed" or "Payment failed". One caption line under the graph narrates the current step. Below 640px the graph hides and the caption plus the roster carry the story.
+
 ### Live Numbers
 The scoreboard rail: hairline-ruled cells, 12.5px muted label over a mono metric whose digits roll on a spring when a real row changes the count. The live dot (6px white, a 2.4s expanding ring) means only "this updates by itself".
 

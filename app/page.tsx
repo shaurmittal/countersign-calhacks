@@ -8,6 +8,7 @@ import { useState } from "react";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { AgentLanes } from "./components/AgentLanes";
+import { AgentRoom } from "./components/AgentRoom";
 import { AuditTrail } from "./components/AuditTrail";
 import { DecisionCard } from "./components/DecisionCard";
 import { useNow } from "./components/format";
@@ -62,8 +63,14 @@ export default function WarRoom() {
         <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0 space-y-6">
             <DecisionCard c={current} detail={detail ?? undefined} />
+            <section aria-label="The room" className="rounded-xl border border-border px-4 py-5 sm:px-6">
+              <SectionHead title="How Countersign is handling it">
+                <span>Live · only the Policy Engine can reach the Payer</span>
+              </SectionHead>
+              <AgentRoom c={current} detail={detail ?? undefined} />
+            </section>
             <section aria-label="Agents" className="rounded-xl border border-border px-4 py-5 sm:px-6">
-              <SectionHead title="Agents on this case">
+              <SectionHead title="Each step, with its evidence">
                 <span>Fixed order · click a step for its evidence</span>
               </SectionHead>
               {detail ? (
@@ -109,7 +116,7 @@ function EmptyBoard({ connecting }: { connecting: boolean }) {
           <span className="live-dot" aria-hidden="true" />
           {connecting ? "Connecting to the board…" : "Waiting for the first request"}
         </p>
-        <h2 className="text-[22px] font-medium tracking-[-0.02em]">Try to get money out of Lumen Labs.</h2>
+        <h2 className="text-[26px] font-semibold tracking-[-0.02em]">Try to get money out of Lumen Labs.</h2>
         <p className="mt-3 text-[14px] leading-relaxed text-muted-foreground">
           Call <a href={`tel:${LINE.replace(/[^\d+]/g, "")}`} className="font-mono text-foreground">{LINE}</a>, type at{" "}
           <a href="/try" className="text-foreground underline underline-offset-4">/try</a>

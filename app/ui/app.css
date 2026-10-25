@@ -76,10 +76,22 @@
   .skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.05), transparent); animation: sweep 1.6s ease-in-out infinite; }
   @keyframes sweep { to { transform: translateX(100%); } }
 
+  /* The agent room (AgentRoom.tsx): white hairline wires; a lit wire carries a pulse toward the working agent. */
+  .room-orbit { fill: none; stroke: rgb(255 255 255 / 0.07); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-dasharray: 2 9; }
+  .room-wire { stroke: rgb(255 255 255 / 0.14); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-dasharray: 3 6; transition: stroke 0.3s; }
+  .room-wire.is-hot { stroke: rgb(255 255 255 / 0.55); stroke-dasharray: none; }
+  .room-wire.is-money { stroke: rgb(255 255 255 / 0.1); }
+  .room-wire.is-money.is-paid { stroke: rgb(34 197 94 / 0.6); stroke-dasharray: none; }
+  .room-pulse { stroke: #fafafa; stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-dasharray: 10 90; animation: room-flow 1.4s linear infinite; }
+  .room-pulse.is-money { stroke: #4ade80; }
+  @keyframes room-flow { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+  .room-ring { animation: room-ring 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  @keyframes room-ring { 0% { transform: scale(0.92); opacity: 0.8; } 100% { transform: scale(1.25); opacity: 0; } }
+
   /* Refused strips stay on the board, struck through. */
   .struck { text-decoration: line-through; text-decoration-color: rgb(248 113 113 / 0.55); text-decoration-thickness: 1px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .live-dot::after, .skeleton::after { animation: none; }
+  .live-dot::after, .skeleton::after, .room-pulse, .room-ring { animation: none; }
 }
